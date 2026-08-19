@@ -121,7 +121,7 @@
 
   function buildShop(tab) {
     const d = VF.state.data;
-    const p = shell('Shop', 'Everything you will ever need, eventually');
+    const p = shell('Shop', 'Everything you will ever need, eventually · paid in Brophys');
     p.appendChild(tabs([{ id: 'rods', label: 'Rods' }, { id: 'bait', label: 'Bait' }], tab,
       function (t) { refresh(t); }));
     const b = body();

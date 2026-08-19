@@ -8,6 +8,7 @@
   let host = null, card = null, open = false, raf = 0, art = null, artCtx = null;
   let gen = 0;   // guards the deferred teardown against a newer open
   let current = null, artT = 0, lastFrame = 0, resolved = false;
+  let revealT = 0;   // 0..1 silhouette-to-creature wipe for a new species
 
   function init() {
     host = document.getElementById('modal');
@@ -138,6 +139,7 @@
     VF.achievements.check();
 
     artT = 0;
+    revealT = c.isNew ? 0 : 1;
     lastFrame = performance.now();
     loop();
     setTimeout(function () { sellBtn.focus(); }, 60);
@@ -159,13 +161,41 @@
 
     const c = current;
     const g = artCtx;
-    g.clearRect(0, 0, art.width, art.height);
+    const W = art.width, H = art.height;
+    g.clearRect(0, 0, W, H);
+
+    if (revealT < 1) revealT = Math.min(1, revealT + dt / 1.15);
+    const k = VF.util.smootherstep(revealT);
+
     g.save();
-    g.translate(art.width / 2, art.height / 2 + Math.sin(artT * 1.4) * 4);
+    g.translate(W / 2, H / 2 + Math.sin(artT * 1.4) * 4);
     g.rotate(Math.sin(artT * 0.85) * 0.055);
     const size = VF.fishArt.fitSize(c.fish, 150);
+
+    if (k < 1) {
+      // a new species resolves out of its own silhouette
+      g.globalAlpha = 1 - k;
+      VF.fishArt.drawSilhouette(g, c.fish, size, 0.9);
+      g.globalAlpha = k;
+    }
     VF.fishArt.draw(g, c.fish, size, { time: artT, mutation: c.mutation });
+    g.globalAlpha = 1;
     g.restore();
+
+    if (k < 1) {
+      // a light sweeps across as it resolves
+      const r = VF.rarities.get(c.rarity);
+      const x = -W * 0.3 + k * W * 1.6;
+      const grad = g.createLinearGradient(x - W * 0.16, 0, x + W * 0.16, 0);
+      grad.addColorStop(0, U.rgbToCss(U.hexToRgb(r.glow), 0));
+      grad.addColorStop(0.5, U.rgbToCss(U.hexToRgb(r.glow), 0.42 * (1 - k)));
+      grad.addColorStop(1, U.rgbToCss(U.hexToRgb(r.glow), 0));
+      g.save();
+      g.globalCompositeOperation = 'lighter';
+      g.fillStyle = grad;
+      g.fillRect(0, 0, W, H);
+      g.restore();
+    }
     raf = requestAnimationFrame(loop);
   }
 

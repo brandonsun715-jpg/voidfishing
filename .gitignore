@@ -1,3 +1,5 @@
 node_modules/
 package-lock.json
-tools/shot-*.png
+
+# generated screenshots from the tools/ scripts
+tools/*.png

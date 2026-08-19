@@ -110,7 +110,7 @@ body.q-low #grain { display: none; }
 #boot {
   position: absolute; inset: 0; z-index: 60;
   display: flex; align-items: center; justify-content: center;
-  background: radial-gradient(ellipse at 50% 60%, rgba(10,14,24,0.55), rgba(2,3,6,0.94) 72%);
+  background: radial-gradient(ellipse at 50% 58%, rgba(6,9,16,0.38), rgba(2,3,6,0.86) 74%);
   backdrop-filter: blur(2px);
   transition: opacity 700ms var(--ease), visibility 700ms;
 }

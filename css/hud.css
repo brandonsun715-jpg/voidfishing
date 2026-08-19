@@ -26,6 +26,10 @@
   color: var(--ink);
   text-shadow: 0 1px 14px rgba(0,0,0,0.75);
 }
+.money-unit {
+  font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--ink-4); margin-left: 2px;
+}
 .money.bump { animation: moneyBump 460ms var(--ease); }
 @keyframes moneyBump {
   0% { transform: none; }
