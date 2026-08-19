@@ -105,3 +105,10 @@ node tools/perf.js         per-stage render timings at each quality level
 node tools/tour.js         screenshots every location and menu
 node tools/gallery.js      renders the whole catalogue to one sheet
 ```
+
+## Building a single file
+
+`npm run build` inlines every stylesheet and script into
+`dist/void-fishing.html` — one self-contained file you can move anywhere and
+open. Because the game uses classic scripts rather than ES modules, this is a
+straight concatenation in the same order `index.html` declares.

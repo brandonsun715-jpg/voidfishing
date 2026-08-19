@@ -11,7 +11,8 @@
     "fight": "node tools/fight.js",
     "perf": "node tools/perf.js",
     "tour": "node tools/tour.js",
-    "gallery": "node tools/gallery.js"
+    "gallery": "node tools/gallery.js",
+    "build": "node tools/build-single.js"
   },
   "repository": {
     "type": "git",
