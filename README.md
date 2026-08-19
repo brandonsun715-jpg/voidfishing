@@ -90,6 +90,19 @@ vignette and film grain are CSS compositing layers, the horizon bloom and the
 land reflection are cached sprites, and the depth ramp is folded into a single
 water gradient. `VF.scene.profile(true)` turns on per-stage timing.
 
+**Creatures.** Counter-shading — dark along the back, pale along the belly — is
+what stops a procedural fish reading as a flat coloured shape. On top of that
+sit a clipped scale texture, a lateral line, a gill plate, fins built from
+membrane plus rays, and an iris in the species' accent colour. Fine detail is
+skipped below about 22px, where it would only be noise.
+
+**Audio.** Everything runs through a limiter and a warmth shelf, so overlapping
+effects never turn brittle. The pad is two banks of detuned sine and triangle
+voices that crossfade on a chord change rather than gliding, widened by a pair
+of modulated delay lines. Every envelope opens and closes on a ramp — instant
+starts are what make small synthesised effects click. The ambient bed eases
+back while a fish is on the line so the reel cuts through.
+
 ## Development tools
 
 Run from the project root with `npm install playwright --no-save` first.
@@ -104,6 +117,9 @@ node tools/responsive.js   layout overflow across viewport sizes
 node tools/perf.js         per-stage render timings at each quality level
 node tools/tour.js         screenshots every location and menu
 node tools/gallery.js      renders the whole catalogue to one sheet
+node tools/closeup.js      renders a few species large, to judge surface detail
+node tools/rods.js         renders every rod preview to one sheet
+node tools/audio.js        measures output level, spectral balance and clipping
 ```
 
 ## Building a single file
