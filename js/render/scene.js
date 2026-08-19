@@ -769,7 +769,7 @@
     /* The diffuse wedge, as a stack of horizontally-belled bands. A clipped
        shape would give the path a hard V for an edge; this way every edge of
        it is soft, which is the only way it reads as light on water. */
-    const bands = q === 'low' ? 7 : q === 'medium' ? 10 : 14;
+    const bands = q === 'low' ? 6 : q === 'medium' ? 9 : 11;
     for (let i = 0; i < bands; i++) {
       const k0 = i / bands, k1 = (i + 1) / bands;
       const y0 = hy + Math.pow(k0, 1.30) * wh;
@@ -793,7 +793,7 @@
 
     /* the flecks. Placement is seeded so they stay put and blink rather than
        sliding across the surface, which is what real chop does. */
-    const n = q === 'low' ? 52 : q === 'medium' ? 105 : 170;
+    const n = q === 'low' ? 44 : q === 'medium' ? 90 : 132;
     const glow = P.glow;
     let bucket = -1;
     for (let i = 0; i < n; i++) {
@@ -872,8 +872,8 @@
      own phase and amplitude, so it reads as swell rather than as scanlines. */
   function drawWaveLines(P, q) {
     const hy = L.horizonY, wh = L.waterH;
-    const lines = q === 'low' ? 16 : q === 'medium' ? 26 : 36;
-    const seg = q === 'low' ? 12 : 22;
+    const lines = q === 'low' ? 15 : q === 'medium' ? 24 : 32;
+    const seg = q === 'low' ? 11 : 18;
     const calm = Math.max(VF.encounters ? VF.encounters.calm() : 0,
                           VF.conditions ? VF.conditions.flag('calm') * 0.8 : 0,
                           VF.wrong ? VF.wrong.intensity() : 0);
@@ -924,7 +924,7 @@
     // a handful of bright glints where the light lands on a crest
     if (q !== 'low') {
       ctx.globalCompositeOperation = 'lighter';
-      const n = 11;
+      const n = 9;
       for (let i = 0; i < n; i++) {
         const jitter = ((Math.sin(i * 78.233) * 43758.5453) % 1 + 1) % 1;
         const k = 0.12 + jitter * 0.8;

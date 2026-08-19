@@ -48,7 +48,7 @@
 
   /* Where the guides sit. They crowd together toward the tip on a real rod,
      because that is where the blank bends most. */
-  const GUIDES = [0.30, 0.44, 0.565, 0.675, 0.77, 0.85, 0.92, 0.975];
+  const GUIDES = [0.30, 0.45, 0.58, 0.695, 0.795, 0.88, 0.95];
 
   /* g: { bx, by, cx, cy, tx, ty, len, angle } — butt, control, tip. */
   function draw(ctx, rod, g, t, opts) {
@@ -84,7 +84,7 @@
     blank.addColorStop(0.72, U.rgbToCss(c1));
     blank.addColorStop(1, U.rgbToCss(U.mixRgb(c1, tipRgb, 0.75)));
     ctx.fillStyle = blank;
-    taper(ctx, g, 0, 1, wButt, wTip, 16);
+    taper(ctx, g, 0, 1, wButt, wTip, 12);
     ctx.fill();
 
     /* a specular line along the lit edge — the thing that makes a blank look

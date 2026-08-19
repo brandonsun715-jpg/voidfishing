@@ -78,6 +78,43 @@
     rafId = requestAnimationFrame(frame);
   }
 
+  /* ------------------------------------------------- adaptive quality
+     The scene is heavier than it used to be. Rather than let a slow machine
+     run it at twenty frames a second, watch the frame time and step the
+     setting down — once, visibly, and never back up on its own, so the player
+     stays in charge of it from Settings. */
+  const perf = { acc: 0, frames: 0, bad: 0, warm: 3, stepped: 0 };
+
+  function watchFrameRate(dt) {
+    if (!started || perf.stepped >= 2 || VF.state.rt.panelOpen) return;
+    if (perf.warm > 0) { perf.warm -= dt; return; }
+    // a clamped dt means the tab was away, not that the machine is slow
+    if (dt >= 0.0999) return;
+    perf.acc += dt;
+    perf.frames++;
+    if (perf.acc < 4) return;
+
+    const avg = perf.acc / perf.frames;
+    perf.acc = 0; perf.frames = 0;
+    const q = VF.state.data.settings.quality;
+    if (avg > 0.026 && q !== 'low') {          // under about 38 frames a second
+      perf.bad++;
+      if (perf.bad < 2) return;
+      perf.bad = 0;
+      perf.stepped++;
+      const next = q === 'high' ? 'medium' : 'low';
+      VF.state.data.settings.quality = next;
+      document.body.className = 'q-' + next;
+      VF.scene.resize();
+      VF.bus.emit('settings:quality');
+      VF.save.save();
+      VF.toast.show('graphics turned down to <strong>' + next + '</strong> to keep it smooth' +
+                    ' &mdash; change it back in settings', null, 6000);
+    } else {
+      perf.bad = 0;
+    }
+  }
+
   function frame(now) {
     rafId = requestAnimationFrame(frame);
     let dt = (now - last) / 1000;
@@ -112,6 +149,7 @@
 
       if (started) VF.hud.tick(dt);
       VF.audio.tick(dt);
+      watchFrameRate(dt);
     } catch (err) {
       console.error('[frame]', err);
       // never let one bad frame kill the loop
