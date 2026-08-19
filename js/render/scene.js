@@ -27,7 +27,7 @@
   let stars = null;
   function buildStars() {
     const q = VF.state.data.settings.quality;
-    const n = q === 'low' ? 90 : q === 'medium' ? 190 : 330;
+    const n = q === 'low' ? 80 : q === 'medium' ? 165 : 255;
     stars = new Array(n);
     const rnd = VF.rng.make(0xBEEF ^ VF.locations.index(VF.state.data.location) * 7919);
     for (let i = 0; i < n; i++) {
@@ -42,13 +42,9 @@
     }
   }
 
-  /* ------------------------------------------------------------- grain
-     A single 128px noise tile, filled as a repeating pattern with a shifting
-     origin. Keeps flat gradients from banding for the cost of one fillRect. */
-  let grainPattern = null, grainOx = 0, grainOy = 0, grainT = 0;
-
+  /* --------------------------------------------------------------- grain
+     One 128px noise tile handed to the CSS layer. Static after boot. */
   function buildGrain() {
-    if (grainPattern) return;
     const N = 128;
     const c = document.createElement('canvas');
     c.width = c.height = N;
@@ -58,21 +54,13 @@
     for (let i = 0; i < px.length; i += 4) {
       const v = Math.random() * 255;
       px[i] = px[i + 1] = px[i + 2] = 255;
-      px[i + 3] = v < 128 ? 0 : Math.round((v - 128) * 1.6);
+      px[i + 3] = v < 128 ? 0 : Math.round((v - 128) * 1.9);
     }
     g.putImageData(img, 0, 0);
-    grainPattern = ctx.createPattern(c, 'repeat');
-  }
-
-  function drawGrain() {
-    if (VF.state.data.settings.quality === 'low' || !grainPattern) return;
-    ctx.save();
-    ctx.globalAlpha = 0.030;
-    ctx.globalCompositeOperation = 'overlay';
-    ctx.translate(grainOx, grainOy);
-    ctx.fillStyle = grainPattern;
-    ctx.fillRect(-136, -136, W + 272, H + 272);
-    ctx.restore();
+    const el = document.getElementById('grain');
+    if (!el) return;
+    try { el.style.backgroundImage = 'url(' + c.toDataURL('image/png') + ')'; }
+    catch (e) { el.style.display = 'none'; }
   }
 
   /* ------------------------------------------------------- backdrop cache */
@@ -230,12 +218,7 @@
 
   function update(dt) {
     t += dt;
-    grainT += dt;
-    if (grainT > 0.11) {
-      grainT = 0;
-      grainOx = (Math.random() * 128) | 0;
-      grainOy = (Math.random() * 128) | 0;
-    }
+
     computeLayout();
     updateRod(dt);
     updateBobber(dt);
@@ -381,6 +364,15 @@
 
   /* ---------------------------------------------------------------- draw */
 
+  /* Opt-in stage timing. Off by default; VF.scene.profile(true) turns it on. */
+  let prof = null;
+  function mark(name, fn) {
+    if (!prof) { fn(); return; }
+    const t0 = performance.now();
+    fn();
+    prof.acc[name] = (prof.acc[name] || 0) + (performance.now() - t0);
+  }
+
   function draw() {
     const P = VF.palette.P;
     const q = VF.state.data.settings.quality;
@@ -390,22 +382,22 @@
     if (shakeOff) ctx.translate(shakeOff.x, shakeOff.y);
 
     buildBackdrop();
-    drawSky(P);
-    drawStars(P, q);
-    drawHorizonFeature(P);
-    if (backdrop) ctx.drawImage(backdrop, 0, 0, W, H);
-    drawAurora(P);
-    drawFog(P, q);
-    drawWater(P, q);
-    drawUnderwater(P);
-    VF.fx.drawRipples(ctx, 0.26);
-    drawLineAndBobber(P);
-    VF.particles.draw(ctx);
-    drawForeground(P);
-    drawVignette(P);
-    drawGrain();
-    VF.fx.drawOverlay(ctx, W, H);
+    mark('sky', function () { drawSky(P); });
+    mark('stars', function () { drawStars(P, q); });
+    mark('horizon', function () { drawHorizonFeature(P); });
+    mark('land', function () { if (backdrop) ctx.drawImage(backdrop, 0, 0, W, H); });
+    mark('aurora', function () { drawAurora(P); });
+    mark('fog', function () { drawFog(P, q); });
+    mark('water', function () { drawWater(P, q); });
+    mark('under', function () { drawUnderwater(P); });
+    mark('ripples', function () { VF.fx.drawRipples(ctx, 0.26); });
+    mark('line', function () { drawLineAndBobber(P); });
+    mark('particles', function () { VF.particles.draw(ctx); });
+    mark('fore', function () { drawForeground(P); });
+    mark('overlay', function () { VF.fx.drawOverlay(ctx, W, H); });
+    syncVignette();
 
+    if (prof) { prof.frames++; }
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   }
 
@@ -440,7 +432,7 @@
       if (a <= 0.02) continue;
       ctx.globalAlpha = a;
       const x = s.x * W;
-      if (s.big && q !== 'low') {
+      if (s.big && q === 'high') {
         ctx.globalAlpha = a * 0.22;
         ctx.beginPath(); ctx.arc(x, y, s.s * 3.2, 0, TAU); ctx.fill();
         ctx.globalAlpha = a;
@@ -458,16 +450,7 @@
     const glow = U.rgbToCss(P.glow);
 
     // ambient bloom around the feature
-    const bg = ctx.createRadialGradient(gx, gy, 0, gx, gy, R * 13);
-    bg.addColorStop(0, U.rgbToCss(P.glow, 0.44 * P.bright + 0.16));
-    bg.addColorStop(0.14, U.rgbToCss(P.glow, 0.20 * P.bright + 0.07));
-    bg.addColorStop(0.42, U.rgbToCss(P.glow, 0.055 * P.bright + 0.022));
-    bg.addColorStop(1, U.rgbToCss(P.glow, 0));
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.fillStyle = bg;
-    ctx.fillRect(gx - R * 13, gy - R * 13, R * 26, R * 26);
-    ctx.restore();
+    drawBloom(P, gx, gy, R);
 
     ctx.save();
     switch (loc.horizon) {
@@ -550,6 +533,34 @@
     ctx.globalAlpha = 1;
   }
 
+  /* The bloom around the horizon feature is a big translucent radial fill, so it
+     is rendered once into a small sprite and blitted, rebuilt only when its
+     colour or brightness actually moves. */
+  let bloom = null, bloomKey = '';
+  function drawBloom(P, gx, gy, R) {
+    const key = (P.glow[0] | 0) + ',' + (P.glow[1] | 0) + ',' + (P.glow[2] | 0) + ',' + Math.round(P.bright * 12);
+    if (key !== bloomKey || !bloom) {
+      bloomKey = key;
+      const S = 192;
+      const c = bloom && bloom.width === S ? bloom : document.createElement('canvas');
+      c.width = c.height = S;
+      const g = c.getContext('2d');
+      const grad = g.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
+      grad.addColorStop(0, U.rgbToCss(P.glow, 0.44 * P.bright + 0.16));
+      grad.addColorStop(0.14, U.rgbToCss(P.glow, 0.20 * P.bright + 0.07));
+      grad.addColorStop(0.42, U.rgbToCss(P.glow, 0.055 * P.bright + 0.022));
+      grad.addColorStop(1, U.rgbToCss(P.glow, 0));
+      g.fillStyle = grad;
+      g.fillRect(0, 0, S, S);
+      bloom = c;
+    }
+    const d = R * 24;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.drawImage(bloom, gx - d / 2, gy - d / 2, d, d);
+    ctx.restore();
+  }
+
   function drawAurora(P) {
     const a = VF.weather.aurora();
     if (a <= 0.02) return;
@@ -583,20 +594,16 @@
   function drawFog(P, q) {
     const amt = P.fogAmt;
     if (amt <= 0.02) return;
-    const bands = q === 'low' ? 2 : 3;
+    const bands = q === 'high' ? 3 : q === 'medium' ? 2 : 1;
     for (let i = 0; i < bands; i++) {
       const y = L.horizonY - H * (0.02 + i * 0.055);
       const hgt = H * (0.05 + i * 0.045);
-      const drift = Math.sin(t * (0.045 + i * 0.02) + i * 2.2) * W * 0.09;
       const g = ctx.createLinearGradient(0, y - hgt, 0, y + hgt * 0.5);
       g.addColorStop(0, U.rgbToCss(P.fog, 0));
       g.addColorStop(0.55, U.rgbToCss(P.fog, amt * (0.30 - i * 0.06)));
       g.addColorStop(1, U.rgbToCss(P.fog, 0));
       ctx.fillStyle = g;
-      ctx.save();
-      ctx.translate(drift, 0);
-      ctx.fillRect(-W * 0.2, y - hgt, W * 1.4, hgt * 1.5);
-      ctx.restore();
+      ctx.fillRect(0, y - hgt, W, hgt * 1.5);
     }
     // ground haze sitting on the water
     const g2 = ctx.createLinearGradient(0, L.horizonY - H * 0.01, 0, L.horizonY + L.waterH * 0.32);
@@ -611,10 +618,13 @@
   function drawWater(P, q) {
     const hy = L.horizonY, wh = L.waterH;
 
+    // one gradient carries the whole depth ramp, including the near-shore
+    // darkening that used to be a second translucent pass
     const g = ctx.createLinearGradient(0, hy, 0, H);
     g.addColorStop(0, U.rgbToCss(P.waterTop));
-    g.addColorStop(0.55, U.rgbToCss(U.mixRgb(P.waterTop, P.waterBot, 0.7)));
-    g.addColorStop(1, U.rgbToCss(P.waterBot));
+    g.addColorStop(0.50, U.rgbToCss(U.mixRgb(P.waterTop, P.waterBot, 0.68)));
+    g.addColorStop(0.78, U.rgbToCss(P.waterBot));
+    g.addColorStop(1, U.rgbToCss(U.mixRgb(P.waterBot, [0, 0, 0], 0.45)));
     ctx.fillStyle = g;
     ctx.fillRect(0, hy, W, wh + 2);
 
@@ -628,43 +638,57 @@
     drawMoonpath(P);
     drawWaveLines(P, q);
 
-    // deepen the very near water so the foreground reads as close
-    const g3 = ctx.createLinearGradient(0, H - wh * 0.26, 0, H);
-    g3.addColorStop(0, U.rgbToCss(P.waterBot, 0));
-    g3.addColorStop(1, U.rgbToCss(P.waterBot, 0.55));
-    ctx.fillStyle = g3;
-    ctx.fillRect(0, H - wh * 0.26, W, wh * 0.26 + 2);
   }
 
-  /* Mirror the distant land into the water, faded and wobbling. */
-  function drawBackdropReflection(P) {
-    if (!backdrop) return;
-    const hy = L.horizonY, wh = L.waterH;
-    const depth = Math.min(wh * 0.42, H * 0.20);
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(0, hy, W, depth);
-    ctx.clip();
-    ctx.globalAlpha = 0.30;
-    ctx.translate(0, hy * 2);
-    ctx.scale(1, -1);
-    // slight horizontal shear makes the mirror read as a moving surface
-    ctx.transform(1, 0, Math.sin(t * 0.5) * 0.010, 1, 0, 0);
-    ctx.drawImage(backdrop, 0, 0, W, H);
-    ctx.restore();
+  /* Mirror the distant land into the water. The flip and the depth fade are
+     baked into a cached strip, so each frame is a single sheared blit. */
+  let reflect = null, reflectKey = '';
 
-    const fade = ctx.createLinearGradient(0, hy, 0, hy + depth);
-    fade.addColorStop(0, U.rgbToCss(P.waterTop, 0.15));
-    fade.addColorStop(1, U.rgbToCss(P.waterTop, 0.92));
-    ctx.fillStyle = fade;
-    ctx.fillRect(0, hy, W, depth);
+  function buildReflection() {
+    const key = backdropKey + ':' + Math.round(L.horizonY);
+    if (reflectKey === key && reflect) return;
+    if (!backdrop) return;
+    reflectKey = key;
+    const hy = L.horizonY;
+    const depth = Math.max(2, Math.round(Math.min(L.waterH * 0.42, H * 0.20)));
+    const c = reflect && reflect.width === Math.round(W) ? reflect : document.createElement('canvas');
+    c.width = Math.max(1, Math.round(W));
+    c.height = depth;
+    const g = c.getContext('2d');
+    g.clearRect(0, 0, c.width, depth);
+    g.save();
+    g.globalAlpha = 0.32;
+    g.translate(0, hy);
+    g.scale(1, -1);
+    g.drawImage(backdrop, 0, 0, W, H);
+    g.restore();
+    // erase with a downward ramp so the mirror dissolves into the water
+    g.globalCompositeOperation = 'destination-out';
+    const fade = g.createLinearGradient(0, 0, 0, depth);
+    fade.addColorStop(0, 'rgba(0,0,0,0.12)');
+    fade.addColorStop(1, 'rgba(0,0,0,1)');
+    g.fillStyle = fade;
+    g.fillRect(0, 0, c.width, depth);
+    g.globalCompositeOperation = 'source-over';
+    reflect = c;
+  }
+
+  function drawBackdropReflection(P) {
+    buildReflection();
+    if (!reflect) return;
+    ctx.save();
+    ctx.translate(0, L.horizonY);
+    // a slight shear makes the mirror read as a moving surface
+    ctx.transform(1, 0, Math.sin(t * 0.5) * 0.012, 1, 0, 0);
+    ctx.drawImage(reflect, 0, 0);
+    ctx.restore();
   }
 
   function drawReflection(P) {
     if (P.starAlpha <= 0.03 || !stars) return;
     const hy = L.horizonY;
     ctx.fillStyle = U.rgbToCss(P.star);
-    const limit = Math.min(stars.length, 150);
+    const limit = Math.min(stars.length, VF.state.data.settings.quality === 'high' ? 110 : 70);
     for (let i = 0; i < limit; i++) {
       const s = stars[i];
       const sy = s.y * hy;
@@ -683,7 +707,8 @@
   /* The signature look: a shimmering path of light from the horizon feature. */
   function drawMoonpath(P) {
     const hy = L.horizonY, wh = L.waterH;
-    const steps = VF.state.data.settings.quality === 'low' ? 22 : 44;
+    const q = VF.state.data.settings.quality;
+    const steps = q === 'low' ? 18 : q === 'medium' ? 24 : 34;
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     for (let i = 0; i < steps; i++) {
@@ -1086,14 +1111,13 @@
     return m * m * p0 + 2 * m * k * p1 + k * k * p2;
   }
 
-  function drawVignette(P) {
-    const pulse = VF.fx.pulseAmt();
-    const g = ctx.createRadialGradient(W * 0.5, H * 0.52, Math.min(W, H) * 0.28,
-                                       W * 0.5, H * 0.52, Math.max(W, H) * 0.78);
-    g.addColorStop(0, 'rgba(0,0,0,0)');
-    g.addColorStop(1, 'rgba(0,0,0,' + (0.55 + pulse * 0.3).toFixed(3) + ')');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, W, H);
+  /* The vignette is a CSS layer; only its pulse strength is driven from here. */
+  let pulseEl = null, lastPulse = -1;
+  function syncVignette() {
+    if (!pulseEl) pulseEl = document.getElementById('vigPulse');
+    if (!pulseEl) return;
+    const v = Math.round(VF.fx.pulseAmt() * 100) / 100;
+    if (v !== lastPulse) { lastPulse = v; pulseEl.style.opacity = v; }
   }
 
   VF.scene = {
@@ -1101,6 +1125,16 @@
     L: L, addShadow: addShadow, newCastLateral: newCastLateral,
     spawnMeteor: spawnMeteor, seedAmbient: seedAmbient,
     rebuild: function () { backdropKey = ''; buildStars(); },
+    profile: function (on) {
+      if (on) { prof = { acc: {}, frames: 0 }; return; }
+      if (!prof) return null;
+      const out = { frames: prof.frames, ms: {} };
+      let total = 0;
+      for (const k in prof.acc) { out.ms[k] = +(prof.acc[k] / prof.frames).toFixed(3); total += prof.acc[k]; }
+      out.totalPerFrame = +(total / prof.frames).toFixed(3);
+      prof = null;
+      return out;
+    },
     size: function () { return { w: W, h: H }; },
     ctx: function () { return ctx; }
   };

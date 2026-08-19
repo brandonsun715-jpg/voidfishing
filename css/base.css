@@ -60,8 +60,38 @@ body {
   touch-action: none;
 }
 
-/* Film grain is drawn into the canvas itself (js/render/scene.js) so it sits
-   under the interface and costs one patterned fill instead of a compositing layer. */
+/* Vignette, pulse and grain are static compositing layers rather than per-frame
+   canvas fills. Full-screen translucent fillRects were the dominant raster cost;
+   as CSS layers the compositor handles them once. */
+#vignette, #vigPulse, #grain {
+  position: absolute; inset: 0;
+  pointer-events: none; z-index: 2;
+}
+#vignette {
+  background: radial-gradient(ellipse 78% 82% at 50% 52%,
+              rgba(0,0,0,0) 28%, rgba(0,0,0,0.30) 66%, rgba(0,0,0,0.62) 100%);
+}
+#vigPulse {
+  background: radial-gradient(ellipse 62% 68% at 50% 52%,
+              rgba(0,0,0,0) 18%, rgba(0,0,0,0.42) 72%, rgba(0,0,0,0.72) 100%);
+  opacity: 0;
+  transition: opacity 180ms linear;
+}
+#grain {
+  inset: -28px;
+  opacity: 0.042;
+  background-repeat: repeat;
+  animation: grainDrift 5.5s steps(5) infinite;
+}
+@keyframes grainDrift {
+  0%   { transform: translate3d(0, 0, 0); }
+  20%  { transform: translate3d(-9px, 6px, 0); }
+  40%  { transform: translate3d(7px, -10px, 0); }
+  60%  { transform: translate3d(-6px, -5px, 0); }
+  80%  { transform: translate3d(10px, 8px, 0); }
+  100% { transform: translate3d(0, 0, 0); }
+}
+body.q-low #grain { display: none; }
 
 /* Coloured bleed at the screen edges, tinted by the current location. */
 #edgeGlow {
@@ -147,4 +177,5 @@ button:focus-visible, [tabindex]:focus-visible { outline: 1px solid var(--line-3
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  #grain { animation: none; }
 }
