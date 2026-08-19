@@ -94,8 +94,9 @@
       ctx.fillStyle = 'rgb(' + p.r[i] + ',' + p.g[i] + ',' + p.b[i] + ')';
 
       if (k === KIND.RAIN) {
-        const len = Math.max(4, p.size[i] * 5);
-        ctx.fillRect(p.x[i], p.y[i], 1, len);
+        // streak length follows fall speed, so heavy rain reads as heavy rain
+        const len = Math.max(5, p.vy[i] * 0.022);
+        ctx.fillRect(p.x[i], p.y[i], p.size[i] > 1.1 ? 1.6 : 1, len);
       } else if (k === KIND.METEOR) {
         const len = p.size[i] * 9;
         const nx = p.vx[i], ny = p.vy[i];

@@ -319,7 +319,7 @@
       cv.width = 240; cv.height = 132;
       const g = cv.getContext('2d');
       g.save(); g.translate(120, 66);
-      const sz = dexArtSize(f, 132);
+      const sz = VF.fishArt.fitSize(f, 118);
       if (has) VF.fishArt.draw(g, f, sz, { time: i * 0.7 });
       else { g.globalAlpha = 0.34; VF.fishArt.drawSilhouette(g, f, sz, 0.85); }
       g.restore();
@@ -338,13 +338,6 @@
     b.appendChild(grid);
     p.appendChild(b);
     return p;
-  }
-
-  /* Fit tall or long species inside the grid tile. */
-  function dexArtSize(f, box) {
-    const tall = { orb: 0.72, round: 0.62, blob: 0.58, jelly: 0.55, anomaly: 0.52,
-                   fractal: 0.50, crustacean: 0.44, ray: 0.42, shard: 0.40, whale: 0.38 }[f.art.body] || 0.30;
-    return Math.min(box * 0.30, (box * 0.40) / (tall * 2));
   }
 
   function showDexDetail(f, entry) {

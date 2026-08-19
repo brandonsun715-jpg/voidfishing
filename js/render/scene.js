@@ -246,15 +246,16 @@
       targetAngle = U.lerp(-0.62, -1.15, U.easeInOutSine(S.charge));
       targetBend = 0.10 + S.charge * 0.34;
     } else if (S.state === 'reeling' && S.fight) {
-      targetAngle = -0.62 + S.fight.tension * 0.30;
-      targetBend = 0.16 + S.fight.tension * 0.85 + S.fight.surge * 0.25;
+      targetAngle = -0.62 + S.fight.tension * 0.22;
+      targetBend = 0.16 + S.fight.tension * 0.40 + S.fight.surge * 0.16;
     } else if (S.state === 'bite') {
       targetBend = 0.10 + Math.sin(t * 26) * 0.16;
     }
 
     rodState.sway = Math.sin(t * 0.55) * 0.014 + Math.sin(t * 0.23) * 0.02;
     rodState.angle = U.approach(rodState.angle, targetAngle, 0.0015, dt);
-    rodState.bend = U.approach(rodState.bend, targetBend, 0.002, dt);
+    // a rod bends, it does not fold — the cap keeps the tip in front of the angler
+    rodState.bend = U.clamp(U.approach(rodState.bend, targetBend, 0.002, dt), 0, 0.78);
   }
 
   function rodTipPoint() {
@@ -266,9 +267,9 @@
     const ex = L.rodHand.x + Math.cos(a) * len;
     const ey = L.rodHand.y + Math.sin(a) * len;
     const nx = -Math.sin(a), ny = Math.cos(a);
-    const cx = L.rodHand.x + Math.cos(a) * len * 0.5 + nx * len * bend * 0.30;
-    const cy = L.rodHand.y + Math.sin(a) * len * 0.5 + ny * len * bend * 0.30;
-    // tip follows the bend
+    // the blank curves progressively: little deflection at the butt, most at the tip
+    const cx = L.rodHand.x + Math.cos(a) * len * 0.5 + nx * len * bend * 0.10;
+    const cy = L.rodHand.y + Math.sin(a) * len * 0.5 + ny * len * bend * 0.10;
     const tx = ex + nx * len * bend * 0.30;
     const ty = ey + ny * len * bend * 0.30;
     return { x: tx, y: ty, cx: cx, cy: cy, len: len, a: a };
@@ -329,15 +330,15 @@
 
     const rain = VF.weather.rain();
     if (rain > 0.02) {
-      const want = Math.round(rain * 130 * scale);
+      const want = Math.round(rain * 190 * scale);
       const have = VF.particles.countOf(K.RAIN);
-      const spawnN = Math.min(8, Math.max(0, Math.round((want - have) * 0.25)));
+      const spawnN = Math.min(14, Math.max(0, Math.round((want - have) * 0.3)));
       for (let i = 0; i < spawnN; i++) {
         VF.particles.spawn({
           x: Math.random() * (W * 1.3) - W * 0.15, y: -20,
           vx: 30 + rain * 60, vy: 620 + Math.random() * 340,
-          life: 4, size: 0.6 + Math.random() * 0.9,
-          color: [180, 210, 232], alpha: 0.18 + Math.random() * 0.22,
+          life: 4, size: 0.5 + Math.random() * 1.1,
+          color: [186, 214, 236], alpha: 0.26 + Math.random() * 0.34,
           kind: K.RAIN, drag: 1, grav: 60
         });
       }
@@ -347,6 +348,37 @@
 
     const met = VF.weather.meteors();
     if (met > 0.05 && Math.random() < dt * 1.9 * met) spawnMeteor();
+
+    // distant lightning: a soft sky-wide bloom, well behind the horizon
+    if (VF.weather.id() === 'storm') {
+      lightning -= dt;
+      if (lightning <= 0) {
+        lightning = VF.rng.g.range(9, 26);
+        flashT = 0.55;
+        flashX = VF.rng.g.range(0.1, 0.9);
+        VF.audio.thunder(VF.rng.g.range(1.4, 3.2));
+      }
+    }
+    if (flashT > 0) flashT = Math.max(0, flashT - dt);
+  }
+
+  let lightning = 12, flashT = 0, flashX = 0.5;
+
+  /* Lightning is drawn as a bloom in the cloud layer, not a full-screen strobe. */
+  function drawLightning(P) {
+    if (flashT <= 0 || VF.state.data.settings.reduceFlash) return;
+    const k = Math.pow(flashT / 0.55, 1.8) * (0.55 + 0.45 * Math.sin(flashT * 47));
+    if (k <= 0.01) return;
+    const x = flashX * W, y = L.horizonY * 0.52;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, Math.max(W, H) * 0.55);
+    g.addColorStop(0, 'rgba(210,225,255,' + (0.30 * k).toFixed(3) + ')');
+    g.addColorStop(0.35, 'rgba(170,195,240,' + (0.09 * k).toFixed(3) + ')');
+    g.addColorStop(1, 'rgba(150,180,230,0)');
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, L.horizonY);
+    ctx.restore();
   }
 
   function spawnMeteor() {
@@ -387,6 +419,7 @@
     mark('horizon', function () { drawHorizonFeature(P); });
     mark('land', function () { if (backdrop) ctx.drawImage(backdrop, 0, 0, W, H); });
     mark('aurora', function () { drawAurora(P); });
+    mark('lightning', function () { drawLightning(P); });
     mark('fog', function () { drawFog(P, q); });
     mark('water', function () { drawWater(P, q); });
     mark('under', function () { drawUnderwater(P); });

@@ -160,18 +160,10 @@
     g.save();
     g.translate(art.width / 2, art.height / 2 + Math.sin(artT * 1.4) * 4);
     g.rotate(Math.sin(artT * 0.85) * 0.055);
-    const size = fitSize(c.fish, 150);
+    const size = VF.fishArt.fitSize(c.fish, 150);
     VF.fishArt.draw(g, c.fish, size, { time: artT, mutation: c.mutation });
     g.restore();
     raf = requestAnimationFrame(loop);
-  }
-
-  /* Keep very long or very tall species inside the hero box. */
-  function fitSize(f, box) {
-    const tall = { orb: 0.72, round: 0.62, blob: 0.58, jelly: 0.55, anomaly: 0.52,
-                   fractal: 0.50, crustacean: 0.44, ray: 0.42, shard: 0.40, whale: 0.38 }[f.art.body] || 0.30;
-    const byHeight = (box * 0.46) / (tall * 2);
-    return Math.min(box * 0.42, byHeight);
   }
 
   function act(kind) {

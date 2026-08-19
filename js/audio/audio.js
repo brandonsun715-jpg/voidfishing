@@ -385,6 +385,12 @@
       tone(n, 55, 4.5, 'sine', 0.16, 34);
       noiseBurst(n + 0.2, 2.4, 'lowpass', 260, 0.07, 70);
     },
+    thunder: function (delay) {
+      // low, distant, and slow to arrive
+      const n = ac.currentTime + (delay || 2);
+      noiseBurst(n, 2.6, 'lowpass', 220, 0.075, 55);
+      tone(n + 0.1, 44, 2.4, 'sine', 0.055, 30);
+    },
     sell: function () {
       const n = ac.currentTime;
       tone(n, 1050, 0.07, 'triangle', 0.055);

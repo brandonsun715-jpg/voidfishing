@@ -63,6 +63,9 @@
     return VF.util.lerp(av, bv, VF.util.smoothstep(blend));
   }
 
+  /* Whoever changes the location, the weather follows. */
+  VF.bus.on('location:changed', function () { reconcile(); });
+
   VF.weather = {
     tick: tick, reconcile: reconcile, force: force, field: field,
     id: function () { return blend < 0.5 && next ? current : (next && blend >= 0.5 ? next : current); },

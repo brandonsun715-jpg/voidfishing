@@ -56,7 +56,11 @@ const path = require('path');
 
       if (VF.fishing.state() === 'bite') {
         if (Math.random() < 0.92) VF.fishing.hook();
-        else { await sleep(1500); }   // deliberately miss sometimes
+        else {
+          await sleep(1500);              // deliberately miss the window
+          // a missed bite drops back to waiting, so reel in to end the cycle
+          VF.fishing.reelIn();
+        }
       }
 
       guard = 0;

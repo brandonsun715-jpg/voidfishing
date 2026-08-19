@@ -153,7 +153,7 @@
   { id: 'tidewalker', name: 'Tidewalker Crab', rarity: 'rare', value: 690, kg: [1.0, 14.0], m: [0.2, 0.9], diff: 0.52,
     desc: 'Walks along the underside of the surface as though it were a floor.',
     locs: ['shore', 'flats', 'trench'], baits: ['worm', 'cluster'], time: [], weather: ['rain', 'storm'],
-    art: { body: 'crustacean', fin: 'none', eyes: 4, glow: 0.1, c1: '#8f5a6a', c2: '#4f2c38', c3: '#e0a2ae', ex: ['spine'] } },
+    art: { body: 'crustacean', fin: 'legs', eyes: 4, glow: 0.1, c1: '#8f5a6a', c2: '#4f2c38', c3: '#e0a2ae', ex: ['spine'] } },
 
   { id: 'starling_koi', name: 'Starling Koi', rarity: 'rare', value: 880, kg: [1.0, 12.0], m: [0.3, 0.9], diff: 0.44,
     desc: 'Its markings match a constellation nobody has bothered to name.',

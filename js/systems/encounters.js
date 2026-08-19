@@ -140,8 +140,10 @@
     }
     if (encPhase === 'still' && encT > 1.6) {
       encPhase = 'reveal'; encT = 0;
-      const L = VF.scene.L;
-      VF.scene.addShadow({ x: -0.35, y: 0.30, sp: 0.055, size: 5.5, alpha: 0.62, life: 14, max: 14 });
+      const loc = VF.locations.current();
+      // something very large, and something faintly lit inside it
+      VF.scene.addShadow({ x: -0.45, y: 0.34, sp: 0.062, size: 9.5, alpha: 0.86, life: 15, max: 15 });
+      VF.scene.addShadow({ x: -0.40, y: 0.30, sp: 0.062, size: 3.2, alpha: 0.5, life: 15, max: 15, glow: loc.glow });
       VF.fx.pulse(0.7);
       VF.bus.emit('encounter:reveal', encData);
     } else if (encPhase === 'reveal' && encT > 2.6) {

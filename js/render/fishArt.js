@@ -14,14 +14,20 @@
     return h >>> 0;
   }
 
+  /* Half-height of each body as a fraction of total length. The renderers and
+     the UI sizing helpers all read this, so proportions stay consistent. */
+  const BODY_H = {
+    torpedo: 0.30, round: 0.38, eel: 0.13, serpent: 0.15, blob: 0.36,
+    jelly: 0.34, ray: 0.22, shard: 0.34, orb: 0.46, crustacean: 0.32,
+    whale: 0.27, ribbon: 0.20, anomaly: 0.36, fractal: 0.38
+  };
+  function bodyRatio(kind) { return BODY_H[kind] === undefined ? 0.30 : BODY_H[kind]; }
+
   /* ------------------------------------------------------------- bodies
      Each returns the path on ctx and reports its bounding half-height. */
 
   function bodyPath(ctx, kind, L, sway, rnd) {
-    const h = { torpedo: 0.30, round: 0.62, eel: 0.13, serpent: 0.15, blob: 0.58,
-                jelly: 0.55, ray: 0.42, shard: 0.40, orb: 0.72, crustacean: 0.44,
-                whale: 0.38, ribbon: 0.20, anomaly: 0.52, fractal: 0.50 }[kind] || 0.34;
-    const H = L * h;
+    const H = L * bodyRatio(kind);
 
     ctx.beginPath();
     switch (kind) {
@@ -90,12 +96,16 @@
         break;
       }
 
-      case 'ray':
-        ctx.moveTo(L * 0.48, 0);
-        ctx.bezierCurveTo(L * 0.30, -H * 0.55, -L * 0.10, -H * 2.0, -L * 0.46, -H * 1.15);
-        ctx.bezierCurveTo(-L * 0.30, -H * 0.30, -L * 0.30, H * 0.30, -L * 0.46, H * 1.15);
-        ctx.bezierCurveTo(-L * 0.10, H * 2.0, L * 0.30, H * 0.55, L * 0.48, 0);
+      case 'ray': {
+        // seen from above: a broad diamond of wing with a whip of tail behind
+        const spanX = L * 0.46, spanY = H * 3.0;
+        ctx.moveTo(spanX, 0);
+        ctx.bezierCurveTo(L * 0.30, -spanY * 0.30, L * 0.02, -spanY * 0.92, -L * 0.34, -spanY);
+        ctx.bezierCurveTo(-L * 0.24, -spanY * 0.42, -L * 0.26, -spanY * 0.14, -L * 0.30, 0);
+        ctx.bezierCurveTo(-L * 0.26, spanY * 0.14, -L * 0.24, spanY * 0.42, -L * 0.34, spanY);
+        ctx.bezierCurveTo(L * 0.02, spanY * 0.92, L * 0.30, spanY * 0.30, spanX, 0);
         break;
+      }
 
       case 'shard':
         ctx.moveTo(L * 0.52, 0);
@@ -109,21 +119,25 @@
         break;
 
       case 'crustacean':
-        ctx.moveTo(L * 0.40, -H * 0.20);
-        ctx.bezierCurveTo(L * 0.48, -H * 0.95, -L * 0.20, -H * 1.15, -L * 0.42, -H * 0.42);
-        ctx.lineTo(-L * 0.48, 0);
-        ctx.lineTo(-L * 0.42, H * 0.42);
-        ctx.bezierCurveTo(-L * 0.20, H * 1.15, L * 0.48, H * 0.95, L * 0.40, H * 0.20);
+        // carapace: wider than long, slightly squared at the front
+        ctx.moveTo(L * 0.34, -H * 0.35);
+        ctx.bezierCurveTo(L * 0.46, -H * 0.95, -L * 0.10, -H * 1.20, -L * 0.36, -H * 0.72);
+        ctx.bezierCurveTo(-L * 0.50, -H * 0.34, -L * 0.50, H * 0.34, -L * 0.36, H * 0.72);
+        ctx.bezierCurveTo(-L * 0.10, H * 1.20, L * 0.46, H * 0.95, L * 0.34, H * 0.35);
+        ctx.quadraticCurveTo(L * 0.40, 0, L * 0.34, -H * 0.35);
         break;
 
       case 'whale':
-        ctx.moveTo(L * 0.52, -H * 0.10);
-        ctx.bezierCurveTo(L * 0.40, -H * 1.02, -L * 0.10, -H * 1.10, -L * 0.36, -H * 0.42);
-        ctx.lineTo(-L * 0.52, -H * 0.92);
-        ctx.lineTo(-L * 0.48, 0);
-        ctx.lineTo(-L * 0.52, H * 0.92);
-        ctx.lineTo(-L * 0.36, H * 0.42);
-        ctx.bezierCurveTo(-L * 0.06, H * 1.16, L * 0.42, H * 1.00, L * 0.52, H * 0.10);
+        // blunt head, long tapering body, deeply forked flukes
+        ctx.moveTo(L * 0.50, H * 0.05);
+        ctx.bezierCurveTo(L * 0.50, -H * 0.85, L * 0.20, -H * 1.05, -L * 0.05, -H * 0.85);
+        ctx.bezierCurveTo(-L * 0.22, -H * 0.70, -L * 0.30, -H * 0.42, -L * 0.36, -H * 0.20);
+        ctx.lineTo(-L * 0.60, -H * 1.45);
+        ctx.quadraticCurveTo(-L * 0.44, -H * 0.22, -L * 0.42, 0);
+        ctx.quadraticCurveTo(-L * 0.44, H * 0.22, -L * 0.60, H * 1.45);
+        ctx.lineTo(-L * 0.36, H * 0.20);
+        ctx.bezierCurveTo(-L * 0.24, H * 0.62, L * 0.14, H * 1.00, L * 0.44, H * 0.72);
+        ctx.quadraticCurveTo(L * 0.53, H * 0.42, L * 0.50, H * 0.05);
         break;
 
       case 'anomaly': {
@@ -169,12 +183,53 @@
 
     const tailX = -L * 0.36;
     switch (style) {
+      case 'legs': {
+        ctx.strokeStyle = col;
+        ctx.lineCap = 'round';
+        ctx.lineWidth = Math.max(1, L * 0.020);
+        for (let side = -1; side <= 1; side += 2) {
+          for (let j = 0; j < 3; j++) {
+            const x = L * (0.10 - j * 0.20);
+            const reach = H * (1.5 + j * 0.25);
+            ctx.beginPath();
+            ctx.moveTo(x, side * H * 0.55);
+            ctx.quadraticCurveTo(x - L * 0.06, side * reach * 0.75,
+                                 x - L * 0.14, side * reach + sway * 3);
+            ctx.stroke();
+          }
+        }
+        // claws, held forward
+        for (let side = -1; side <= 1; side += 2) {
+          ctx.lineWidth = Math.max(1, L * 0.026);
+          ctx.beginPath();
+          ctx.moveTo(L * 0.26, side * H * 0.45);
+          ctx.lineTo(L * 0.50, side * H * 1.15);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.ellipse(L * 0.56, side * H * 1.30, L * 0.075, H * 0.42, side * 0.7, 0, TAU);
+          ctx.fill();
+        }
+        break;
+      }
       case 'wing':
-        // handled by the body silhouettes that use it (ray/whale); add a small rudder
+        // pectoral fins sweeping back and down from behind the head
+        for (let w = 0; w < 2; w++) {
+          const dir = w ? 1 : -1;
+          const reach = w ? 1 : 0.55;      // near fin larger than the far one
+          ctx.beginPath();
+          ctx.moveTo(L * 0.18, dir * H * 0.30);
+          ctx.quadraticCurveTo(L * 0.02, dir * H * (1.9 * reach) + sway * 5,
+                               -L * 0.30, dir * H * (2.3 * reach) + sway * 7);
+          ctx.quadraticCurveTo(-L * 0.14, dir * H * (1.0 * reach), -L * 0.10, dir * H * 0.28);
+          ctx.closePath();
+          ctx.globalAlpha = alpha * (w ? 1 : 0.55);
+          ctx.fill();
+        }
+        ctx.globalAlpha = alpha;
+        // dorsal
         ctx.beginPath();
-        ctx.moveTo(tailX, 0);
-        ctx.quadraticCurveTo(-L * 0.62, -H * 0.9 + sway * 6, -L * 0.72, -H * 0.2);
-        ctx.quadraticCurveTo(-L * 0.62, H * 0.5 + sway * 6, tailX, H * 0.15);
+        ctx.moveTo(L * 0.10, -H * 0.78);
+        ctx.quadraticCurveTo(-L * 0.04, -H * 1.7, -L * 0.24, -H * 0.70);
         ctx.closePath(); ctx.fill();
         break;
       case 'veil':
@@ -524,8 +579,12 @@
     const L = size * 2;
     const pal = palette(art, opts.mutation);
     const glow = art.glow * (pal.mut ? 1.25 : 1);
+    const j = jitter(fish.id);
 
     ctx.save();
+    // per-species proportion jitter, so two fish sharing a body type are never
+    // the same fish in a different colour
+    ctx.scale(j.x, j.y);
 
     // outer glow
     if (glow > 0.05) {
@@ -561,10 +620,16 @@
     ctx.fillRect(-L, -H * 1.3, L * 2, H * 1.6);
     ctx.restore();
 
-    // outline
-    ctx.strokeStyle = U.rgbToCss(U.shade(U.hexToRgb(pal.c2), -0.45), 0.65);
-    ctx.lineWidth = Math.max(0.8, L * 0.007);
+    // Outline, then a rim light. Without the rim the near-black species read as
+    // holes rather than creatures.
+    ctx.strokeStyle = U.rgbToCss(U.shade(U.hexToRgb(pal.c2), -0.5), 0.55);
+    ctx.lineWidth = Math.max(0.8, L * 0.009);
     ctx.stroke();
+    ctx.save();
+    ctx.strokeStyle = U.rgbToCss(U.hexToRgb(pal.c3), 0.42);
+    ctx.lineWidth = Math.max(0.7, L * 0.005);
+    ctx.stroke();
+    ctx.restore();
 
     drawExtras(ctx, art.ex || [], L, H, sway, { c1: pal.c1, c2: pal.c2, c3: pal.c3 }, rnd, tm);
 
@@ -587,11 +652,27 @@
     ctx.restore();
   }
 
-  function measureH(kind, L) {
-    const h = { torpedo: 0.30, round: 0.62, eel: 0.13, serpent: 0.15, blob: 0.58,
-                jelly: 0.55, ray: 0.42, shard: 0.40, orb: 0.72, crustacean: 0.44,
-                whale: 0.38, ribbon: 0.20, anomaly: 0.52, fractal: 0.50 }[kind] || 0.34;
-    return L * h;
+  function measureH(kind, L) { return L * bodyRatio(kind); }
+
+  /* Deterministic proportion jitter keyed to the species id. */
+  const jitterCache = Object.create(null);
+  function jitter(id) {
+    let j = jitterCache[id];
+    if (!j) {
+      const r = VF.rng.make(hash(id) ^ 0x5bf03635);
+      j = jitterCache[id] = { x: 0.90 + r() * 0.24, y: 0.84 + r() * 0.34 };
+    }
+    return j;
+  }
+
+  /* The largest half-size a creature can be drawn at and still fit a box. */
+  function fitSize(fish, box) {
+    const kind = fish.art.body;
+    const r = bodyRatio(kind);
+    // the paths overshoot the nominal half-height, most of all on the winged bodies
+    const over = (kind === 'ray' || kind === 'jelly') ? 2.2 : (kind === 'serpent' || kind === 'eel' || kind === 'ribbon') ? 3.4 : 1.35;
+    const byHeight = (box * 0.46) / (r * 2 * over * 1.18);
+    return Math.max(6, Math.min(box * 0.40, byHeight));
   }
 
   function drawSilhouette(ctx, fish, size, alpha) {
@@ -599,7 +680,9 @@
     const L = size * 2;
     const rnd = VF.rng.make(hash(fish.id));
     const H = measureH(art.body, L);
+    const j = jitter(fish.id);
     ctx.save();
+    ctx.scale(j.x, j.y);
     ctx.globalAlpha = alpha === undefined ? 0.8 : alpha;
     drawFins(ctx, art.fin, L, H, 0, '#000', 1);
     bodyPath(ctx, art.body, L, 0, rnd);
@@ -613,5 +696,6 @@
     ctx.restore();
   }
 
-  VF.fishArt = { draw: draw, drawSilhouette: drawSilhouette, palette: palette, hash: hash };
+  VF.fishArt = { draw: draw, drawSilhouette: drawSilhouette, palette: palette,
+                 hash: hash, bodyRatio: bodyRatio, fitSize: fitSize };
 })(window.VF = window.VF || {});
