@@ -186,7 +186,7 @@
     const f = c.fish;
     const rank = VF.rarities.rank(c.rarity);
     // difficulty grows with species difficulty, rarity and how big this individual is
-    const raw = f.diff * 0.62 + rank * 0.055 + c.pct * 0.22;
+    const raw = f.diff * 0.55 + rank * 0.100 + c.pct * 0.16;
     const power = U.clamp(raw, 0.08, 1.35);
     return {
       power: power,                                   // how hard it pulls
