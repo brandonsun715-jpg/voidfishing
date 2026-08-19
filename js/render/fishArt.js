@@ -97,13 +97,17 @@
       }
 
       case 'ray': {
-        // seen from above: a broad diamond of wing with a whip of tail behind
-        const spanX = L * 0.46, spanY = H * 3.0;
-        ctx.moveTo(spanX, 0);
-        ctx.bezierCurveTo(L * 0.30, -spanY * 0.30, L * 0.02, -spanY * 0.92, -L * 0.34, -spanY);
-        ctx.bezierCurveTo(-L * 0.24, -spanY * 0.42, -L * 0.26, -spanY * 0.14, -L * 0.30, 0);
-        ctx.bezierCurveTo(-L * 0.26, spanY * 0.14, -L * 0.24, spanY * 0.42, -L * 0.34, spanY);
-        ctx.bezierCurveTo(L * 0.02, spanY * 0.92, L * 0.30, spanY * 0.30, spanX, 0);
+        // seen from above: broad wings, a pair of cephalic lobes at the head,
+        // and a narrow body tapering to a whip
+        const spanX = L * 0.42, spanY = H * 3.0;
+        ctx.moveTo(spanX, -H * 0.30);
+        ctx.quadraticCurveTo(L * 0.52, -H * 0.10, spanX + L * 0.02, H * 0.06);
+        ctx.quadraticCurveTo(L * 0.50, H * 0.24, spanX - L * 0.02, H * 0.34);
+        ctx.bezierCurveTo(L * 0.26, spanY * 0.34, L * 0.00, spanY * 0.94, -L * 0.34, spanY);
+        ctx.bezierCurveTo(-L * 0.24, spanY * 0.40, -L * 0.30, spanY * 0.10, -L * 0.50, H * 0.06);
+        ctx.lineTo(-L * 0.50, -H * 0.06);
+        ctx.bezierCurveTo(-L * 0.30, -spanY * 0.10, -L * 0.24, -spanY * 0.40, -L * 0.34, -spanY);
+        ctx.bezierCurveTo(L * 0.00, -spanY * 0.94, L * 0.26, -spanY * 0.34, spanX, -H * 0.30);
         break;
       }
 
@@ -176,96 +180,160 @@
 
   /* --------------------------------------------------------------- fins */
 
-  function drawFins(ctx, style, L, H, sway, col, alpha) {
-    if (style === 'none') return;
+  /* Fins are membrane plus rays: fill the shape, then stroke thin supports
+     radiating from where the fin meets the body. That single detail is most of
+     what separates a fin from a triangle. */
+  function paintFin(ctx, path, col, alpha, rays) {
     ctx.globalAlpha = alpha;
     ctx.fillStyle = col;
+    ctx.fill(path);
+    if (rays && rays.n > 1) {
+      ctx.save();
+      ctx.clip(path);
+      ctx.strokeStyle = rays.col;
+      ctx.globalAlpha = alpha * 0.55;
+      ctx.lineWidth = rays.w;
+      ctx.lineCap = 'round';
+      for (let i = 0; i < rays.n; i++) {
+        const t = i / (rays.n - 1);
+        const a = rays.a0 + (rays.a1 - rays.a0) * t;
+        ctx.beginPath();
+        ctx.moveTo(rays.x, rays.y);
+        ctx.lineTo(rays.x + Math.cos(a) * rays.len, rays.y + Math.sin(a) * rays.len);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+    ctx.globalAlpha = alpha;
+  }
 
+  function drawFins(ctx, style, L, H, sway, col, alpha, accent) {
+    if (style === 'none') return;
+    const rayCol = accent || col;
+    const rw = Math.max(0.6, L * 0.006);
     const tailX = -L * 0.36;
+
     switch (style) {
       case 'legs': {
         ctx.strokeStyle = col;
+        ctx.fillStyle = col;
+        ctx.globalAlpha = alpha;
         ctx.lineCap = 'round';
         ctx.lineWidth = Math.max(1, L * 0.020);
         for (let side = -1; side <= 1; side += 2) {
-          for (let j = 0; j < 3; j++) {
-            const x = L * (0.10 - j * 0.20);
-            const reach = H * (1.5 + j * 0.25);
+          for (let j = 0; j < 4; j++) {
+            const x = L * (0.14 - j * 0.15);
+            const reach = H * (0.95 + j * 0.12);
             ctx.beginPath();
-            ctx.moveTo(x, side * H * 0.55);
-            ctx.quadraticCurveTo(x - L * 0.06, side * reach * 0.75,
-                                 x - L * 0.14, side * reach + sway * 3);
+            ctx.moveTo(x, side * H * 0.62);
+            ctx.quadraticCurveTo(x - L * 0.10, side * reach * 0.9,
+                                 x - L * 0.22, side * reach + sway * 2);
             ctx.stroke();
           }
         }
-        // claws, held forward
+        // claws: an upper arm, a forearm, then a two-part pincer
         for (let side = -1; side <= 1; side += 2) {
-          ctx.lineWidth = Math.max(1, L * 0.026);
+          const ex = L * 0.30, ey = side * H * 1.05;      // elbow
+          const cx = L * 0.56, cy = side * H * 0.86;      // claw base
+          ctx.lineWidth = Math.max(1.4, L * 0.030);
           ctx.beginPath();
-          ctx.moveTo(L * 0.26, side * H * 0.45);
-          ctx.lineTo(L * 0.50, side * H * 1.15);
+          ctx.moveTo(L * 0.20, side * H * 0.55);
+          ctx.lineTo(ex, ey);
+          ctx.lineTo(cx, cy);
+          ctx.stroke();
+          ctx.save();
+          ctx.translate(cx, cy);
+          ctx.rotate(side * -0.5);
+          ctx.beginPath();
+          ctx.ellipse(0, 0, L * 0.085, H * 0.38, 0, 0, TAU);
+          ctx.fill();
+          ctx.lineWidth = Math.max(1.1, L * 0.020);
+          ctx.beginPath();
+          ctx.moveTo(L * 0.05, -H * 0.14);
+          ctx.lineTo(L * 0.17, -H * 0.30);
           ctx.stroke();
           ctx.beginPath();
-          ctx.ellipse(L * 0.56, side * H * 1.30, L * 0.075, H * 0.42, side * 0.7, 0, TAU);
-          ctx.fill();
+          ctx.moveTo(L * 0.05, H * 0.10);
+          ctx.lineTo(L * 0.17, H * 0.02);
+          ctx.stroke();
+          ctx.restore();
         }
         break;
       }
-      case 'wing':
-        // pectoral fins sweeping back and down from behind the head
+
+      case 'wing': {
         for (let w = 0; w < 2; w++) {
           const dir = w ? 1 : -1;
-          const reach = w ? 1 : 0.55;      // near fin larger than the far one
-          ctx.beginPath();
-          ctx.moveTo(L * 0.18, dir * H * 0.30);
-          ctx.quadraticCurveTo(L * 0.02, dir * H * (1.9 * reach) + sway * 5,
-                               -L * 0.30, dir * H * (2.3 * reach) + sway * 7);
-          ctx.quadraticCurveTo(-L * 0.14, dir * H * (1.0 * reach), -L * 0.10, dir * H * 0.28);
-          ctx.closePath();
-          ctx.globalAlpha = alpha * (w ? 1 : 0.55);
-          ctx.fill();
+          const reach = w ? 1 : 0.55;
+          const p = new Path2D();
+          p.moveTo(L * 0.18, dir * H * 0.30);
+          p.quadraticCurveTo(L * 0.02, dir * H * (1.9 * reach) + sway * 5,
+                             -L * 0.30, dir * H * (2.3 * reach) + sway * 7);
+          p.quadraticCurveTo(-L * 0.14, dir * H * (1.0 * reach), -L * 0.10, dir * H * 0.28);
+          p.closePath();
+          paintFin(ctx, p, col, alpha * (w ? 1 : 0.55), {
+            col: rayCol, w: rw, n: 6, x: L * 0.12, y: dir * H * 0.32, len: L * 0.62,
+            a0: dir > 0 ? 0.5 : -0.5, a1: dir > 0 ? 2.5 : -2.5
+          });
         }
+        const d = new Path2D();
+        d.moveTo(L * 0.10, -H * 0.78);
+        d.quadraticCurveTo(-L * 0.04, -H * 1.7, -L * 0.24, -H * 0.70);
+        d.closePath();
+        paintFin(ctx, d, col, alpha, { col: rayCol, w: rw, n: 5, x: -L * 0.06,
+          y: -H * 0.70, len: H * 1.2, a0: -2.2, a1: -1.0 });
+        break;
+      }
+
+      case 'veil': {
+        const t = new Path2D();
+        t.moveTo(tailX, -H * 0.28);
+        t.bezierCurveTo(-L * 0.72, -H * 1.5 + sway * 9, -L * 0.95, -H * 0.5, -L * 0.78, H * 0.15 + sway * 5);
+        t.bezierCurveTo(-L * 0.95, H * 0.9, -L * 0.66, H * 1.6, tailX, H * 0.28);
+        t.closePath();
+        paintFin(ctx, t, col, alpha * 0.82, { col: rayCol, w: rw, n: 9,
+          x: tailX, y: 0, len: L * 0.62, a0: -2.55, a1: 2.55 });
+        const d = new Path2D();
+        d.moveTo(L * 0.14, -H * 0.72);
+        d.quadraticCurveTo(-L * 0.05, -H * 2.0 + sway * 7, -L * 0.30, -H * 0.7);
+        d.closePath();
+        paintFin(ctx, d, col, alpha * 0.82, { col: rayCol, w: rw, n: 7,
+          x: -L * 0.08, y: -H * 0.70, len: H * 1.5, a0: -2.4, a1: -0.9 });
+        break;
+      }
+
+      case 'long': {
+        const t = new Path2D();
+        t.moveTo(tailX, -H * 0.22);
+        t.lineTo(-L * 0.88, -H * 1.25 + sway * 8);
+        t.lineTo(-L * 0.66, 0);
+        t.lineTo(-L * 0.88, H * 1.25 + sway * 8);
+        t.lineTo(tailX, H * 0.22);
+        t.closePath();
+        paintFin(ctx, t, col, alpha, { col: rayCol, w: rw, n: 9,
+          x: tailX, y: 0, len: L * 0.60, a0: -2.5, a1: 2.5 });
+        const d = new Path2D();
+        d.moveTo(L * 0.20, -H * 0.70);
+        d.quadraticCurveTo(L * 0.02, -H * 1.85, -L * 0.28, -H * 0.66);
+        d.closePath();
+        paintFin(ctx, d, col, alpha, { col: rayCol, w: rw, n: 7,
+          x: -L * 0.04, y: -H * 0.66, len: H * 1.4, a0: -2.3, a1: -0.85 });
+        break;
+      }
+
+      case 'spiky': {
+        const t = new Path2D();
+        t.moveTo(tailX, -H * 0.24);
+        t.lineTo(-L * 0.70, -H * 1.05 + sway * 6);
+        t.lineTo(-L * 0.56, -H * 0.20);
+        t.lineTo(-L * 0.72, H * 0.25);
+        t.lineTo(-L * 0.62, H * 1.05 + sway * 6);
+        t.lineTo(tailX, H * 0.24);
+        t.closePath();
+        paintFin(ctx, t, col, alpha, { col: rayCol, w: rw, n: 7,
+          x: tailX, y: 0, len: L * 0.44, a0: -2.4, a1: 2.4 });
         ctx.globalAlpha = alpha;
-        // dorsal
-        ctx.beginPath();
-        ctx.moveTo(L * 0.10, -H * 0.78);
-        ctx.quadraticCurveTo(-L * 0.04, -H * 1.7, -L * 0.24, -H * 0.70);
-        ctx.closePath(); ctx.fill();
-        break;
-      case 'veil':
-        ctx.beginPath();
-        ctx.moveTo(tailX, -H * 0.28);
-        ctx.bezierCurveTo(-L * 0.72, -H * 1.5 + sway * 9, -L * 0.95, -H * 0.5, -L * 0.78, H * 0.15 + sway * 5);
-        ctx.bezierCurveTo(-L * 0.95, H * 0.9, -L * 0.66, H * 1.6, tailX, H * 0.28);
-        ctx.closePath(); ctx.fill();
-        // dorsal veil
-        ctx.beginPath();
-        ctx.moveTo(L * 0.14, -H * 0.72);
-        ctx.quadraticCurveTo(-L * 0.05, -H * 2.0 + sway * 7, -L * 0.30, -H * 0.7);
-        ctx.closePath(); ctx.fill();
-        break;
-      case 'long':
-        ctx.beginPath();
-        ctx.moveTo(tailX, -H * 0.22);
-        ctx.lineTo(-L * 0.88, -H * 1.25 + sway * 8);
-        ctx.lineTo(-L * 0.66, 0);
-        ctx.lineTo(-L * 0.88, H * 1.25 + sway * 8);
-        ctx.lineTo(tailX, H * 0.22);
-        ctx.closePath(); ctx.fill();
-        ctx.beginPath();
-        ctx.moveTo(L * 0.20, -H * 0.70);
-        ctx.quadraticCurveTo(L * 0.02, -H * 1.85, -L * 0.28, -H * 0.66);
-        ctx.closePath(); ctx.fill();
-        break;
-      case 'spiky':
-        ctx.beginPath();
-        ctx.moveTo(tailX, -H * 0.24);
-        ctx.lineTo(-L * 0.70, -H * 1.05 + sway * 6);
-        ctx.lineTo(-L * 0.56, -H * 0.20);
-        ctx.lineTo(-L * 0.72, H * 0.25);
-        ctx.lineTo(-L * 0.62, H * 1.05 + sway * 6);
-        ctx.lineTo(tailX, H * 0.24);
-        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = col;
         for (let i = 0; i < 5; i++) {
           const x = L * (0.24 - i * 0.13);
           ctx.beginPath();
@@ -275,38 +343,52 @@
           ctx.closePath(); ctx.fill();
         }
         break;
-      case 'frill':
-        ctx.beginPath();
-        ctx.moveTo(L * 0.30, -H * 0.62);
+      }
+
+      case 'frill': {
+        const d = new Path2D();
+        d.moveTo(L * 0.30, -H * 0.62);
         for (let i = 0; i <= 9; i++) {
           const k = i / 9;
           const x = U.lerp(L * 0.30, -L * 0.42, k);
-          ctx.lineTo(x, -H * (0.55 + Math.abs(Math.sin(k * 6 + sway)) * 0.95));
+          d.lineTo(x, -H * (0.55 + Math.abs(Math.sin(k * 6 + sway)) * 0.95));
         }
-        ctx.lineTo(-L * 0.42, -H * 0.4);
-        ctx.closePath(); ctx.fill();
-        ctx.beginPath();
-        ctx.moveTo(tailX, -H * 0.24);
-        ctx.quadraticCurveTo(-L * 0.74, 0 + sway * 8, tailX, H * 0.24);
-        ctx.closePath(); ctx.fill();
+        d.lineTo(-L * 0.42, -H * 0.4);
+        d.closePath();
+        paintFin(ctx, d, col, alpha, { col: rayCol, w: rw, n: 10,
+          x: -L * 0.06, y: -H * 0.5, len: H * 1.5, a0: -2.7, a1: -0.5 });
+        const t = new Path2D();
+        t.moveTo(tailX, -H * 0.24);
+        t.quadraticCurveTo(-L * 0.74, 0 + sway * 8, tailX, H * 0.24);
+        t.closePath();
+        paintFin(ctx, t, col, alpha, null);
         break;
-      default: /* normal */
-        ctx.beginPath();
-        ctx.moveTo(tailX, -H * 0.24);
-        ctx.lineTo(-L * 0.66, -H * 0.92 + sway * 7);
-        ctx.lineTo(-L * 0.58, 0);
-        ctx.lineTo(-L * 0.66, H * 0.92 + sway * 7);
-        ctx.lineTo(tailX, H * 0.24);
-        ctx.closePath(); ctx.fill();
-        ctx.beginPath();
-        ctx.moveTo(L * 0.16, -H * 0.72);
-        ctx.quadraticCurveTo(-L * 0.02, -H * 1.5, -L * 0.24, -H * 0.68);
-        ctx.closePath(); ctx.fill();
-        ctx.beginPath();
-        ctx.moveTo(L * 0.10, H * 0.62);
-        ctx.quadraticCurveTo(L * 0.00, H * 1.25, -L * 0.16, H * 0.60);
-        ctx.closePath(); ctx.fill();
+      }
+
+      default: { /* normal */
+        const t = new Path2D();
+        t.moveTo(tailX, -H * 0.24);
+        t.lineTo(-L * 0.66, -H * 0.92 + sway * 7);
+        t.lineTo(-L * 0.58, 0);
+        t.lineTo(-L * 0.66, H * 0.92 + sway * 7);
+        t.lineTo(tailX, H * 0.24);
+        t.closePath();
+        paintFin(ctx, t, col, alpha, { col: rayCol, w: rw, n: 8,
+          x: tailX, y: 0, len: L * 0.36, a0: -2.4, a1: 2.4 });
+        const d = new Path2D();
+        d.moveTo(L * 0.16, -H * 0.72);
+        d.quadraticCurveTo(-L * 0.02, -H * 1.5, -L * 0.24, -H * 0.68);
+        d.closePath();
+        paintFin(ctx, d, col, alpha, { col: rayCol, w: rw, n: 6,
+          x: -L * 0.04, y: -H * 0.68, len: H * 1.1, a0: -2.3, a1: -0.9 });
+        const an = new Path2D();
+        an.moveTo(L * 0.10, H * 0.62);
+        an.quadraticCurveTo(L * 0.00, H * 1.25, -L * 0.16, H * 0.60);
+        an.closePath();
+        paintFin(ctx, an, col, alpha, { col: rayCol, w: rw, n: 5,
+          x: -L * 0.03, y: H * 0.60, len: H * 0.9, a0: 0.9, a1: 2.3 });
         break;
+      }
     }
     ctx.globalAlpha = 1;
   }
@@ -397,16 +479,30 @@
           break;
         }
         case 'teeth': {
-          ctx.fillStyle = '#f2ede0'; ctx.globalAlpha = 0.9;
-          for (let j = 0; j < 6; j++) {
-            const x = L * (0.44 - j * 0.055);
-            const s = L * 0.026;
+          // an open jaw at the head: dark inside, teeth along both edges
+          const mx = L * 0.50, back = L * 0.14;
+          ctx.globalAlpha = 0.7;
+          ctx.fillStyle = 'rgba(6,4,11,0.7)';
+          ctx.beginPath();
+          ctx.moveTo(mx, -H * 0.20);
+          ctx.quadraticCurveTo(back + L * 0.08, -H * 0.10, back, H * 0.04);
+          ctx.quadraticCurveTo(back + L * 0.08, H * 0.26, mx, H * 0.40);
+          ctx.closePath(); ctx.fill();
+          ctx.globalAlpha = 0.95;
+          ctx.fillStyle = '#f4efe2';
+          const nT = 8;
+          for (let j = 0; j < nT; j++) {
+            const t = j / (nT - 1);
+            const xt = U.lerp(mx - L * 0.03, back + L * 0.04, t);
+            const yTop = U.lerp(-H * 0.18, H * 0.02, t);
+            const yBot = U.lerp(H * 0.37, H * 0.05, t);
+            const sz = L * 0.015 * (1 - t * 0.45);
             ctx.beginPath();
-            ctx.moveTo(x, H * 0.06); ctx.lineTo(x + s, H * 0.06);
-            ctx.lineTo(x + s * 0.5, H * 0.30); ctx.closePath(); ctx.fill();
+            ctx.moveTo(xt - sz, yTop); ctx.lineTo(xt + sz, yTop);
+            ctx.lineTo(xt, yTop + sz * 2.4); ctx.closePath(); ctx.fill();
             ctx.beginPath();
-            ctx.moveTo(x, -H * 0.02); ctx.lineTo(x + s, -H * 0.02);
-            ctx.lineTo(x + s * 0.5, -H * 0.24); ctx.closePath(); ctx.fill();
+            ctx.moveTo(xt - sz, yBot); ctx.lineTo(xt + sz, yBot);
+            ctx.lineTo(xt, yBot - sz * 2.4); ctx.closePath(); ctx.fill();
           }
           break;
         }
@@ -555,6 +651,91 @@
     }
   }
 
+  /* --------------------------------------------------- surface detail
+     Everything here paints inside the already-clipped body path. */
+
+  /* Rows of overlapping arcs. Reads as scales without costing a texture. */
+  function scaleTexture(ctx, L, H, col, rnd, dense) {
+    const step = L * (dense ? 0.042 : 0.058);
+    const r = step * 0.85;
+    ctx.strokeStyle = col;
+    ctx.lineWidth = Math.max(0.4, L * 0.0035);
+    ctx.globalAlpha = 0.13;
+    let row = 0;
+    for (let y = -H * 1.05; y < H * 1.05; y += step * 0.68) {
+      const off = (row++ % 2) * step * 0.5;
+      ctx.beginPath();
+      for (let x = -L * 0.55 + off; x < L * 0.55; x += step) {
+        ctx.moveTo(x - r * 0.5, y);
+        ctx.arc(x, y, r * 0.5, Math.PI * 0.15, Math.PI * 0.85);
+      }
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  /* The pale seam along the flank that most fish carry. */
+  function lateralLine(ctx, L, H, col) {
+    ctx.strokeStyle = col;
+    ctx.globalAlpha = 0.22;
+    ctx.lineWidth = Math.max(0.6, L * 0.005);
+    ctx.beginPath();
+    ctx.moveTo(L * 0.38, -H * 0.12);
+    ctx.quadraticCurveTo(0, H * 0.06, -L * 0.42, H * 0.02);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  /* Operculum: the plate behind the head. */
+  function gillPlate(ctx, L, H, col) {
+    ctx.strokeStyle = col;
+    ctx.globalAlpha = 0.30;
+    ctx.lineWidth = Math.max(0.6, L * 0.006);
+    ctx.beginPath();
+    ctx.moveTo(L * 0.30, -H * 0.70);
+    ctx.quadraticCurveTo(L * 0.21, 0, L * 0.30, H * 0.62);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  function mouthLine(ctx, L, H, col) {
+    ctx.strokeStyle = col;
+    ctx.globalAlpha = 0.42;
+    ctx.lineWidth = Math.max(0.6, L * 0.006);
+    ctx.beginPath();
+    ctx.moveTo(L * 0.52, H * 0.02);
+    ctx.quadraticCurveTo(L * 0.44, H * 0.16, L * 0.34, H * 0.12);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  /* A pectoral fin sitting in front of the flank, which is what gives a fish
+     its sense of depth rather than reading as a flat cutout. */
+  function pectoral(ctx, L, H, col, accent, sway) {
+    const p = new Path2D();
+    p.moveTo(L * 0.20, H * 0.12);
+    p.quadraticCurveTo(L * 0.10, H * 0.78 + sway * 2, -L * 0.04, H * 0.56);
+    p.quadraticCurveTo(L * 0.08, H * 0.34, L * 0.20, H * 0.12);
+    p.closePath();
+    paintFin(ctx, p, col, 0.38, { col: accent, w: Math.max(0.5, L * 0.004), n: 4,
+      x: L * 0.19, y: H * 0.14, len: H * 0.8, a0: 1.3, a1: 2.4 });
+    ctx.globalAlpha = 1;
+  }
+
+  function eye(ctx, x, y, r, iris) {
+    ctx.fillStyle = '#f7f3e8';
+    ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+    ctx.fillStyle = iris;
+    ctx.beginPath(); ctx.arc(x + r * 0.14, y, r * 0.74, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#08060e';
+    ctx.beginPath(); ctx.arc(x + r * 0.20, y, r * 0.42, 0, TAU); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.beginPath(); ctx.arc(x - r * 0.30, y - r * 0.32, r * 0.24, 0, TAU); ctx.fill();
+  }
+
+  /* Bodies built from panels rather than scales — the strange ones. */
+  const SCALED = { torpedo: 1, round: 1, eel: 1, serpent: 1, shard: 1, crustacean: 1, whale: 1 };
+
   /* --------------------------------------------------------------- main */
 
   function palette(art, mutation) {
@@ -580,6 +761,8 @@
     const pal = palette(art, opts.mutation);
     const glow = art.glow * (pal.mut ? 1.25 : 1);
     const j = jitter(fish.id);
+    // below roughly 22px the fine detail is sub-pixel noise, so skip it
+    const detail = opts.detail === undefined ? size >= 22 : opts.detail;
 
     ctx.save();
     // per-species proportion jitter, so two fish sharing a body type are never
@@ -599,26 +782,65 @@
     // fins go behind the body
     const probe = VF.rng.make(hash(fish.id));
     const H0 = measureH(art.body, L);
-    drawFins(ctx, art.fin, L, H0, sway, pal.c2, 0.85);
+    // a ray's body already is its wings, so a wing fin would only double it up
+    if (!(art.body === 'ray' && art.fin === 'wing')) {
+      drawFins(ctx, art.fin, L, H0, sway, pal.c2, 0.85, pal.c3);
+    }
 
     // body
     const H = bodyPath(ctx, art.body, L, sway, probe);
-    const bg = ctx.createLinearGradient(0, -H, 0, H);
-    bg.addColorStop(0, pal.c1);
-    bg.addColorStop(0.55, pal.c2);
-    bg.addColorStop(1, U.rgbToCss(U.shade(U.hexToRgb(pal.c2), -0.28)));
+    const c1 = U.hexToRgb(pal.c1), c2 = U.hexToRgb(pal.c2), c3 = U.hexToRgb(pal.c3);
+
+    /* Counter-shading: dark along the back, pale along the belly. This is the
+       single thing that stops a fish reading as a flat coloured shape. */
+    const bg = ctx.createLinearGradient(0, -H * 1.05, 0, H * 1.05);
+    // the belly lightens out of the body colour, never all the way to the
+    // accent, or pale species bleach out entirely
+    const belly = U.mixRgb(c1, c3, 0.45);
+    bg.addColorStop(0.00, U.rgbToCss(U.shade(c2, -0.42)));
+    bg.addColorStop(0.20, U.rgbToCss(U.mixRgb(c2, c1, 0.55)));
+    bg.addColorStop(0.50, U.rgbToCss(c1));
+    bg.addColorStop(0.80, U.rgbToCss(U.mixRgb(c1, belly, 0.7)));
+    bg.addColorStop(1.00, U.rgbToCss(U.shade(belly, 0.10)));
     ctx.fillStyle = bg;
     ctx.fill();
 
-    // top light
     ctx.save();
     ctx.clip();
-    const hl = ctx.createLinearGradient(0, -H * 1.1, 0, H * 0.2);
-    hl.addColorStop(0, U.rgbToCss(U.hexToRgb(pal.c3), 0.34));
-    hl.addColorStop(1, U.rgbToCss(U.hexToRgb(pal.c3), 0));
-    ctx.fillStyle = hl;
-    ctx.fillRect(-L, -H * 1.3, L * 2, H * 1.6);
+
+    // scale texture — skipped at small sizes where it would only be noise
+    if (detail && SCALED[art.body]) scaleTexture(ctx, L, H, U.rgbToCss(U.shade(c2, -0.5)), rnd, art.body === 'round');
+
+    // specular band along the upper flank
+    const sp = ctx.createLinearGradient(0, -H * 0.95, 0, H * 0.10);
+    sp.addColorStop(0, U.rgbToCss(c3, 0));
+    sp.addColorStop(0.42, U.rgbToCss(U.mixRgb(c3, [255, 255, 255], 0.35), 0.18));
+    sp.addColorStop(1, U.rgbToCss(c3, 0));
+    ctx.fillStyle = sp;
+    ctx.fillRect(-L, -H * 1.2, L * 2, H * 1.4);
+
+    // and a soft glow from the belly for anything luminous
+    if (glow > 0.15) {
+      const bl = ctx.createRadialGradient(0, H * 0.6, 0, 0, H * 0.6, L * 0.55);
+      bl.addColorStop(0, U.rgbToCss(c3, 0.34 * glow));
+      bl.addColorStop(1, U.rgbToCss(c3, 0));
+      ctx.fillStyle = bl;
+      ctx.fillRect(-L, -H * 1.2, L * 2, H * 2.4);
+    }
+
+    if (detail) {
+      lateralLine(ctx, L, H, U.rgbToCss(U.mixRgb(c3, [255, 255, 255], 0.3)));
+      if (SCALED[art.body] && art.body !== 'eel' && art.body !== 'serpent') {
+        gillPlate(ctx, L, H, U.rgbToCss(U.shade(c2, -0.55)));
+        if ((art.ex || []).indexOf('teeth') < 0) mouthLine(ctx, L, H, U.rgbToCss(U.shade(c2, -0.55)));
+      }
+    }
     ctx.restore();
+
+    // pectoral fin, in front of the flank
+    if (detail && SCALED[art.body] && art.body !== 'eel' && art.body !== 'serpent') {
+      pectoral(ctx, L, H, pal.c2, pal.c3, sway);
+    }
 
     // Outline, then a rim light. Without the rim the near-black species read as
     // holes rather than creatures.
@@ -633,19 +855,15 @@
 
     drawExtras(ctx, art.ex || [], L, H, sway, { c1: pal.c1, c2: pal.c2, c3: pal.c3 }, rnd, tm);
 
-    // eyes
+    // eyes, irised in the species accent so they carry its colour
     const n = art.eyes | 0;
     if (n > 0) {
-      const er = Math.max(1.2, L * 0.030);
+      const er = Math.max(1.2, L * 0.032);
+      const iris = U.rgbToCss(U.mixRgb(c3, [40, 30, 60], 0.35));
       for (let i = 0; i < n; i++) {
         const ex = L * (0.32 - (i % 3) * 0.09);
         const ey = -H * 0.24 + Math.floor(i / 3) * H * 0.42;
-        ctx.fillStyle = '#f7f3e8';
-        ctx.beginPath(); ctx.arc(ex, ey, er, 0, TAU); ctx.fill();
-        ctx.fillStyle = '#0a0810';
-        ctx.beginPath(); ctx.arc(ex + er * 0.22, ey, er * 0.52, 0, TAU); ctx.fill();
-        ctx.fillStyle = 'rgba(255,255,255,0.85)';
-        ctx.beginPath(); ctx.arc(ex - er * 0.28, ey - er * 0.3, er * 0.22, 0, TAU); ctx.fill();
+        eye(ctx, ex, ey, er, iris);
       }
     }
 
@@ -670,7 +888,8 @@
     const kind = fish.art.body;
     const r = bodyRatio(kind);
     // the paths overshoot the nominal half-height, most of all on the winged bodies
-    const over = (kind === 'ray' || kind === 'jelly') ? 2.2 : (kind === 'serpent' || kind === 'eel' || kind === 'ribbon') ? 3.4 : 1.35;
+    const over = kind === 'ray' ? 3.3 : kind === 'jelly' ? 2.2
+              : (kind === 'serpent' || kind === 'eel' || kind === 'ribbon') ? 3.4 : 1.35;
     const byHeight = (box * 0.46) / (r * 2 * over * 1.18);
     return Math.max(6, Math.min(box * 0.40, byHeight));
   }

@@ -41,7 +41,7 @@
   padding: 15px 20px 13px;
   border-bottom: 1px solid var(--line);
 }
-.panel-title { font-size: 13px; letter-spacing: 0.26em; text-transform: uppercase; color: var(--ink); }
+.panel-title { font-size: 13px; letter-spacing: 0.26em; text-transform: lowercase; color: var(--ink); }
 .panel-sub { font-size: 11px; color: var(--ink-3); letter-spacing: 0.04em; margin-top: 3px; }
 .panel-close {
   width: 28px; height: 28px; display: grid; place-items: center;
@@ -54,7 +54,7 @@
 .tabs { display: flex; gap: 2px; padding: 10px 20px 0; border-bottom: 1px solid var(--line); }
 .tab {
   padding: 7px 13px 9px;
-  font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase;
+  font-size: 10.5px; letter-spacing: 0.15em; text-transform: lowercase;
   color: var(--ink-3);
   border-bottom: 1.5px solid transparent;
   transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease);
@@ -85,6 +85,16 @@
 .row.equipped { border-color: var(--accent-dim); background: rgba(127,168,200,0.055); }
 
 .row-mark { width: 3px; align-self: stretch; border-radius: 2px; background: var(--line-2); min-height: 34px; }
+
+/* rods are shown, not just described */
+.row-rod { grid-template-columns: auto auto 1fr auto; }
+.rod-art-box {
+  width: 150px; flex: 0 0 150px;
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: linear-gradient(160deg, rgba(255,255,255,0.030), rgba(0,0,0,0.30));
+  overflow: hidden;
+}
+.rod-art { display: block; width: 100%; height: 66px; }
 .row-main { min-width: 0; }
 .row-name { font-size: 13px; color: var(--ink); letter-spacing: 0.02em; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .row-desc { font-size: 11.5px; color: var(--ink-3); margin-top: 3px; line-height: 1.5; }
@@ -104,7 +114,7 @@
 .tag {
   display: inline-block; padding: 2px 7px;
   border: 1px solid currentColor; border-radius: 100px;
-  font-size: 8.5px; letter-spacing: 0.16em; text-transform: uppercase;
+  font-size: 8.5px; letter-spacing: 0.16em; text-transform: lowercase;
   opacity: 0.9;
 }
 
@@ -114,7 +124,7 @@
 .dex-count { font-family: var(--mono); font-size: 11px; color: var(--ink-3); margin-left: auto; }
 .seg { display: flex; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
 .seg button {
-  padding: 5px 9px; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase;
+  padding: 5px 9px; font-size: 9.5px; letter-spacing: 0.1em; text-transform: lowercase;
   color: var(--ink-3); border-right: 1px solid var(--line);
   transition: all var(--dur) var(--ease);
 }
@@ -170,7 +180,7 @@
 
 .catch-banner {
   padding: 9px 18px;
-  font-size: 9.5px; letter-spacing: 0.28em; text-transform: uppercase;
+  font-size: 9.5px; letter-spacing: 0.28em; text-transform: lowercase;
   text-align: center; color: #06080c;
   font-weight: 600;
 }
@@ -184,7 +194,7 @@
 .catch-glow { position: absolute; inset: 0; pointer-events: none; }
 
 .catch-body { padding: 16px 18px 18px; }
-.catch-rarity { font-size: 9.5px; letter-spacing: 0.24em; text-transform: uppercase; }
+.catch-rarity { font-size: 9.5px; letter-spacing: 0.24em; text-transform: lowercase; }
 .catch-name {
   font-size: clamp(19px, 3vw, 25px); font-weight: 300; letter-spacing: 0.03em;
   color: var(--ink); margin: 4px 0 3px; line-height: 1.15;
@@ -199,7 +209,7 @@
 
 .size-track { height: 4px; background: rgba(255,255,255,0.07); border-radius: 2px; overflow: hidden; margin-bottom: 5px; }
 .size-fill { height: 100%; width: 0%; border-radius: 2px; transition: width 900ms var(--ease) 260ms; }
-.size-note { display: flex; justify-content: space-between; font-size: 9.5px; letter-spacing: 0.1em; color: var(--ink-4); text-transform: uppercase; margin-bottom: 15px; }
+.size-note { display: flex; justify-content: space-between; font-size: 9.5px; letter-spacing: 0.1em; color: var(--ink-4); text-transform: lowercase; margin-bottom: 15px; }
 
 .catch-value {
   display: flex; align-items: baseline; justify-content: center; gap: 8px;
@@ -215,7 +225,7 @@
   padding: 3px 9px; margin-bottom: 9px;
   border: 1px solid rgba(255,196,90,0.42); border-radius: 100px;
   background: rgba(255,180,60,0.10);
-  font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: #ffd48a;
+  font-size: 9px; letter-spacing: 0.2em; text-transform: lowercase; color: #ffd48a;
 }
 
 /* -------------------------------------------------------------- selector */
@@ -240,7 +250,7 @@
   animation: panelIn 240ms var(--ease) both;
   text-align: center;
 }
-.dialog h3 { margin: 0 0 8px; font-size: 13px; letter-spacing: 0.2em; text-transform: uppercase; font-weight: 400; }
+.dialog h3 { margin: 0 0 8px; font-size: 13px; letter-spacing: 0.2em; text-transform: lowercase; font-weight: 400; }
 .dialog p { margin: 0 0 18px; font-size: 12.5px; color: var(--ink-3); line-height: 1.6; }
 .dialog-actions { display: flex; gap: 8px; justify-content: center; }
 
@@ -330,6 +340,10 @@ input[type=range]::-moz-range-thumb {
 .loc-desc { font-size: 11.5px; color: var(--ink-3); margin-top: 6px; line-height: 1.55; }
 .loc-meta { display: flex; gap: 10px; margin-top: 7px; font-family: var(--mono); font-size: 10px; color: var(--ink-4); }
 
+@media (max-width: 780px) {
+  .row-rod { grid-template-columns: auto 1fr auto; }
+  .rod-art-box { grid-column: 2; width: 100%; flex: 1 1 auto; }
+}
 @media (max-width: 620px) {
   .catch-metrics { grid-template-columns: repeat(2, 1fr); }
   .catch-actions { grid-template-columns: 1fr 1fr; }

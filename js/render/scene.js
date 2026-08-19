@@ -1067,81 +1067,21 @@
     ctx.stroke();
   }
 
+  /* Geometry lives here; the drawing itself is shared with the shop preview. */
   function drawRod(P) {
     const rod = VF.rods.get(VF.state.data.rod);
-    const art = rod.art;
     const tip = rodTipPoint();
     const hand = L.rodHand;
     const a = tip.a;
-    const buttX = hand.x - Math.cos(a) * tip.len * 0.13;
-    const buttY = hand.y - Math.sin(a) * tip.len * 0.13;
-
-    // glow for the fancier rods
-    if (art.glow > 0.02) {
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.strokeStyle = U.rgbToCss(U.hexToRgb(art.tip), 0.13 * art.glow);
-      ctx.lineWidth = 7;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(buttX, buttY);
-      ctx.quadraticCurveTo(tip.cx, tip.cy, tip.x, tip.y);
-      ctx.stroke();
-      ctx.restore();
-    }
-
-    // tapered blank: three passes from thick to thin
-    const passes = [[3.2, art.c2, 0], [2.0, art.c1, 0.18], [0.9, art.tip, 0.45]];
-    for (let i = 0; i < passes.length; i++) {
-      const [wid, col, from] = passes[i];
-      ctx.strokeStyle = col;
-      ctx.lineWidth = wid;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      const sx = U.lerp(buttX, tip.x, from), sy = U.lerp(buttY, tip.y, from);
-      ctx.moveTo(sx, sy);
-      ctx.quadraticCurveTo(tip.cx, tip.cy, tip.x, tip.y);
-      ctx.stroke();
-    }
-
-    // grip
-    ctx.strokeStyle = art.grip;
-    ctx.lineWidth = 5.5;
-    ctx.beginPath();
-    ctx.moveTo(buttX, buttY);
-    ctx.lineTo(hand.x + Math.cos(a) * tip.len * 0.06, hand.y + Math.sin(a) * tip.len * 0.06);
-    ctx.stroke();
-
-    // reel
-    const rx = hand.x + Math.cos(a) * tip.len * 0.09 - Math.sin(a) * 5;
-    const ry = hand.y + Math.sin(a) * tip.len * 0.09 + Math.cos(a) * 5;
-    ctx.fillStyle = art.c2;
-    ctx.beginPath(); ctx.arc(rx, ry, 5.2, 0, TAU); ctx.fill();
-    ctx.strokeStyle = art.tip; ctx.lineWidth = 1.1;
-    ctx.beginPath(); ctx.arc(rx, ry, 5.2, 0, TAU); ctx.stroke();
-    const spin = VF.fishing.S.state === 'reeling' && VF.fishing.S.fight && VF.fishing.S.fight.reeling ? t * 12 : t * 0.4;
-    ctx.beginPath();
-    ctx.moveTo(rx, ry);
-    ctx.lineTo(rx + Math.cos(spin) * 4.2, ry + Math.sin(spin) * 4.2);
-    ctx.stroke();
-
-    // guides
-    if (art.style !== 'plain') {
-      ctx.fillStyle = art.tip;
-      for (let i = 1; i <= 3; i++) {
-        const k = 0.30 + i * 0.20;
-        const gx = quadAt(buttX, tip.cx, tip.x, k);
-        const gy = quadAt(buttY, tip.cy, tip.y, k);
-        ctx.globalAlpha = 0.55 + art.glow * 0.4;
-        ctx.beginPath(); ctx.arc(gx, gy, 1.5, 0, TAU); ctx.fill();
-      }
-      ctx.globalAlpha = 1;
-    }
-  }
-
-  function quadAt(p0, p1, p2, k) {
-    const m = 1 - k;
-    return m * m * p0 + 2 * m * k * p1 + k * k * p2;
+    const S = VF.fishing.S;
+    const reeling = S.state === 'reeling' && S.fight && S.fight.reeling;
+    VF.rodArt.draw(ctx, rod, {
+      bx: hand.x - Math.cos(a) * tip.len * 0.13,
+      by: hand.y - Math.sin(a) * tip.len * 0.13,
+      cx: tip.cx, cy: tip.cy,
+      tx: tip.x, ty: tip.y,
+      len: tip.len, angle: a
+    }, t, { spin: reeling ? t * 12 : t * 0.4 });
   }
 
   /* The vignette is a CSS layer; only its pulse strength is driven from here. */

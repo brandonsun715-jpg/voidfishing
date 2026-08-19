@@ -6,6 +6,43 @@
   const U = VF.util;
   let host = null, overlay = null, current = null, node = null;
   let gen = 0;   // guards the deferred teardown against a newer open
+  let rodCanvases = [];   // live rod previews, animated while the shop is open
+  let rodRaf = 0;
+
+  /* Rod previews animate — the flourishes on the late-tier rods are the point
+     of showing them at all — so they run their own loop while visible. */
+  function startRodLoop() {
+    stopRodLoop();
+    if (!rodCanvases.length) return;
+    const t0 = performance.now();
+    (function frame() {
+      if (!rodCanvases.length) { rodRaf = 0; return; }
+      const t = (performance.now() - t0) / 1000;
+      for (let i = 0; i < rodCanvases.length; i++) {
+        const e = rodCanvases[i];
+        if (!e.cv.isConnected) continue;
+        const g = e.ctx;
+        g.clearRect(0, 0, e.cv.width, e.cv.height);
+        VF.rodArt.preview(g, e.rod, e.cv.width, e.cv.height, t + e.phase);
+      }
+      rodRaf = requestAnimationFrame(frame);
+    })();
+  }
+  function stopRodLoop() {
+    if (rodRaf) cancelAnimationFrame(rodRaf);
+    rodRaf = 0;
+    rodCanvases = [];
+  }
+
+  function rodPreview(rod, i, dim) {
+    const cv = U.el('canvas', 'rod-art');
+    cv.width = 300; cv.height = 132;
+    const g = cv.getContext('2d');
+    if (dim) cv.style.opacity = '0.45';
+    VF.rodArt.preview(g, rod, cv.width, cv.height, i * 0.9);
+    rodCanvases.push({ cv: cv, ctx: g, rod: rod, phase: i * 0.9 });
+    return cv;
+  }
   let dexFilter = 'all', dexMode = 'all';
 
   function init() {
@@ -20,6 +57,7 @@
     if (VF.catchUI.isOpen()) return;
     if (current === id) { close(); return; }
     if (current) closeNow();
+    stopRodLoop();
     gen++;
     current = id;
     VF.state.rt.panelOpen = id;
@@ -28,6 +66,7 @@
     U.clear(host);
     host.appendChild(node);
     host.classList.remove('hidden');
+    startRodLoop();
     U.qsa('.mbtn').forEach(function (b) { b.classList.toggle('active', b.dataset.panel === id); });
     VF.hud.pressEnd();
   }
@@ -49,6 +88,7 @@
   }
 
   function closeNow() {
+    stopRodLoop();
     current = null; node = null;
     VF.state.rt.panelOpen = null;
     U.qsa('.mbtn').forEach(function (b) { b.classList.remove('active'); });
@@ -57,9 +97,11 @@
 
   function refresh(tab) {
     if (!current) return;
+    stopRodLoop();
     const id = current, prev = node;
     node = build(id, tab);
     if (prev && prev.parentNode) prev.parentNode.replaceChild(node, prev);
+    startRodLoop();
   }
 
   /* ------------------------------------------------------------ scaffold */
@@ -136,11 +178,15 @@
         const locked = !levelOk || !voidOk;
         const can = VF.economy.canAfford(rod.cost);
 
-        const row = U.el('div', 'row' + (owned ? ' owned' : '') + (locked && !owned ? ' locked' : '') +
+        const row = U.el('div', 'row row-rod' + (owned ? ' owned' : '') + (locked && !owned ? ' locked' : '') +
                                   (d.rod === rod.id ? ' equipped' : ''));
         const mark = U.el('div', 'row-mark');
         mark.style.background = owned ? 'var(--good)' : (locked ? 'var(--line-2)' : 'var(--accent)');
         row.appendChild(mark);
+
+        const art = U.el('div', 'rod-art-box');
+        art.appendChild(rodPreview(rod, VF.rods.index(rod.id), locked && !owned));
+        row.appendChild(art);
 
         const main = U.el('div', 'row-main');
         const name = U.el('div', 'row-name');
@@ -486,10 +532,13 @@
       d.ownedRods.map(function (id) { return VF.rods.get(id); })
         .sort(function (a, c) { return VF.rods.index(a.id) - VF.rods.index(c.id); })
         .forEach(function (rod) {
-          const row = U.el('div', 'row' + (d.rod === rod.id ? ' equipped' : ' owned'));
+          const row = U.el('div', 'row row-rod' + (d.rod === rod.id ? ' equipped' : ' owned'));
           const mark = U.el('div', 'row-mark');
           mark.style.background = rod.art.tip;
           row.appendChild(mark);
+          const artBox = U.el('div', 'rod-art-box');
+          artBox.appendChild(rodPreview(rod, VF.rods.index(rod.id), false));
+          row.appendChild(artBox);
           const main = U.el('div', 'row-main');
           const name = U.el('div', 'row-name');
           name.appendChild(U.el('span', null, rod.name));

@@ -27,7 +27,7 @@
   text-shadow: 0 1px 14px rgba(0,0,0,0.75);
 }
 .money-unit {
-  font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase;
+  font-size: 9px; letter-spacing: 0.18em; text-transform: lowercase;
   color: var(--ink-4); margin-left: 2px;
 }
 .money.bump { animation: moneyBump 460ms var(--ease); }
@@ -67,7 +67,7 @@
   backdrop-filter: blur(9px);
   -webkit-backdrop-filter: blur(9px);
 }
-.chip-k { font-size: 8.5px; letter-spacing: 0.18em; color: var(--ink-4); }
+.chip-k { font-size: 9px; letter-spacing: 0.20em; color: var(--ink-3); }
 .chip-v { font-size: 11px; color: var(--ink-2); letter-spacing: 0.03em; white-space: nowrap; }
 .chip-btn { transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease); }
 .chip-btn:hover { border-color: var(--line-3); background: var(--pane-2); }
@@ -76,7 +76,7 @@
 .menu-row { display: flex; gap: 3px; }
 .mbtn {
   padding: 6px 11px;
-  font-size: 10.5px; letter-spacing: 0.13em; text-transform: uppercase;
+  font-size: 10.5px; letter-spacing: 0.13em; text-transform: lowercase;
   color: var(--ink-3);
   border: 1px solid transparent; border-radius: var(--r);
   transition: color var(--dur) var(--ease), background var(--dur) var(--ease),
@@ -112,7 +112,7 @@
               transform 120ms var(--ease);
 }
 .gear-card:hover { border-color: var(--line-3); background: var(--pane-2); transform: translateY(-1px); }
-.gear-k { font-size: 8.5px; letter-spacing: 0.20em; color: var(--ink-4); }
+.gear-k { font-size: 9px; letter-spacing: 0.22em; color: var(--ink-3); }
 .gear-v { font-size: 12px; color: var(--ink-2); letter-spacing: 0.02em; }
 .gear-card:hover .gear-v { color: var(--ink); }
 .gear-n {
@@ -154,8 +154,8 @@
 }
 .action-btn:hover { background: var(--pane-2); border-color: var(--line-3); }
 .action-btn:active { transform: translateY(1px); }
-#actionLabel { font-size: 13px; letter-spacing: 0.20em; text-transform: uppercase; color: var(--ink); }
-.action-hint { font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-4); }
+#actionLabel { font-size: 13px; letter-spacing: 0.20em; text-transform: lowercase; color: var(--ink); }
+.action-hint { font-size: 9.5px; letter-spacing: 0.16em; text-transform: lowercase; color: var(--ink-3); }
 
 .action-btn.charging { border-color: rgba(255, 214, 120, 0.42); }
 .action-btn.bite {
@@ -203,8 +203,8 @@
 }
 
 .fight-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 11px; }
-.fight-name { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-2); }
-.fight-warn { font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--bad); opacity: 0; transition: opacity 120ms; }
+.fight-name { font-size: 11px; letter-spacing: 0.16em; text-transform: lowercase; color: var(--ink-2); }
+.fight-warn { font-size: 10px; letter-spacing: 0.16em; text-transform: lowercase; color: var(--bad); opacity: 0; transition: opacity 120ms; }
 .fight-warn.on { opacity: 1; animation: warnBlink 480ms steps(2) infinite; }
 @keyframes warnBlink { 50% { opacity: 0.25; } }
 
@@ -212,8 +212,8 @@
 .bar-block:last-child { margin-bottom: 0; }
 .bar-label {
   display: flex; justify-content: space-between;
-  font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase;
-  color: var(--ink-4); margin-bottom: 4px;
+  font-size: 9.5px; letter-spacing: 0.17em; text-transform: lowercase;
+  color: var(--ink-3); margin-bottom: 4px;
 }
 .bar-label span:last-child { font-family: var(--mono); }
 .bar {
@@ -244,7 +244,7 @@
   text-align: center; pointer-events: none;
   font-size: clamp(20px, 3.4vw, 38px);
   font-weight: 200; letter-spacing: 0.30em; text-indent: 0.30em;
-  text-transform: uppercase;
+  text-transform: lowercase;
   color: var(--ink);
   text-shadow: 0 0 34px rgba(0,0,0,0.9), 0 0 60px currentColor;
   opacity: 0;
@@ -306,7 +306,7 @@
 .enc-text {
   font-size: clamp(15px, 2.2vw, 24px);
   font-weight: 200; letter-spacing: 0.42em; text-indent: 0.42em;
-  text-transform: uppercase; color: #e8dcff;
+  text-transform: lowercase; color: #e8dcff;
   text-shadow: 0 0 50px rgba(150, 110, 255, 0.75);
   animation: encPulse 2.6s ease-in-out infinite;
 }
