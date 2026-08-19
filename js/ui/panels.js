@@ -150,12 +150,14 @@
           ? (!levelOk ? 'Requires level ' + rod.level : 'Requires a Void-tier catch')
           : rod.desc));
 
+        // comparison arrows only matter when deciding whether to buy
+        const c = owned ? function () { return 0; } : cmp;
         const grid = U.el('div', 'stat-grid');
-        grid.appendChild(statCell('Cast', rod.cast.toFixed(2), cmp(rod.cast, eq.cast)));
-        grid.appendChild(statCell('Reel', rod.reel.toFixed(2), cmp(rod.reel, eq.reel)));
-        grid.appendChild(statCell('Line', rod.line.toFixed(2), cmp(rod.line, eq.line)));
-        grid.appendChild(statCell('Rare', '×' + rod.rare.toFixed(2), cmp(rod.rare, eq.rare)));
-        grid.appendChild(statCell('Luck', '+' + rod.luck.toFixed(2), cmp(rod.luck, eq.luck)));
+        grid.appendChild(statCell('Cast', rod.cast.toFixed(2), c(rod.cast, eq.cast)));
+        grid.appendChild(statCell('Reel', rod.reel.toFixed(2), c(rod.reel, eq.reel)));
+        grid.appendChild(statCell('Line', rod.line.toFixed(2), c(rod.line, eq.line)));
+        grid.appendChild(statCell('Rare', '×' + rod.rare.toFixed(2), c(rod.rare, eq.rare)));
+        grid.appendChild(statCell('Luck', '+' + rod.luck.toFixed(2), c(rod.luck, eq.luck)));
         main.appendChild(grid);
         row.appendChild(main);
 
@@ -260,11 +262,18 @@
     const bar = U.el('div', 'dex-toolbar');
     const segR = U.el('div', 'seg');
     [{ id: 'all', label: 'All' }].concat(VF.rarities.list.map(function (r) {
-      return { id: r.id, label: r.rank === 7 ? '?!' : r.name.slice(0, 4) };
+      return { id: r.id, label: r.name };
     })).forEach(function (o) {
       const btn = U.el('button', dexFilter === o.id ? 'active' : '', o.label);
-      if (o.id !== 'all') btn.style.color = dexFilter === o.id ? VF.rarities.color(o.id) : '';
-      btn.title = o.id === 'all' ? 'All rarities' : VF.rarities.get(o.id).name;
+      if (o.id !== 'all') {
+        const col = VF.rarities.color(o.id);
+        btn.style.color = dexFilter === o.id ? col : '';
+        const dot = U.el('span');
+        dot.style.cssText = 'display:inline-block;width:5px;height:5px;border-radius:50%;' +
+          'margin-right:6px;vertical-align:middle;background:' + col +
+          ';box-shadow:0 0 6px ' + U.rgbToCss(U.hexToRgb(VF.rarities.get(o.id).glow), 0.6);
+        btn.insertBefore(dot, btn.firstChild);
+      }
       btn.addEventListener('click', function () { dexFilter = o.id; VF.audio.click(); refresh(); });
       segR.appendChild(btn);
     });
@@ -307,11 +316,12 @@
       cell.appendChild(pip);
 
       const cv = U.el('canvas', 'dex-art');
-      cv.width = 220; cv.height = 116;
+      cv.width = 240; cv.height = 132;
       const g = cv.getContext('2d');
-      g.save(); g.translate(110, 58);
-      if (has) VF.fishArt.draw(g, f, 44, { time: i * 0.7 });
-      else { g.globalAlpha = 0.34; VF.fishArt.drawSilhouette(g, f, 44, 0.85); }
+      g.save(); g.translate(120, 66);
+      const sz = dexArtSize(f, 132);
+      if (has) VF.fishArt.draw(g, f, sz, { time: i * 0.7 });
+      else { g.globalAlpha = 0.34; VF.fishArt.drawSilhouette(g, f, sz, 0.85); }
       g.restore();
       cell.appendChild(cv);
 
@@ -328,6 +338,13 @@
     b.appendChild(grid);
     p.appendChild(b);
     return p;
+  }
+
+  /* Fit tall or long species inside the grid tile. */
+  function dexArtSize(f, box) {
+    const tall = { orb: 0.72, round: 0.62, blob: 0.58, jelly: 0.55, anomaly: 0.52,
+                   fractal: 0.50, crustacean: 0.44, ray: 0.42, shard: 0.40, whale: 0.38 }[f.art.body] || 0.30;
+    return Math.min(box * 0.30, (box * 0.40) / (tall * 2));
   }
 
   function showDexDetail(f, entry) {

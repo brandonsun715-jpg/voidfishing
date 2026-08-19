@@ -60,26 +60,8 @@ body {
   touch-action: none;
 }
 
-/* Fine film grain keeps the flat gradients from banding. */
-#grain {
-  position: absolute; inset: -50%;
-  pointer-events: none;
-  opacity: 0.030;
-  z-index: 2;
-  background-image:
-    repeating-radial-gradient(circle at 17% 29%, rgba(255,255,255,.9) 0 0.6px, transparent 0.6px 2.4px),
-    repeating-radial-gradient(circle at 71% 63%, rgba(255,255,255,.75) 0 0.5px, transparent 0.5px 3.1px);
-  animation: grainDrift 7s steps(6) infinite;
-}
-@keyframes grainDrift {
-  0%   { transform: translate(0, 0); }
-  20%  { transform: translate(-1.5%, 1%); }
-  40%  { transform: translate(1%, -1.5%); }
-  60%  { transform: translate(-1%, -1%); }
-  80%  { transform: translate(1.5%, 1.5%); }
-  100% { transform: translate(0, 0); }
-}
-body.q-low #grain { display: none; }
+/* Film grain is drawn into the canvas itself (js/render/scene.js) so it sits
+   under the interface and costs one patterned fill instead of a compositing layer. */
 
 /* Coloured bleed at the screen edges, tinted by the current location. */
 #edgeGlow {
@@ -165,5 +147,4 @@ button:focus-visible, [tabindex]:focus-visible { outline: 1px solid var(--line-3
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
-  #grain { animation: none; }
 }

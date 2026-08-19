@@ -42,6 +42,39 @@
     }
   }
 
+  /* ------------------------------------------------------------- grain
+     A single 128px noise tile, filled as a repeating pattern with a shifting
+     origin. Keeps flat gradients from banding for the cost of one fillRect. */
+  let grainPattern = null, grainOx = 0, grainOy = 0, grainT = 0;
+
+  function buildGrain() {
+    if (grainPattern) return;
+    const N = 128;
+    const c = document.createElement('canvas');
+    c.width = c.height = N;
+    const g = c.getContext('2d');
+    const img = g.createImageData(N, N);
+    const px = img.data;
+    for (let i = 0; i < px.length; i += 4) {
+      const v = Math.random() * 255;
+      px[i] = px[i + 1] = px[i + 2] = 255;
+      px[i + 3] = v < 128 ? 0 : Math.round((v - 128) * 1.6);
+    }
+    g.putImageData(img, 0, 0);
+    grainPattern = ctx.createPattern(c, 'repeat');
+  }
+
+  function drawGrain() {
+    if (VF.state.data.settings.quality === 'low' || !grainPattern) return;
+    ctx.save();
+    ctx.globalAlpha = 0.030;
+    ctx.globalCompositeOperation = 'overlay';
+    ctx.translate(grainOx, grainOy);
+    ctx.fillStyle = grainPattern;
+    ctx.fillRect(-136, -136, W + 272, H + 272);
+    ctx.restore();
+  }
+
   /* ------------------------------------------------------- backdrop cache */
   let backdrop = null, backdropKey = '';
 
@@ -150,6 +183,7 @@
   function init(cv) {
     canvas = cv;
     ctx = cv.getContext('2d', { alpha: false });
+    buildGrain();
     resize();
     VF.bus.on('location:changed', function () { backdropKey = ''; buildStars(); seedAmbient(); });
     VF.bus.on('settings:quality', function () { backdropKey = ''; buildStars(); VF.particles.clearAll(); seedAmbient(); });
@@ -196,6 +230,12 @@
 
   function update(dt) {
     t += dt;
+    grainT += dt;
+    if (grainT > 0.11) {
+      grainT = 0;
+      grainOx = (Math.random() * 128) | 0;
+      grainOy = (Math.random() * 128) | 0;
+    }
     computeLayout();
     updateRod(dt);
     updateBobber(dt);
@@ -363,6 +403,7 @@
     VF.particles.draw(ctx);
     drawForeground(P);
     drawVignette(P);
+    drawGrain();
     VF.fx.drawOverlay(ctx, W, H);
 
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
