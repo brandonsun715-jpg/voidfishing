@@ -1011,19 +1011,34 @@
     return Math.max(6, Math.min(box * 0.40, byHeight));
   }
 
-  function drawSilhouette(ctx, fish, size, alpha) {
+  /* The shape coming up through the water. `near` is 0 out in the dark and 1
+     just under the surface — the closer it gets, the more of its own colour
+     the water gives back, so the reveal happens gradually instead of the fish
+     staying a black cut-out until the catch card opens. */
+  function drawSilhouette(ctx, fish, size, alpha, near) {
     const art = fish.art;
     const L = size * 2;
     const rnd = VF.rng.make(hash(fish.id));
     const H = measureH(art.body, L);
     const j = jitter(fish.id);
+    const lift = U.clamp(near === undefined ? 0 : near, 0, 1);
+    const c1 = U.hexToRgb(art.c1), c2 = U.hexToRgb(art.c2);
+    const body = U.rgbToCss(U.mixRgb([2, 3, 6], U.shade(c1, -0.45), lift * 0.85));
+    const fin = U.rgbToCss(U.mixRgb([1, 2, 4], U.shade(c2, -0.55), lift * 0.8));
+
     ctx.save();
     ctx.scale(j.x, j.y);
     ctx.globalAlpha = alpha === undefined ? 0.8 : alpha;
-    drawFins(ctx, art.fin, L, H, 0, '#000', 1);
+    drawFins(ctx, art.fin, L, H, 0, fin, 1);
     bodyPath(ctx, art.body, L, 0, rnd);
-    ctx.fillStyle = '#000';
+    ctx.fillStyle = body;
     ctx.fill();
+    // one thin highlight along the back, where the surface light would land
+    if (lift > 0.15) {
+      ctx.strokeStyle = U.rgbToCss(U.mixRgb(c1, [190, 215, 245], 0.5), 0.26 * lift);
+      ctx.lineWidth = Math.max(0.7, L * 0.006);
+      ctx.stroke();
+    }
     if (art.glow > 0.35) {
       ctx.globalAlpha *= art.glow * 0.5;
       ctx.fillStyle = art.c3;

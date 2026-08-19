@@ -1116,7 +1116,8 @@
       ctx.lineWidth = Math.max(1, size * 0.07);
       ctx.stroke();
     } else if (c.fish && c.fish.id) {
-      VF.fishArt.drawSilhouette(ctx, c.fish, size, k * 0.9);
+      // it comes out of the dark as it comes up
+      VF.fishArt.drawSilhouette(ctx, c.fish, size, k * 0.9, Math.pow(k, 1.5));
     }
     ctx.restore();
     ctx.globalAlpha = 1;
