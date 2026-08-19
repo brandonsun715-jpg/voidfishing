@@ -32,7 +32,7 @@
   function start(id) {
     if (S.phase !== 'idle') return false;
     if (!canVisit()) {
-      VF.toast.show('reel in first', 'you cannot walk away mid-fight.');
+      VF.toast.show('reel in first — you cannot walk away mid-fight', null, 2600);
       return false;
     }
     const res = VF.npcs.talk(id, { defer: true });

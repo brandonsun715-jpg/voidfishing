@@ -150,8 +150,8 @@
         break;
       }
       case 'outfit': {
-        ctx.translate(0, h * 0.22);
-        const fh = h * 0.62;
+        ctx.translate(0, h * 0.30);
+        const fh = h * 0.80;
         VF.anglerArt.draw(ctx, c, fh, t, true);
         break;
       }

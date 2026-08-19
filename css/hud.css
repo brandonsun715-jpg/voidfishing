@@ -390,7 +390,7 @@ body.wrong .toasts { opacity: 0; transition: opacity 500ms var(--ease); }
 #hud.visiting .hud-bottom,
 #hud.visiting .fight,
 #hud.visiting .prompt { opacity: 0; pointer-events: none; transition: opacity 420ms var(--ease); }
-#hud.visiting .hud-top { opacity: 0.28; transition: opacity 420ms var(--ease); }
+#hud.visiting .hud-top { opacity: 0.24; pointer-events: none; transition: opacity 420ms var(--ease); }
 
 @media (max-width: 760px) {
   .caption { bottom: 34px; width: calc(100vw - 40px); }

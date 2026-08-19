@@ -774,7 +774,7 @@
      and have the conversation out on the shore where it can be seen. */
   function speak(id) {
     if (!VF.visit.canVisit()) {
-      VF.toast.show('not now', 'reel in before you walk off.');
+      VF.toast.show('reel in before you walk off', null, 2600);
       return;
     }
     close();

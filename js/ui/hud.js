@@ -349,6 +349,24 @@
 
   let capLine = null, capNpc = null, capReady = false;
 
+  /* Somebody becoming willing to talk is silent otherwise — the player would
+     have to keep opening the journal to find out. Checked about once a second;
+     anyNew() only walks five people and their stage gates. */
+  let newCheck = 0, hadNew = false;
+
+  function watchForVisitors(dt) {
+    newCheck -= dt;
+    if (newCheck > 0) return;
+    newCheck = 1.1;
+    const now = VF.npcs.anyNew();
+    if (now && !hadNew && !VF.visit.active()) {
+      VF.toast.show('somebody on the shore has something to say &mdash; ' +
+                    '<strong>journal &middot; people</strong>', null, 5600);
+      flashMenu('journal');
+    }
+    hadNew = now;
+  }
+
   function tickCaption() {
     const el = document.getElementById('caption');
     if (!el) return;
@@ -465,6 +483,7 @@
     const S = VF.fishing.S;
 
     tickCaption();
+    watchForVisitors(dt);
 
     /* money counts up rather than snapping */
     if (Math.abs(shownMoney - d.money) > 0.5) {
