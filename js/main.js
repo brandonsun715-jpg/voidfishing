@@ -28,7 +28,10 @@
     window.addEventListener('resize', onResize, { passive: true });
     window.addEventListener('orientationchange', onResize, { passive: true });
     document.addEventListener('visibilitychange', function () {
-      if (document.visibilityState === 'visible') last = performance.now();
+      if (document.visibilityState !== 'visible') return;
+      last = performance.now();
+      // coming back from a background tab is not evidence about this machine
+      perf.acc = 0; perf.frames = 0; perf.slow = 0; perf.bad = 0; perf.warm = 2;
     });
     document.addEventListener('contextmenu', function (e) {
       if (e.target && e.target.id === 'scene') e.preventDefault();
@@ -87,9 +90,9 @@
 
   function watchFrameRate(dt) {
     if (!started || perf.stepped >= 2 || VF.state.rt.panelOpen) return;
-    if (perf.warm > 0) { perf.warm -= dt; return; }
-    // a clamped dt means the tab was away, not that the machine is slow
-    if (dt >= 0.0999) return;
+    if (perf.warm > 0) { perf.warm -= Math.min(dt, 0.1); return; }
+    // half a second is not a slow machine, it is a tab that was somewhere else
+    if (dt > 0.5) return;
     perf.acc += dt;
     perf.frames++;
     if (dt > 0.030) perf.slow++;
@@ -102,9 +105,9 @@
     perf.acc = 0; perf.frames = 0; perf.slow = 0;
     const q = VF.state.data.settings.quality;
     perf.share = share;
-    if (enough && share > 0.45 && q !== 'low') {
+    if (enough && share > 0.55 && q !== 'low') {
       perf.bad++;
-      if (perf.bad < 3) return;
+      if (perf.bad < 4) return;
       perf.bad = 0;
       perf.stepped++;
       const next = q === 'high' ? 'medium' : 'low';
@@ -125,6 +128,9 @@
     let dt = (now - last) / 1000;
     last = now;
     if (!(dt > 0)) dt = 0.016;
+    // the honest frame time, before the clamp, is what tells us how the
+    // machine is coping — the clamp is for the simulation, not for measuring
+    const raw = dt;
     // a long pause (tab in the background) must not fast-forward the fight
     if (dt > 0.1) dt = 0.1;
 
@@ -154,7 +160,7 @@
 
       if (started) VF.hud.tick(dt);
       VF.audio.tick(dt);
-      watchFrameRate(dt);
+      watchFrameRate(raw);
     } catch (err) {
       console.error('[frame]', err);
       // never let one bad frame kill the loop
