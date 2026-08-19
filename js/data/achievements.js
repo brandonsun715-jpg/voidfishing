@@ -1,0 +1,107 @@
+/* VOID FISHING — achievements. `test(d)` reads the save data and returns true when earned.
+   Hidden achievements show as ?????? until unlocked. */
+(function (VF) {
+  'use strict';
+
+  function dexCount(d) { return Object.keys(d.fishdex).length; }
+  function dexOf(d, rarity) {
+    let n = 0;
+    for (const id in d.fishdex) {
+      const f = VF.fish.byId(id);
+      if (f && f.rarity === rarity) n++;
+    }
+    return n;
+  }
+
+  const LIST = [
+    { id: 'first_catch', name: 'First Catch', desc: 'Land your first fish.', reward: 50,
+      test: function (d) { return d.stats.catches >= 1; } },
+    { id: 'ten', name: 'Ten Fish', desc: 'Land 10 fish.', reward: 150,
+      test: function (d) { return d.stats.catches >= 10; } },
+    { id: 'hundred', name: 'A Hundred Fish', desc: 'Land 100 fish.', reward: 2000,
+      test: function (d) { return d.stats.catches >= 100; } },
+    { id: 'thousand', name: 'A Thousand Fish', desc: 'Land 1,000 fish.', reward: 120000,
+      test: function (d) { return d.stats.catches >= 1000; } },
+
+    { id: 'big_catch', name: 'Big Catch', desc: 'Land something over 50 kg.', reward: 400,
+      test: function (d) { return d.stats.biggestKg >= 50; } },
+    { id: 'huge_catch', name: 'Considerable Catch', desc: 'Land something over 500 kg.', reward: 6000,
+      test: function (d) { return d.stats.biggestKg >= 500; } },
+    { id: 'record_breaker', name: 'Record Breaker', desc: 'Break 25 personal size records.', reward: 3000,
+      test: function (d) { return d.stats.recordsBroken >= 25; } },
+    { id: 'giant', name: 'Absolute Unit', desc: 'Land a catch in the top 1% of its species.', reward: 2500,
+      test: function (d) { return !!d.flags.caughtGiant; } },
+
+    { id: 'rare_1', name: 'Something Worth Keeping', desc: 'Land a Rare fish.', reward: 300,
+      test: function (d) { return !!d.flags.rare_rare; } },
+    { id: 'epic_1', name: 'Uncommonly Lucky', desc: 'Land an Epic fish.', reward: 1200,
+      test: function (d) { return !!d.flags.rare_epic; } },
+    { id: 'legendary', name: 'Legendary', desc: 'Land a Legendary fish.', reward: 9000,
+      test: function (d) { return d.stats.legendaryCatches >= 1; } },
+    { id: 'mythic', name: 'Told In Whispers', desc: 'Land a Mythic fish.', reward: 60000,
+      test: function (d) { return !!d.flags.rare_mythic; } },
+    { id: 'void_walker', name: 'Void Walker', desc: 'Land a Void fish.', reward: 500000,
+      test: function (d) { return d.stats.voidCatches >= 1; } },
+    { id: 'glitch', name: '??????', desc: 'Land something that should not exist.', hidden: true, reward: 4000000,
+      test: function (d) { return !!d.flags.rare_glitch; } },
+
+    { id: 'mutation_1', name: 'Not Standard Issue', desc: 'Land a mutated fish.', reward: 800,
+      test: function (d) { return d.stats.mutationsFound >= 1; } },
+    { id: 'mutation_10', name: 'Collector of Oddities', desc: 'Land 10 mutated fish.', reward: 15000,
+      test: function (d) { return d.stats.mutationsFound >= 10; } },
+    { id: 'voidtouched', name: 'Marked', desc: 'Land a Void-Touched fish.', hidden: true, reward: 250000,
+      test: function (d) { return !!d.flags.mut_voidtouched; } },
+
+    { id: 'collector_10', name: 'Collector', desc: 'Discover 10 species.', reward: 400,
+      test: function (d) { return dexCount(d) >= 10; } },
+    { id: 'collector_30', name: 'Serious Collector', desc: 'Discover 30 species.', reward: 5000,
+      test: function (d) { return dexCount(d) >= 30; } },
+    { id: 'collector_50', name: 'Cataloguer', desc: 'Discover 50 species.', reward: 80000,
+      test: function (d) { return dexCount(d) >= 50; } },
+    { id: 'collector_all', name: 'The Complete Record', desc: 'Discover every species.', reward: 25000000,
+      test: function (d) { return dexCount(d) >= VF.fish.count; } },
+    { id: 'all_common', name: 'Thorough', desc: 'Discover every Common species.', reward: 1500,
+      test: function (d) { return dexOf(d, 'common') >= VF.fish.byRarity('common').length; } },
+
+    { id: 'rich_1k', name: 'Pocket Money', desc: 'Earn 1,000 Brophys in total.', reward: 100,
+      test: function (d) { return d.stats.earned >= 1000; } },
+    { id: 'rich_100k', name: 'Comfortable', desc: 'Earn 100,000 Brophys in total.', reward: 4000,
+      test: function (d) { return d.stats.earned >= 100000; } },
+    { id: 'millionaire', name: 'Millionaire', desc: 'Earn 1,000,000 Brophys in total.', reward: 50000,
+      test: function (d) { return d.stats.earned >= 1000000; } },
+    { id: 'billionaire', name: 'Absurdly Wealthy', desc: 'Earn 1,000,000,000 Brophys in total.', reward: 20000000,
+      test: function (d) { return d.stats.earned >= 1e9; } },
+
+    { id: 'level_10', name: 'Getting The Hang Of It', desc: 'Reach level 10.', reward: 600,
+      test: function (d) { return d.level >= 10; } },
+    { id: 'level_25', name: 'Old Hand', desc: 'Reach level 25.', reward: 12000,
+      test: function (d) { return d.level >= 25; } },
+    { id: 'level_50', name: 'Lifer', desc: 'Reach level 50.', reward: 400000,
+      test: function (d) { return d.level >= 50; } },
+
+    { id: 'traveller', name: 'Traveller', desc: 'Unlock 4 fishing spots.', reward: 2500,
+      test: function (d) { return d.unlockedLocations.length >= 4; } },
+    { id: 'end_of_map', name: 'The End Of The Map', desc: 'Reach BENEATH.', hidden: true, reward: 1000000,
+      test: function (d) { return d.unlockedLocations.indexOf('beneath') >= 0; } },
+
+    { id: 'conservationist', name: 'Conservationist', desc: 'Release 50 fish.', reward: 3000,
+      test: function (d) { return d.stats.released >= 50; } },
+    { id: 'perfect_10', name: 'Steady Hands', desc: 'Land 10 fish without the tension ever entering the red.', reward: 2000,
+      test: function (d) { return d.stats.perfectReels >= 10; } },
+    { id: 'snapped', name: 'It Happens', desc: 'Snap your line. Everyone does eventually.', reward: 50,
+      test: function (d) { return d.stats.linesSnapped >= 1; } },
+    { id: 'encounters', name: 'Something Is Below You', desc: 'Survive 5 legendary encounters.', reward: 30000,
+      test: function (d) { return d.stats.encounters >= 5; } },
+    { id: 'patient', name: 'Patient', desc: 'Spend two hours at the water.', reward: 5000,
+      test: function (d) { return d.stats.playSeconds >= 7200; } },
+    { id: 'best_rod', name: 'Nothing Left To Buy', desc: 'Own every rod.', hidden: true, reward: 100000000,
+      test: function (d) { return d.ownedRods.length >= VF.rods.list.length; } }
+  ];
+
+  const BY_ID = VF.util.byId(LIST);
+
+  VF.achievementData = {
+    list: LIST,
+    get: function (id) { return BY_ID[id] || null; }
+  };
+})(window.VF = window.VF || {});
