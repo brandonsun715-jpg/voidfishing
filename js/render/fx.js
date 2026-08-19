@@ -54,19 +54,45 @@
     };
   }
 
-  /* Ripples are drawn as squashed ellipses to sit flat on the water plane. */
+  /* Ripples are drawn as squashed ellipses to sit flat on the water plane.
+     A disturbance on water does not make one ring — it makes a leading crest
+     with two or three slower rings chasing it, so that is what gets drawn. */
+  const RINGS = [
+    { k: 1.00, a: 1.00, w: 1.00, from: 0.00 },
+    { k: 0.68, a: 0.52, w: 0.75, from: 0.12 },
+    { k: 0.42, a: 0.26, w: 0.55, from: 0.28 }
+  ];
+
   function drawRipples(ctx, squash) {
+    const sq = squash === undefined ? 0.28 : squash;
     for (let i = 0; i < ripples.length; i++) {
       const r = ripples[i];
       const t = 1 - r.life / r.max;
-      const a = (1 - t) * (1 - t) * 0.75;
-      if (a <= 0.01) continue;
-      ctx.globalAlpha = a;
-      ctx.strokeStyle = U.rgbToCss(r.color);
-      ctx.lineWidth = r.w * (1 - t * 0.5);
-      ctx.beginPath();
-      ctx.ellipse(r.x, r.y, r.r, r.r * (squash === undefined ? 0.28 : squash), 0, 0, U.TAU);
-      ctx.stroke();
+      const base = (1 - t) * (1 - t) * 0.8;
+      if (base <= 0.01) continue;
+      const col = r.color;
+      for (let j = 0; j < RINGS.length; j++) {
+        const g = RINGS[j];
+        if (t < g.from) continue;
+        const rr = r.r * g.k;
+        if (rr < 0.6) continue;
+        const a = base * g.a;
+        if (a <= 0.012) continue;
+        ctx.globalAlpha = a;
+        ctx.strokeStyle = U.rgbToCss(col);
+        ctx.lineWidth = Math.max(0.5, r.w * g.w * (1 - t * 0.45));
+        ctx.beginPath();
+        ctx.ellipse(r.x, r.y, rr, rr * sq, 0, 0, U.TAU);
+        ctx.stroke();
+      }
+      // the dark dimple in the middle, which is what you actually see first
+      if (t < 0.5) {
+        ctx.globalAlpha = base * 0.30 * (1 - t * 2);
+        ctx.fillStyle = 'rgba(0,0,0,1)';
+        ctx.beginPath();
+        ctx.ellipse(r.x, r.y, r.r * 0.34, r.r * 0.34 * sq, 0, 0, U.TAU);
+        ctx.fill();
+      }
     }
     ctx.globalAlpha = 1;
   }

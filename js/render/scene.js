@@ -658,7 +658,10 @@
 
     // one gradient carries the whole depth ramp, including the near-shore
     // darkening that used to be a second translucent pass
-    const g = ctx.createLinearGradient(0, hy, 0, H);
+    // the ramp is tilted rather than vertical, so the side away from the light
+    // sits deeper without costing a second full-water pass
+    const tilt = U.clamp(L.glowX / W, 0.15, 0.85);
+    const g = ctx.createLinearGradient(W * tilt * 0.9, hy - wh * 0.10, W * (1 - tilt) * 0.7, H);
     g.addColorStop(0, U.rgbToCss(P.waterTop));
     g.addColorStop(0.50, U.rgbToCss(U.mixRgb(P.waterTop, P.waterBot, 0.68)));
     g.addColorStop(0.78, U.rgbToCss(P.waterBot));
@@ -666,14 +669,19 @@
     ctx.fillStyle = g;
     ctx.fillRect(0, hy, W, wh + 2);
 
-    // horizon seam: a thin bright line where sky meets water
-    ctx.globalAlpha = 0.46 * P.bright + 0.14;
-    ctx.fillStyle = U.rgbToCss(P.glow);
-    ctx.fillRect(0, hy - 1, W, 1.3);
+    // horizon seam: brightest where the light source meets it, gone at the edges
+    const seam = ctx.createLinearGradient(0, 0, W, 0);
+    const seamA = 0.55 * P.bright + 0.16;
+    seam.addColorStop(0, U.rgbToCss(P.glow, seamA * 0.18));
+    seam.addColorStop(U.clamp(L.glowX / W, 0.05, 0.95), U.rgbToCss(P.glow, seamA));
+    seam.addColorStop(1, U.rgbToCss(P.glow, seamA * 0.22));
+    ctx.fillStyle = seam;
+    ctx.fillRect(0, hy - 1, W, 1.4);
     ctx.globalAlpha = 1;
 
     if (q !== 'low') { drawBackdropReflection(P); drawReflection(P); }
     drawMoonpath(P);
+    drawSwell(P, q);
     drawWaveLines(P, q);
 
   }
@@ -742,38 +750,129 @@
     ctx.globalAlpha = 1;
   }
 
-  /* The signature look: a shimmering path of light from the horizon feature. */
+  /* The signature look. A real moonpath is not a painted stripe — it is one
+     soft wedge of haze with a few hundred separate specular flecks blinking on
+     and off inside it, denser and narrower the closer you look to the source.
+     So that is what this draws: a wedge, then the flecks. */
+  function moonSpread(k) { return U.lerp(W * 0.020, W * 0.30, Math.pow(k, 0.72)); }
+
   function drawMoonpath(P) {
     const hy = L.horizonY, wh = L.waterH;
     const q = VF.state.data.settings.quality;
-    const steps = q === 'low' ? 18 : q === 'medium' ? 24 : 34;
+    const gx = L.glowX;
+    const calmK = VF.encounters ? 1 - VF.encounters.calm() * 0.85 : 1;
+    const chop = (0.55 + VF.weather.wind() * 0.9 + VF.weather.rain() * 0.5) * calmK;
+
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    for (let i = 0; i < steps; i++) {
-      const k = i / steps;
+
+    /* The diffuse wedge, as a stack of horizontally-belled bands. A clipped
+       shape would give the path a hard V for an edge; this way every edge of
+       it is soft, which is the only way it reads as light on water. */
+    const bands = q === 'low' ? 7 : q === 'medium' ? 10 : 14;
+    for (let i = 0; i < bands; i++) {
+      const k0 = i / bands, k1 = (i + 1) / bands;
+      const y0 = hy + Math.pow(k0, 1.30) * wh;
+      const y1 = hy + Math.pow(k1, 1.30) * wh;
+      if (y0 > H) break;
+      const km = (k0 + k1) * 0.5;
+      const spread = moonSpread(km) * 1.45;
+      const wob = Math.sin(y0 * 0.03 + t * 0.5) * spread * 0.10 * chop;
+      const a = (0.30 * P.bright + 0.06) * (1 - Math.pow(km, 1.35) * 0.60);
+      if (a <= 0.006) continue;
+      const cx = gx + wob;
+      const bandG = ctx.createLinearGradient(cx - spread, 0, cx + spread, 0);
+      bandG.addColorStop(0, U.rgbToCss(P.glow, 0));
+      bandG.addColorStop(0.26, U.rgbToCss(P.glow, a * 0.28));
+      bandG.addColorStop(0.50, U.rgbToCss(P.glow, a));
+      bandG.addColorStop(0.74, U.rgbToCss(P.glow, a * 0.28));
+      bandG.addColorStop(1, U.rgbToCss(P.glow, 0));
+      ctx.fillStyle = bandG;
+      ctx.fillRect(cx - spread, y0, spread * 2, y1 - y0 + 1.2);
+    }
+
+    /* the flecks. Placement is seeded so they stay put and blink rather than
+       sliding across the surface, which is what real chop does. */
+    const n = q === 'low' ? 52 : q === 'medium' ? 105 : 170;
+    const glow = P.glow;
+    let bucket = -1;
+    for (let i = 0; i < n; i++) {
+      const r1 = ((Math.sin(i * 12.9898) * 43758.5453) % 1 + 1) % 1;
+      const r2 = ((Math.sin(i * 78.2331) * 43758.5453) % 1 + 1) % 1;
+      const r3 = ((Math.sin(i * 41.1177) * 43758.5453) % 1 + 1) % 1;
+
+      const k = Math.pow(r1, 0.85);
       const y = hy + Math.pow(k, 1.30) * wh;
-      const spread = U.lerp(W * 0.022, W * 0.26, Math.pow(k, 0.70));
-      const calmK = VF.encounters ? 1 - VF.encounters.calm() * 0.9 : 1;
-      const wob = (Math.sin(y * 0.055 + t * 1.35) * spread * 0.42
-                + Math.sin(y * 0.021 - t * 0.8) * spread * 0.30) * calmK;
-      const a = (0.20 * P.bright + 0.075) * (1 - Math.pow(k, 1.7)) * (0.35 + 0.65 * (1 - k));
-      if (a <= 0.004) continue;
-      ctx.globalAlpha = a;
-      ctx.fillStyle = U.rgbToCss(P.glow);
-      const hgt = Math.max(1.1, wh / steps * 0.85);
-      ctx.beginPath();
-      ctx.ellipse(L.glowX + wob, y, spread * (0.6 + Math.sin(y * 0.08 + t) * 0.18), hgt * 0.6, 0, 0, TAU);
-      ctx.fill();
+      if (y > H + 2) continue;
+      const spread = moonSpread(k);
+      // clustered toward the centre line, the way specular scatter falls off
+      const off = (r2 * 2 - 1);
+      const lateral = off * Math.abs(off) * spread;
+      const drift = (Math.sin(y * 0.045 + t * (0.9 + r3 * 0.7)) * spread * 0.24 +
+                     Math.sin(y * 0.018 - t * 0.55) * spread * 0.16) * chop;
+      const x = gx + lateral + drift;
+
+      // each fleck has its own blink, and the near ones are longer and lazier
+      const sp = 1.1 + r3 * 3.2;
+      let tw = Math.sin(t * sp + r2 * 12.0) * 0.5 + 0.5;
+      tw = tw * tw * (1 - Math.abs(off) * 0.55);
+      const a = tw * (0.42 * P.bright + 0.09) * (1 - Math.pow(k, 2.1) * 0.55) * calmK;
+      if (a <= 0.012) continue;
+
+      const wdt = U.lerp(1.6, 30, Math.pow(k, 1.25)) * (0.55 + r3 * 0.9);
+      const hgt = Math.max(0.7, U.lerp(0.7, 2.6, k));
+      // four alpha buckets keep the fill-style churn down
+      const b = a < 0.08 ? 0 : a < 0.16 ? 1 : a < 0.26 ? 2 : 3;
+      if (b !== bucket) {
+        bucket = b;
+        ctx.fillStyle = U.rgbToCss(glow, [0.08, 0.18, 0.30, 0.46][b]);
+      }
+      ctx.fillRect(x - wdt * 0.5, y, wdt, hgt);
     }
     ctx.restore();
     ctx.globalAlpha = 1;
+  }
+
+  /* Broad, slow bands of sheen. The wave lines give the surface its texture;
+     this gives it a body of water underneath, moving on a much longer period. */
+  function drawSwell(P, q) {
+    if (q === 'low') return;
+    const hy = L.horizonY, wh = L.waterH;
+    const calm = VF.encounters ? VF.encounters.calm() : 0;
+    const n = q === 'medium' ? 2 : 3;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < n; i++) {
+      const ph = i * 2.399;
+      const k = 0.34 + i * 0.15;
+      const y = hy + Math.pow(k, 1.30) * wh + Math.sin(t * 0.20 + ph) * wh * 0.045;
+      const h = wh * (0.055 + i * 0.018);
+      const a = (0.055 * P.bright + 0.014) * (0.55 + 0.45 * Math.sin(t * 0.28 + ph)) * (1 - calm * 0.5);
+      if (a <= 0.004) continue;
+      const g = ctx.createLinearGradient(0, y - h, 0, y + h);
+      g.addColorStop(0, U.rgbToCss(P.glow, 0));
+      g.addColorStop(0.5, U.rgbToCss(P.glow, a));
+      g.addColorStop(1, U.rgbToCss(P.glow, 0));
+      ctx.fillStyle = g;
+      ctx.fillRect(0, y - h, W, h * 2);
+    }
+    ctx.restore();
+  }
+
+  /* One shared height field. Sampling every line from it is what makes the
+     surface coherent — the lines behave like contours of a single moving
+     sheet of water rather than a stack of independent wiggles. */
+  function field(x, y, sp) {
+    return Math.sin(x * 0.0042 + y * 0.0060 + t * sp * 0.85)
+         + Math.sin(x * 0.0113 - y * 0.0038 + t * sp * 1.45) * 0.44
+         + Math.sin(x * 0.0271 + y * 0.0021 + t * sp * 2.10) * 0.17;
   }
 
   /* The surface. Lines are spaced and shaped irregularly and each carries its
      own phase and amplitude, so it reads as swell rather than as scanlines. */
   function drawWaveLines(P, q) {
     const hy = L.horizonY, wh = L.waterH;
-    const lines = q === 'low' ? 18 : q === 'medium' ? 30 : 44;
+    const lines = q === 'low' ? 16 : q === 'medium' ? 26 : 36;
     const seg = q === 'low' ? 12 : 22;
     const calm = Math.max(VF.encounters ? VF.encounters.calm() : 0,
                           VF.conditions ? VF.conditions.flag('calm') * 0.8 : 0,
@@ -784,7 +883,9 @@
     const crest = U.mixRgb(P.waterTop, P.glow, 0.80);
     const trough = U.mixRgb(P.waterBot, [0, 0, 0], 0.35);
 
-    ctx.lineWidth = 1;
+    const crestCss = U.rgbToCss(crest);
+    const troughCss = U.rgbToCss(trough);
+
     for (let i = 0; i < lines; i++) {
       // uneven spacing: each band is nudged by a fixed per-line offset
       const jitter = (Math.sin(i * 12.9898) * 43758.5453) % 1;
@@ -792,37 +893,38 @@
       const y = hy + Math.pow(k, 1.42) * wh;
       if (y > H + 4) continue;
 
-      const amp = U.lerp(0.35, 6.4, Math.pow(k, 1.25)) * chop;
+      const amp = U.lerp(0.4, 13, Math.pow(k, 1.55)) * chop;
       const ph = i * 2.399;                       // golden-angle phase spread
-      const f1 = 0.0055 + k * 0.010;
-      const f2 = 0.021 + jitter * 0.014;
       const speed = wind * (0.45 + k * 1.1);
 
       // brighter bands catch the light, darker ones read as troughs
       const bright = 0.5 + 0.5 * Math.sin(i * 1.7 + t * 0.35);
       const col = bright > 0.55 ? crest : trough;
-      const a = U.lerp(0.05, 0.30, Math.pow(k, 1.15)) * (0.35 + P.bright * 0.85) *
+      const a = U.lerp(0.08, 0.46, Math.pow(k, 1.10)) * (0.35 + P.bright * 0.85) *
                 (1 - calm * 0.5) * (bright > 0.55 ? bright : 0.55);
       if (a <= 0.012) continue;
 
       ctx.globalAlpha = a;
-      ctx.strokeStyle = U.rgbToCss(col);
+      ctx.strokeStyle = bright > 0.55 ? crestCss : troughCss;
+      // near swell is heavier than the compressed bands out by the horizon
+      ctx.lineWidth = U.lerp(0.85, 1.5, Math.pow(k, 2.2));
       ctx.beginPath();
       for (let j = 0; j <= seg; j++) {
         const x = (j / seg) * (W + 60) - 30;
-        const yy = y
-          + Math.sin(x * f1 + t * speed + ph) * amp
-          + Math.sin(x * f2 - t * speed * 1.7 + ph * 1.7) * amp * 0.42
-          + Math.sin(x * 0.0016 + t * 0.11 + ph) * amp * 1.15;
+        // every line samples the same field, so neighbours rise and fall
+        // together and the surface reads as swell instead of as loose squiggles
+        const yy = y + field(x, y, speed) * amp
+          + Math.sin(x * 0.019 + t * speed * 1.9 + ph * 1.7) * amp * 0.14;
         if (j === 0) ctx.moveTo(x, yy); else ctx.lineTo(x, yy);
       }
       ctx.stroke();
     }
+    ctx.lineWidth = 1;
 
     // a handful of bright glints where the light lands on a crest
     if (q !== 'low') {
       ctx.globalCompositeOperation = 'lighter';
-      const n = 14;
+      const n = 11;
       for (let i = 0; i < n; i++) {
         const jitter = ((Math.sin(i * 78.233) * 43758.5453) % 1 + 1) % 1;
         const k = 0.12 + jitter * 0.8;
@@ -830,11 +932,23 @@
         const drift = (t * (6 + jitter * 14)) % (W + 200) - 100;
         const x = ((jitter * W * 1.7) + drift) % (W + 120) - 60;
         const tw = 0.5 + 0.5 * Math.sin(t * (1.4 + jitter * 2.6) + i);
-        ctx.globalAlpha = 0.16 * tw * (0.3 + P.bright) * (1 - calm * 0.7);
-        ctx.fillStyle = U.rgbToCss(P.glow);
+        const ga = 0.19 * tw * tw * (0.3 + P.bright) * (1 - calm * 0.7);
+        if (ga <= 0.012) continue;
+        const gw = U.lerp(5, 26, k), gh = U.lerp(0.6, 1.7, k);
+        ctx.globalAlpha = ga;
+        // a soft halo with a hard core reads as light on water, not as a dash
+        const hg = ctx.createRadialGradient(x, y, 0, x, y, gw);
+        hg.addColorStop(0, U.rgbToCss(P.glow, 0.9));
+        hg.addColorStop(0.35, U.rgbToCss(P.glow, 0.30));
+        hg.addColorStop(1, U.rgbToCss(P.glow, 0));
+        ctx.fillStyle = hg;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.scale(1, gh / gw);
         ctx.beginPath();
-        ctx.ellipse(x, y, U.lerp(4, 22, k), U.lerp(0.5, 1.4, k), 0, 0, TAU);
+        ctx.arc(0, 0, gw, 0, TAU);
         ctx.fill();
+        ctx.restore();
       }
       ctx.globalCompositeOperation = 'source-over';
     }
