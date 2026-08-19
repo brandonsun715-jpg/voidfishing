@@ -183,15 +183,28 @@
   /* Fins are membrane plus rays: fill the shape, then stroke thin supports
      radiating from where the fin meets the body. That single detail is most of
      what separates a fin from a triangle. */
+  /* Set by drawFins so a fin can be painted as a membrane rather than a flat
+     shape: thick and opaque where it leaves the body, thinning to translucent
+     at the trailing edge. */
+  let FIN = null;
+
   function paintFin(ctx, path, col, alpha, rays) {
     ctx.globalAlpha = alpha;
-    ctx.fillStyle = col;
+    if (FIN && rays && rays.len > 0) {
+      const g = ctx.createRadialGradient(rays.x, rays.y, 0, rays.x, rays.y, rays.len * 1.02);
+      g.addColorStop(0, U.rgbToCss(U.shade(FIN.base, -0.30)));
+      g.addColorStop(0.45, U.rgbToCss(FIN.base));
+      g.addColorStop(1, U.rgbToCss(U.mixRgb(FIN.base, FIN.tip, 0.42), 0.62));
+      ctx.fillStyle = g;
+    } else {
+      ctx.fillStyle = col;
+    }
     ctx.fill(path);
     if (rays && rays.n > 1) {
       ctx.save();
       ctx.clip(path);
       ctx.strokeStyle = rays.col;
-      ctx.globalAlpha = alpha * 0.55;
+      ctx.globalAlpha = alpha * 0.72;
       ctx.lineWidth = rays.w;
       ctx.lineCap = 'round';
       for (let i = 0; i < rays.n; i++) {
@@ -204,11 +217,20 @@
       }
       ctx.restore();
     }
+    // the margin, where a fin catches the light along its trailing edge
+    if (FIN) {
+      ctx.globalAlpha = alpha * 0.45;
+      ctx.strokeStyle = U.rgbToCss(U.mixRgb(FIN.tip, [255, 255, 255], 0.35));
+      ctx.lineWidth = FIN.edge;
+      ctx.stroke(path);
+    }
     ctx.globalAlpha = alpha;
   }
 
-  function drawFins(ctx, style, L, H, sway, col, alpha, accent) {
+  function drawFins(ctx, style, L, H, sway, col, alpha, accent, baseRgb, tipRgb) {
     if (style === 'none') return;
+    FIN = baseRgb ? { base: baseRgb, tip: tipRgb || baseRgb,
+                      edge: Math.max(0.5, L * 0.0045) } : null;
     const rayCol = accent || col;
     const rw = Math.max(0.6, L * 0.006);
     const tailX = -L * 0.36;
@@ -397,6 +419,7 @@
 
   function drawExtras(ctx, list, L, H, sway, art, rnd, tm) {
     const acc = art.c3;
+    const accRgb = art.r3 || U.hexToRgb(art.c3);
     for (let i = 0; i < list.length; i++) {
       const e = list[i];
       ctx.save();
@@ -516,8 +539,8 @@
           ctx.stroke();
           const g = ctx.createRadialGradient(lx, ly, 0, lx, ly, L * 0.30);
           g.addColorStop(0, acc);
-          g.addColorStop(0.3, U.rgbToCss(U.hexToRgb(acc), 0.5));
-          g.addColorStop(1, U.rgbToCss(U.hexToRgb(acc), 0));
+          g.addColorStop(0.3, U.rgbToCss(accRgb, 0.5));
+          g.addColorStop(1, U.rgbToCss(accRgb, 0));
           ctx.globalAlpha = 0.9; ctx.fillStyle = g;
           ctx.beginPath(); ctx.arc(lx, ly, L * 0.30, 0, TAU); ctx.fill();
           ctx.fillStyle = acc; ctx.globalAlpha = 1;
@@ -760,8 +783,13 @@
     }
     if (fx.darken) { c1 = U.shade(c1, -fx.darken * 0.45); c2 = U.shade(c2, -fx.darken * 0.5); }
 
+    // both forms: the css strings for anything that just needs a fill, and the
+    // raw triples for anything that has to keep mixing. Running the strings
+    // back through hexToRgb parses "rgb(…)" as hex and yields black, which is
+    // exactly what used to happen to every body on screen.
     return {
       c1: U.rgbToCss(c1), c2: U.rgbToCss(c2), c3: U.rgbToCss(c3),
+      r1: c1, r2: c2, r3: c3,
       mut: top, traits: ids, fx: fx
     };
   }
@@ -788,9 +816,9 @@
     // outer glow
     if (glow > 0.05) {
       const g = ctx.createRadialGradient(0, 0, 0, 0, 0, L * 0.95);
-      g.addColorStop(0, U.rgbToCss(U.hexToRgb(pal.c3), 0.30 * glow));
-      g.addColorStop(0.5, U.rgbToCss(U.hexToRgb(pal.c3), 0.10 * glow));
-      g.addColorStop(1, U.rgbToCss(U.hexToRgb(pal.c3), 0));
+      g.addColorStop(0, U.rgbToCss(pal.r3, 0.30 * glow));
+      g.addColorStop(0.5, U.rgbToCss(pal.r3, 0.10 * glow));
+      g.addColorStop(1, U.rgbToCss(pal.r3, 0));
       ctx.fillStyle = g;
       ctx.fillRect(-L, -L, L * 2, L * 2);
     }
@@ -800,12 +828,12 @@
     const H0 = measureH(art.body, L);
     // a ray's body already is its wings, so a wing fin would only double it up
     if (!(art.body === 'ray' && art.fin === 'wing')) {
-      drawFins(ctx, art.fin, L, H0, sway, pal.c2, 0.85, pal.c3);
+      drawFins(ctx, art.fin, L, H0, sway, pal.c2, 0.85, pal.c3, pal.r2, pal.r3);
     }
 
     // body
     const H = bodyPath(ctx, art.body, L, sway, probe);
-    const c1 = U.hexToRgb(pal.c1), c2 = U.hexToRgb(pal.c2), c3 = U.hexToRgb(pal.c3);
+    const c1 = pal.r1, c2 = pal.r2, c3 = pal.r3;
     const rnd2 = VF.rng.make(hash(fish.id) ^ 0x1234);
 
     /* Counter-shading: dark along the back, pale along the belly. This is the
@@ -813,14 +841,30 @@
     const bg = ctx.createLinearGradient(0, -H * 1.05, 0, H * 1.05);
     // the belly lightens out of the body colour, never all the way to the
     // accent, or pale species bleach out entirely
-    const belly = U.mixRgb(c1, c3, 0.45);
-    bg.addColorStop(0.00, U.rgbToCss(U.shade(c2, -0.42)));
-    bg.addColorStop(0.20, U.rgbToCss(U.mixRgb(c2, c1, 0.55)));
-    bg.addColorStop(0.50, U.rgbToCss(c1));
-    bg.addColorStop(0.80, U.rgbToCss(U.mixRgb(c1, belly, 0.7)));
-    bg.addColorStop(1.00, U.rgbToCss(U.shade(belly, 0.10)));
+    const belly = U.mixRgb(c1, c3, 0.38);
+    // pale species need the back pushed toward a common deep, or -46% of an
+    // already-white c2 is still white and the counter-shading vanishes
+    const back = U.mixRgb(U.shade(c2, -0.28), [11, 15, 24], 0.40);
+    bg.addColorStop(0.00, U.rgbToCss(back));
+    bg.addColorStop(0.16, U.rgbToCss(U.mixRgb(U.mixRgb(c2, c1, 0.40), back, 0.45)));
+    bg.addColorStop(0.34, U.rgbToCss(U.mixRgb(c2, c1, 0.62)));
+    bg.addColorStop(0.58, U.rgbToCss(c1));
+    bg.addColorStop(0.84, U.rgbToCss(U.mixRgb(c1, belly, 0.7)));
+    bg.addColorStop(1.00, U.rgbToCss(belly));
     ctx.fillStyle = bg;
     ctx.fill();
+
+    /* The silhouette gets an edge: a lit rim along the back, shadow through
+       the middle, and a little bounce off the belly. Without it the body has
+       no boundary and every fish reads as a sticker. */
+    const eg = ctx.createLinearGradient(0, -H * 1.02, 0, H * 1.02);
+    eg.addColorStop(0.00, U.rgbToCss(U.mixRgb(c3, [255, 255, 255], 0.45), 0.46));
+    eg.addColorStop(0.30, U.rgbToCss(U.shade(back, -0.35), 0.40));
+    eg.addColorStop(0.72, U.rgbToCss(U.shade(c2, -0.45), 0.28));
+    eg.addColorStop(1.00, U.rgbToCss(U.mixRgb(belly, [255, 255, 255], 0.30), 0.34));
+    ctx.strokeStyle = eg;
+    ctx.lineWidth = Math.max(0.7, L * 0.0055);
+    ctx.stroke();
 
     ctx.save();
     ctx.clip();
@@ -839,7 +883,7 @@
     // and a soft glow from the belly for anything luminous
     if (glow > 0.15) {
       const bl = ctx.createRadialGradient(0, H * 0.6, 0, 0, H * 0.6, L * 0.55);
-      bl.addColorStop(0, U.rgbToCss(c3, 0.34 * glow));
+      bl.addColorStop(0, U.rgbToCss(c3, Math.min(0.34, 0.30 * glow)));
       bl.addColorStop(1, U.rgbToCss(c3, 0));
       ctx.fillStyle = bl;
       ctx.fillRect(-L, -H * 1.2, L * 2, H * 2.4);
@@ -916,16 +960,17 @@
 
     // Outline, then a rim light. Without the rim the near-black species read as
     // holes rather than creatures.
-    ctx.strokeStyle = U.rgbToCss(U.shade(U.hexToRgb(pal.c2), -0.5), 0.55);
+    ctx.strokeStyle = U.rgbToCss(U.shade(pal.r2, -0.5), 0.55);
     ctx.lineWidth = Math.max(0.8, L * 0.009);
     ctx.stroke();
     ctx.save();
-    ctx.strokeStyle = U.rgbToCss(U.hexToRgb(pal.c3), 0.42);
+    ctx.strokeStyle = U.rgbToCss(pal.r3, 0.42);
     ctx.lineWidth = Math.max(0.7, L * 0.005);
     ctx.stroke();
     ctx.restore();
 
-    drawExtras(ctx, art.ex || [], L, H, sway, { c1: pal.c1, c2: pal.c2, c3: pal.c3 }, rnd, tm);
+    drawExtras(ctx, art.ex || [], L, H, sway,
+               { c1: pal.c1, c2: pal.c2, c3: pal.c3, r3: pal.r3 }, rnd, tm);
 
     // eyes, irised in the species accent so they carry its colour
     const n = art.eyes | 0;
