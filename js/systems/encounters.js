@@ -7,7 +7,7 @@
   const U = VF.util;
 
   let ambientTimer = 22;
-  let encTimer = 150;
+  let encTimer = 75;
   let calm = 0;            // 0..1, how still the water has gone
   let calmTarget = 0;
   let encPhase = null;     // null | 'still' | 'reveal' | 'waiting'
@@ -99,8 +99,8 @@
   function encounterChance() {
     const d = VF.state.data;
     const loc = VF.locations.current();
-    const base = 0.014 + VF.locations.index(loc.id) * 0.004;
-    return U.clamp(base * VF.weather.encounter() * (1 + VF.progression.luck() * 0.10), 0, 0.14);
+    const base = 0.050 + VF.locations.index(loc.id) * 0.012;
+    return U.clamp(base * VF.weather.encounter() * (1 + VF.progression.luck() * 0.10), 0, 0.25);
   }
 
   function tryStartEncounter() {
@@ -174,14 +174,14 @@
     if (st === 'waiting') {
       encTimer -= dt;
       if (encTimer <= 0) {
-        encTimer = VF.rng.g.range(95, 220);
+        encTimer = VF.rng.g.range(80, 190);
         if (VF.rng.g() < encounterChance()) tryStartEncounter();
       }
     }
   }
 
   function reset() {
-    ambientTimer = 22; encTimer = 150;
+    ambientTimer = 22; encTimer = 75;
     encPhase = null; encData = null; calm = 0; calmTarget = 0;
   }
 

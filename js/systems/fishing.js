@@ -11,6 +11,7 @@
   const CAST_FLIGHT_TIME = 0.72;   // bobber travel time
   const SWEET_FROM = 0.80;         // top of the meter gives a rare-chance bonus
   const BITE_WINDOW = 1.35;        // seconds to react to a bite
+  const BITE_WINDOW_BIG = 2.6;     // an encounter is too rare to lose to a slow hand
   const SLACK_LIMIT = 3.6;         // seconds of no tension before the fish throws the hook
   const SNAP_GRACE = 0.45;         // seconds at max tension before the line goes
 
@@ -33,6 +34,7 @@
 
     pending: null,       // rolled catch waiting to be hooked
     pendingOpts: null,   // forced roll options from an encounter
+    biteWindow: BITE_WINDOW,
     fight: null,
 
     lastResult: null,
@@ -105,6 +107,7 @@
     opts = opts || {};
     if (S.sweet && !opts.minRank) opts = Object.assign({}, opts, { rareBoost: 1.12 });
     S.pending = VF.loot.roll(opts);
+    S.biteWindow = opts.minRank ? BITE_WINDOW_BIG : BITE_WINDOW;
     setState('bite');
     VF.bus.emit('fishing:bite', S.pending);
   }
@@ -341,7 +344,7 @@
         break;
 
       case 'bite':
-        if (S.t >= BITE_WINDOW) {
+        if (S.t >= (S.biteWindow || BITE_WINDOW)) {
           S.pending = null;
           VF.bus.emit('fishing:missed');
           beginWaiting();
@@ -353,6 +356,9 @@
         break;
 
       case 'landed':
+        // watchdog: the catch card owns this state, so if it is gone the catch
+        // is resolved here rather than leaving the rod unusable
+        if (S.t > 25 && !(VF.catchUI && VF.catchUI.isOpen())) resolveCatch();
         break;
     }
   }
@@ -366,8 +372,21 @@
     return true;
   }
 
+  /* Return the rod to a usable state from anywhere (used by save reset). */
+  function hardReset() {
+    S.charging = false;
+    S.charge = 0;
+    S.pending = null;
+    S.pendingOpts = null;
+    S.fight = null;
+    S.lastResult = null;
+    S.encounterActive = false;
+    if (S.state !== 'idle') setState('idle');
+  }
+
   VF.fishing = {
     S: S,
+    hardReset: hardReset,
     tick: tick,
     canCast: canCast,
     beginCharge: beginCharge,

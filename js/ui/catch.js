@@ -6,7 +6,8 @@
 
   const U = VF.util;
   let host = null, card = null, open = false, raf = 0, art = null, artCtx = null;
-  let current = null, artT = 0, lastFrame = 0;
+  let gen = 0;   // guards the deferred teardown against a newer open
+  let current = null, artT = 0, lastFrame = 0, resolved = false;
 
   function init() {
     host = document.getElementById('modal');
@@ -25,6 +26,8 @@
     if (!c || open) return;
     current = c;
     open = true;
+    resolved = false;
+    gen++;
     VF.state.rt.panelOpen = 'catch';
 
     const r = VF.rarities.get(c.rarity);
@@ -167,7 +170,8 @@
   }
 
   function act(kind) {
-    if (!open) return;
+    if (!open || resolved) return;
+    resolved = true;
     let r;
     if (kind === 'sell') { r = VF.catches.sell(); if (r) VF.toast.show('Sold for <strong class="mono">' + U.money(r) + '</strong>', 'good', 2400); }
     else if (kind === 'keep') { VF.catches.keep(); VF.toast.plain('Kept in your bag', null, 2000); }
@@ -185,14 +189,23 @@
 
   function defaultAction() { act('sell'); }
 
+  /* Dismissing the card must never strand the catch. If no choice was made the
+     fish is sold, so the player cannot lose progress by closing the window. */
   function close() {
     if (!open) return;
+    if (!resolved && VF.fishing.state() === 'landed') {
+      resolved = true;
+      VF.catches.sell();
+    }
     open = false;
     VF.state.rt.panelOpen = null;
     cancelAnimationFrame(raf);
     raf = 0;
     if (card) card.classList.add('out');
+    const myGen = ++gen;
     setTimeout(function () {
+      // something else may own the modal host by now
+      if (myGen !== gen || open || VF.panels.isOpen()) return;
       host.classList.add('hidden');
       U.clear(host);
       card = null; art = null; artCtx = null; current = null;

@@ -5,6 +5,7 @@
 
   const U = VF.util;
   let host = null, overlay = null, current = null, node = null;
+  let gen = 0;   // guards the deferred teardown against a newer open
   let dexFilter = 'all', dexMode = 'all';
 
   function init() {
@@ -19,6 +20,7 @@
     if (VF.catchUI.isOpen()) return;
     if (current === id) { close(); return; }
     if (current) closeNow();
+    gen++;
     current = id;
     VF.state.rt.panelOpen = id;
     overlay.classList.remove('hidden', 'out');
@@ -36,7 +38,10 @@
     if (node) node.classList.add('out');
     overlay.classList.add('out');
     const n = node;
+    const myGen = ++gen;
     setTimeout(function () {
+      // a panel opened during the exit animation owns the host now — leave it alone
+      if (myGen !== gen) return;
       if (n && n.parentNode) n.parentNode.removeChild(n);
       if (!current) { host.classList.add('hidden'); overlay.classList.add('hidden'); }
     }, 210);
@@ -822,6 +827,8 @@
     const yes = U.el('button', 'btn btn-danger', 'Reset');
     yes.addEventListener('click', function () {
       VF.save.reset();
+      VF.catchUI.close();
+      VF.fishing.hardReset();
       VF.loot.invalidatePool();
       VF.encounters.reset();
       VF.fx.reset();
