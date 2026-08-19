@@ -232,8 +232,11 @@
   function updateRod(dt) {
     const S = VF.fishing.S;
     const fh = L.figureH;
-    L.rodHand.x = L.seatX + fh * 0.40;
-    L.rodHand.y = L.seatY - fh * 0.52;
+    // the body poses first; the rod hangs off whatever the hands are doing
+    VF.anglerArt.update(dt, S);
+    const h = VF.anglerArt.hand(fh, 'sit', 1);
+    L.rodHand.x = L.seatX + h.x;
+    L.rodHand.y = L.seatY + h.y;
 
     let targetAngle = -0.62;                       // radians, up and to the right
     let targetBend = 0.10;
@@ -1040,10 +1043,20 @@
 
     ctx.save();
     ctx.translate(seatX, seatY);
-    VF.anglerArt.draw(ctx, VF.cosmetics.cfg('outfit'), fh, t, false,
-                      { x: L.rodHand.x - seatX, y: L.rodHand.y - seatY }, rim);
+    const look = L.bobber.visible ? L.bobber : L.castTarget;
+    VF.anglerArt.draw(ctx, VF.cosmetics.cfg('outfit'), fh, t, {
+      mode: 'sit',
+      rim: rim,
+      hand: { x: L.rodHand.x - seatX, y: L.rodHand.y - seatY },
+      rodAngle: rodState.angle + rodState.sway,
+      aim: { x: look.x - seatX, y: look.y - seatY },
+      handOver: true
+    });
     ctx.restore();
     drawRod(P);
+    // the hand closes over the grip, so it goes on after the rod
+    VF.anglerArt.drawHand(ctx, VF.cosmetics.cfg('outfit'), fh, L.rodHand,
+                          rodState.angle + rodState.sway);
   }
 
   /* Rod geometry lives here; the drawing is shared with the shop previews. */
