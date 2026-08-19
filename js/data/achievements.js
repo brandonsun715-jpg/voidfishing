@@ -130,7 +130,10 @@
 
     /* --- people and the record --- */
     { id: 'met_all', name: 'Everyone Who Is Here', desc: 'Speak to all five of them.', reward: 15000,
-      test: function (d) { return Object.keys(d.npcs).length >= VF.npcs.list.length; } },
+      test: function (d) {
+        // having a record is not the same as having talked to them
+        return VF.npcs.list.every(function (n) { return VF.npcs.met(n.id); });
+      } },
     { id: 'journal_10', name: 'Keeping Notes', desc: 'Write ten journal entries.', reward: 8000,
       test: function (d) { return d.journal.length >= 10; } },
     { id: 'streak_25', name: 'Not One Lost', desc: 'Land 25 in a row without losing one.', reward: 30000,

@@ -118,6 +118,16 @@
 
   const BY_ID = VF.util.byId(LIST);
 
+  const NOBODY = { met: 0, stage: 0, heard: [] };
+
+  /* Read-only. Asking whether somebody has something to say must not create a
+     record for them — that is a write, and it made "speak to all five of them"
+     true for a player who had spoken to none of them. */
+  function peek(id) {
+    return VF.state.data.npcs[id] || NOBODY;
+  }
+
+  /* Writable. Only called when something actually happens with that person. */
   function rec(id) {
     const d = VF.state.data;
     if (!d.npcs[id]) d.npcs[id] = { met: 0, stage: 0, heard: [] };
@@ -139,7 +149,7 @@
   function hasNew(id) {
     const npc = BY_ID[id];
     if (!npc) return false;
-    return availableStage(npc) > rec(id).stage - 1;
+    return availableStage(npc) > peek(id).stage - 1;
   }
 
   function anyNew() {
@@ -187,7 +197,8 @@
   VF.npcs = {
     list: LIST,
     get: function (id) { return BY_ID[id] || null; },
-    rec: rec, talk: talk, hasNew: hasNew, anyNew: anyNew,
+    rec: rec, peek: peek, talk: talk, hasNew: hasNew, anyNew: anyNew,
+    met: function (id) { return peek(id).met > 0; },
     unlocked: unlocked, availableStage: availableStage
   };
 })(window.VF = window.VF || {});
