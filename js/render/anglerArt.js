@@ -180,7 +180,8 @@
     s.lean = lean;
 
     if (mode === 'sit') {
-      s.hip = { x: 0, y: -fh * 0.02 };
+      // the hips slide back on the ledge as the pull comes on
+      s.hip = { x: -P.lean * fh * 0.035, y: -fh * 0.02 - P.pull * fh * 0.010 };
       // legs hang over the lip, the near one a little further out
       s.legs = [
         { hip: { x: -fh * 0.01, y: s.hip.y }, knee: { x: fh * 0.33, y: -fh * 0.17 },
@@ -211,7 +212,9 @@
 
     // spine: hips to the base of the neck, rotated by the lean
     const th = fh * s.torsoH * (1 + breath * 0.5);
-    const cs = Math.cos(lean * 0.30), sn = Math.sin(lean * 0.30);
+    // hauling on a rod is a whole-body thing, so the lean has to be legible
+    const rot = lean * (mode === 'sit' ? 0.44 : 0.30);
+    const cs = Math.cos(rot), sn = Math.sin(rot);
     const spineX = sn * th * face, spineY = -cs * th;
     s.chest = { x: s.hip.x + spineX * 0.62 + face * fh * 0.012, y: s.hip.y + spineY * 0.62 };
     s.neck = { x: s.hip.x + spineX, y: s.hip.y + spineY };
@@ -221,7 +224,7 @@
     s.headR = fh * 0.083;
     const yaw = (P.glance * 0.5 + (opts.aimYaw || 0)) * face;
     s.head = {
-      x: s.neck.x + face * fh * 0.030 + yaw * fh * 0.030 + sn * fh * 0.02 * face,
+      x: s.neck.x + face * fh * 0.030 + yaw * fh * 0.030 + sn * fh * 0.03 * face,
       y: s.neck.y - s.headR * 1.14 - fh * 0.008 + Math.abs(yaw) * fh * 0.004
     };
     s.yaw = yaw;

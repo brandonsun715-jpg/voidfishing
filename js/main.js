@@ -83,7 +83,7 @@
      run it at twenty frames a second, watch the frame time and step the
      setting down — once, visibly, and never back up on its own, so the player
      stays in charge of it from Settings. */
-  const perf = { acc: 0, frames: 0, bad: 0, warm: 3, stepped: 0 };
+  const perf = { acc: 0, frames: 0, slow: 0, bad: 0, warm: 4, stepped: 0 };
 
   function watchFrameRate(dt) {
     if (!started || perf.stepped >= 2 || VF.state.rt.panelOpen) return;
@@ -92,14 +92,19 @@
     if (dt >= 0.0999) return;
     perf.acc += dt;
     perf.frames++;
+    if (dt > 0.030) perf.slow++;
     if (perf.acc < 4) return;
 
-    const avg = perf.acc / perf.frames;
-    perf.acc = 0; perf.frames = 0;
+    // the share of slow frames, not the mean: one garbage-collection pause in
+    // four seconds should not be read as a machine that cannot cope
+    const share = perf.slow / Math.max(1, perf.frames);
+    const enough = perf.frames >= 40;
+    perf.acc = 0; perf.frames = 0; perf.slow = 0;
     const q = VF.state.data.settings.quality;
-    if (avg > 0.026 && q !== 'low') {          // under about 38 frames a second
+    perf.share = share;
+    if (enough && share > 0.45 && q !== 'low') {
       perf.bad++;
-      if (perf.bad < 2) return;
+      if (perf.bad < 3) return;
       perf.bad = 0;
       perf.stepped++;
       const next = q === 'high' ? 'medium' : 'low';
@@ -159,5 +164,5 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
 
-  VF.game = { start: start, restartLoop: startLoop };
+  VF.game = { start: start, restartLoop: startLoop, perf: perf };
 })(window.VF = window.VF || {});

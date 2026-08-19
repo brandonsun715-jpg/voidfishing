@@ -14,9 +14,10 @@ const path = require('path');
     await page.click('#bootStart');
     await page.evaluate(() => { VF.state.data.settings.quality = 'high';
                                 document.body.className = 'q-high'; VF.scene.resize(); });
-    await page.waitForTimeout(15000);
+    await page.waitForTimeout(20000);
+    const diag = await page.evaluate(() => VF.game.perf ? { share: +VF.game.perf.share.toFixed(2), stepped: VF.game.perf.stepped } : null);
     const q = await page.evaluate(() => VF.state.data.settings.quality);
-    console.log(name.padEnd(6), w + 'x' + h, '-> quality:', q);
+    console.log(name.padEnd(6), w + 'x' + h, '-> quality:', q, JSON.stringify(diag));
     await page.close();
   }
   console.log('\nerrors: ' + errs.length);
