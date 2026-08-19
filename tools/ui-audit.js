@@ -59,7 +59,7 @@ const path = require('path');
         clicked++;
         await page.waitForTimeout(70);
         const state = await page.evaluate(() => ({
-          panel: !!document.querySelector('.panel, .catch-card, .dialog'),
+          panel: !!document.querySelector('.panel, .catch-card, .dialog, .opener, .speech'),
           modalVisible: !document.getElementById('modal').classList.contains('hidden')
         }));
         if (!state.panel && state.modalVisible) {

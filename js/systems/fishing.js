@@ -93,7 +93,11 @@
 
     // Better rods and further casts find fish sooner; deep spots make you wait.
     const base = VF.rng.g.range(4.2, 10.5);
+    const build = VF.build ? VF.build.stats() : null;
+    const cond = VF.conditions ? VF.conditions.mods() : null;
     const k = bait.bite * loc.biteBoost * VF.weather.bite() *
+              (build ? build.bite / bait.bite : 1) *
+              (cond ? cond.bite : 1) *
               (1 - U.clamp(rod.cast * 0.12, 0, 0.22)) *
               (1 - U.clamp(S.castPower * 0.10, 0, 0.10));
     S.biteWait = U.clamp(base * k, 1.6, 22);
@@ -101,12 +105,30 @@
     S.nibble = 0;
     setState('waiting');
     VF.bus.emit('fishing:waiting');
+    // the line goes somewhere it has not been before
+    if (VF.secrets) VF.secrets.tryFind();
   }
 
   function triggerBite(opts) {
     opts = opts || {};
     if (S.sweet && !opts.minRank) opts = Object.assign({}, opts, { rareBoost: 1.12 });
+
+    // an encounter is always a fish; otherwise the hook may have found an object
+    if (!opts.minRank && VF.rng.g() < VF.treasureData.chance()) {
+      const t = VF.treasureData.roll();
+      if (t) {
+        S.pending = { kind: 'treasure', treasure: t, rarity: t.rarity,
+                      rarityDef: VF.rarities.get(t.rarity), traits: [],
+                      fish: { name: t.name, diff: 0.2, art: null } };
+        S.biteWindow = BITE_WINDOW;
+        setState('bite');
+        VF.bus.emit('fishing:bite', S.pending);
+        return;
+      }
+    }
+
     S.pending = VF.loot.roll(opts);
+    S.pending.kind = 'fish';
     S.biteWindow = opts.minRank ? BITE_WINDOW_BIG : BITE_WINDOW;
     setState('bite');
     VF.bus.emit('fishing:bite', S.pending);
@@ -116,7 +138,7 @@
 
   function hook() {
     if (S.state !== 'bite' || !S.pending) return false;
-    const p = VF.loot.fightParams(S.pending);
+    const p = S.pending.kind === 'treasure' ? treasureFight() : VF.loot.fightParams(S.pending);
     S.fight = {
       c: S.pending,
       p: p,
@@ -141,6 +163,18 @@
     setState('reeling');
     VF.bus.emit('fishing:hooked', S.fight);
     return true;
+  }
+
+  /* Objects do not fight back. They are just heavy and awkward. */
+  function treasureFight() {
+    const rod = VF.rods.get(VF.state.data.rod);
+    const build = VF.build ? VF.build.stats() : null;
+    return {
+      power: 0.20, stamina: 0.55, surgeRate: 0.35,
+      lineStrength: rod.line * (build ? build.line : 1),
+      reelForce: rod.reel * (build ? build.reel : 1),
+      erratic: 0.15
+    };
   }
 
   function setReeling(on) {
@@ -236,18 +270,32 @@
     const c = f.c;
     const d = VF.state.data;
 
+    if (c.kind === 'treasure') { landTreasure(c, f); return; }
+
     d.stats.catches++;
+    d.streak++;
+    if (d.streak > d.records.bestStreak) d.records.bestStreak = d.streak;
     if (f.perfect) d.stats.perfectReels++;
 
     const rank = VF.rarities.rank(c.rarity);
     if (rank >= 4) d.stats.legendaryCatches++;
     if (rank >= 6) d.stats.voidCatches++;
     d.flags['rare_' + c.rarity] = true;
-    if (c.mutation) {
+
+    const traits = c.traits || [];
+    if (traits.length) {
       d.stats.mutationsFound++;
-      d.flags['mut_' + c.mutation] = true;
+      if (traits.length >= 2) d.stats.multiTrait++;
+      if (traits.length >= 3) d.flags.combo3 = true;
+      if (traits.length >= 4) d.flags.combo4 = true;
+      for (let i = 0; i < traits.length; i++) {
+        d.traitsSeen[traits[i]] = (d.traitsSeen[traits[i]] | 0) + 1;
+        d.flags['mut_' + traits[i]] = true;
+        d.flags['trait_' + traits[i]] = true;
+      }
     }
     if (c.isGiant) d.flags.caughtGiant = true;
+    if (rank >= 6) VF.journal.add('firstvoid');
 
     /* fishdex */
     let entry = d.fishdex[c.id];
@@ -255,13 +303,26 @@
       entry = d.fishdex[c.id] = { caught: 0, record: null, firstSeen: Date.now(), mutations: {} };
     }
     entry.caught++;
-    if (c.mutation) entry.mutations[c.mutation] = (entry.mutations[c.mutation] | 0) + 1;
+    if (!entry.traits) entry.traits = {};
+    for (let i = 0; i < traits.length; i++) {
+      entry.traits[traits[i]] = (entry.traits[traits[i]] | 0) + 1;
+      entry.mutations[traits[i]] = (entry.mutations[traits[i]] | 0) + 1;
+    }
     if (!entry.record || c.kg > entry.record.kg) {
       if (entry.record) d.stats.recordsBroken++;
-      entry.record = { kg: c.kg, m: c.m, pct: c.pct, mutation: c.mutation, at: Date.now() };
+      entry.record = { kg: c.kg, m: c.m, pct: c.pct, traits: traits.slice(),
+                       mutation: traits.length ? traits[0] : null, at: Date.now() };
     }
     if (c.kg > d.stats.biggestKg) { d.stats.biggestKg = c.kg; d.stats.biggestFish = c.id; }
     if (rank > d.stats.rarestRank) { d.stats.rarestRank = rank; d.stats.rarestFish = c.id; }
+
+    /* the record board */
+    const R = d.records;
+    if (c.kg > R.biggestKg) { R.biggestKg = c.kg; R.biggestId = c.id; R.biggestTraits = traits.slice(); }
+    if (c.value > R.richest) { R.richest = c.value; R.richestId = c.id; R.richestTraits = traits.slice(); }
+    const combo = VF.traits.comboScore(traits);
+    if (combo > R.bestCombo) { R.bestCombo = combo; R.bestComboId = c.id; R.bestComboTraits = traits.slice(); }
+    if (c.m > R.longestSpecies) { R.longestSpecies = c.m; R.longestId = c.id; }
 
     VF.progression.addXp(c.xp);
 
@@ -273,9 +334,28 @@
     VF.save.save();
   }
 
+  /* Objects go straight into the record and the journal; there is no fight to
+     have lost and no fishdex entry to make. */
+  function landTreasure(c, f) {
+    const d = VF.state.data;
+    const t = c.treasure;
+    d.stats.treasuresFound++;
+    d.treasures[t.id] = (d.treasures[t.id] | 0) + 1;
+    if (t.journal) VF.journal.add(t.journal);
+    if (t.token) d.caseTokens++;
+    if (t.relic) VF.charms.grant(t.relic);
+    S.fight = null;
+    S.lastResult = c;
+    S.encounterActive = false;
+    setState('landed');
+    VF.bus.emit('fishing:treasure', c);
+    VF.save.save();
+  }
+
   function lose(reason) {
     const c = S.fight ? S.fight.c : null;
     VF.state.data.stats.escapes++;
+    VF.state.data.streak = 0;
     if (reason === 'snap') VF.state.data.stats.linesSnapped++;
     S.fight = null;
     S.encounterActive = false;

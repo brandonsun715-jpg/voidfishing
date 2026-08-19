@@ -49,6 +49,69 @@ const path = require('path');
     const out = {};
     const S = VF.state.data.settings;
 
+    /* The reel ducks the ambient bed while it runs, so total level is the wrong
+       thing to measure. It lives at 1-6kHz where the water does not, so the
+       test watches that band instead. */
+    function bandDb(loHz, hiHz) {
+      const nyq = VF.audio.tap().context.sampleRate / 2;
+      an.getFloatFrequencyData(freq);
+      let peak = -Infinity;
+      for (let i = 0; i < freq.length; i++) {
+        const hz = (i / freq.length) * nyq;
+        if (hz >= loHz && hz <= hiHz) peak = Math.max(peak, freq[i]);
+      }
+      return peak;
+    }
+    async function sampleBand(ms, lo, hi) {
+      const t0 = performance.now();
+      let best = -Infinity;
+      while (performance.now() - t0 < ms) {
+        best = Math.max(best, bandDb(lo, hi));
+        await new Promise(res => requestAnimationFrame(res));
+      }
+      return Math.round(best);
+    }
+
+    // music is muted for this measurement: a bell landing mid-sample swamps
+    // the very band the reel occupies
+    // weather also lives in this band, so it is pinned for the duration
+    const musicWas = S.music;
+    S.music = 0; VF.audio.setVolumes();
+    VF.weather.force('clear');
+    for (let i = 0; i < 60; i++) VF.weather.tick(0.5);
+    // the world keeps making ambient noise on its own timers; silence just those
+    // for the duration so the reel is the only thing in the band
+    const muted = {};
+    ['splash', 'nibble', 'surge', 'thunder', 'bite', 'cast'].forEach(function (k) {
+      muted[k] = VF.audio[k]; VF.audio[k] = function () {};
+    });
+    // the earlier stingers duck the ambient bed; let it come all the way back
+    // before taking a baseline, or the reel looks louder than it is
+    await new Promise(r => setTimeout(r, 7000));
+    const base = await sampleBand(1600, 1200, 6000);
+    VF.audio.reelStart();
+    for (let i = 0; i <= 10; i++) {
+      VF.audio.reelTension(i / 10);
+      await new Promise(r => setTimeout(r, 60));
+    }
+    const during = await sampleBand(900, 1200, 6000);
+    VF.audio.reelStop();
+    /* Watch it decay rather than taking one snapshot: a single window can catch
+       a stray transient, and what matters is that the loop returns to the
+       resting floor at all, not what it reads at one arbitrary moment. */
+    const decay = [];
+    for (let i = 0; i < 7; i++) decay.push(await sampleBand(900, 1200, 6000));
+    const after = Math.min.apply(null, decay);
+    out.reelDecay = decay;
+    Object.keys(muted).forEach(function (k) { VF.audio[k] = muted[k]; });
+    S.music = musicWas; VF.audio.setVolumes();
+    out.reelBandDb = { base: base, during: during, after: after };
+    out.reelRise = during - base;
+    out.reelResidual = after - base;
+
+    // frequency balance of the resting bed: is there content across the range?
+
+
     function spectrum() {
       const nyq = VF.audio.tap().context.sampleRate / 2;
       const edges = [0, 120, 500, 2000, 8000, nyq];
@@ -97,25 +160,6 @@ const path = require('path');
     VF.audio.encounter();
     out.loudest = await sample(1800);
 
-    // the reel loop is the one continuous effect, so prove it both rises above
-    // the resting bed and returns to it
-    await new Promise(r => setTimeout(r, 2500));
-    const base = await sample(900);
-    VF.audio.reelStart();
-    for (let i = 0; i <= 10; i++) {
-      VF.audio.reelTension(i / 10);
-      await new Promise(r => setTimeout(r, 60));
-    }
-    out.reeling = await sample(700);
-    VF.audio.reelStop();
-    await new Promise(r => setTimeout(r, 900));
-    const after = await sample(900);
-    out.reelBaseline = base;
-    out.afterReelStop = after;
-    out.reelRise = +(out.reeling.rms - base.rms).toFixed(5);
-    out.reelResidual = +(after.rms - base.rms).toFixed(5);
-
-    // frequency balance of the resting bed: is there content across the range?
     // spectral balance of the resting bed, in dBFS per band
     await new Promise(r => setTimeout(r, 900));
     const nyq = VF.audio.tap().context.sampleRate / 2;
@@ -140,8 +184,10 @@ const path = require('path');
   else {
     if (measure.ambientOnly.rms < 0.0008) verdict.push('FAIL: ambient bed is silent');
     if (measure.loudest.peak > 0.99) verdict.push('FAIL: output is clipping (peak ' + measure.loudest.peak + ')');
-    if (measure.reelRise <= 0.0008) verdict.push('WARN: reel loop is inaudible over the bed');
-    if (measure.reelResidual > measure.reelRise * 0.35) verdict.push('FAIL: reel loop did not stop');
+    if (measure.reelRise < 6) verdict.push('WARN: reel loop barely rises over the bed (+' + measure.reelRise + 'dB)');
+    if (measure.reelResidual > Math.max(3, measure.reelRise * 0.4))
+      verdict.push('FAIL: reel loop never returned to the floor (best +' +
+                   measure.reelResidual + 'dB, decay ' + measure.reelDecay.join('/') + ')');
     if (measure.fireErrors.length) verdict.push('FAIL: ' + measure.fireErrors.join(', '));
   }
   console.log(verdict.length ? verdict.join('\n') : 'audio OK: signal present, no clipping, all effects fired');

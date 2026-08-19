@@ -329,7 +329,7 @@
 
   /* A struck tone with a second partial and a soft attack — closer to a
      marimba than a test sine. */
-  function bell(note, when, gainAmt, decay, panPos) {
+  function bell(note, when, gainAmt, decay, panPos, dest) {
     const g = ac.createGain();
     g.gain.setValueAtTime(0, when);
     g.gain.linearRampToValueAtTime(gainAmt, when + 0.03);
@@ -341,9 +341,11 @@
     lp.frequency.exponentialRampToValueAtTime(700, when + decay * 0.7);
     g.connect(lp);
 
+    /* Route through a bus, never straight to the reverb send: a direct connect
+       leaks past the volume that is supposed to control it. */
+    const out = dest || sfxBus;
     const p = pan(panPos === undefined ? 0 : panPos);
-    if (p) { lp.connect(p); p.connect(musicBus); p.connect(verbSend); }
-    else { lp.connect(musicBus); lp.connect(verbSend); }
+    if (p) { lp.connect(p); p.connect(out); } else { lp.connect(out); }
 
     const partials = [[1, 1], [2.01, 0.26], [3.02, 0.09]];
     for (let i = 0; i < partials.length; i++) {
@@ -396,11 +398,11 @@
       const oct = VF.rng.g() < 0.32 ? 36 : 24;
       const n = loc.music.root + oct + sc[VF.rng.g.int(0, sc.length - 1)];
       const p = VF.rng.g.range(-0.55, 0.55);
-      bell(n, now + 0.02, 0.068, 3.0 + VF.rng.g() * 2.6, p);
+      bell(n, now + 0.02, 0.068, 3.0 + VF.rng.g() * 2.6, p, musicBus);
       // an answering note, quieter and off to the other side
       if (VF.rng.g() < 0.4) {
         const n2 = n + sc[VF.rng.g.int(0, sc.length - 1)] - sc[0];
-        bell(n2, now + 0.55 + VF.rng.g() * 0.5, 0.038, 2.6, -p);
+        bell(n2, now + 0.55 + VF.rng.g() * 0.5, 0.038, 2.6, -p, musicBus);
       }
     }
 
@@ -516,9 +518,9 @@
        it clicks, with a little body underneath. */
     reelStart: function () {
       if (reelLoop) return;
-      const s = loopSource(noisePink, 0.5);
+      const s = loopSource(noiseWhite, 0.7);
       const bp = ac.createBiquadFilter();
-      bp.type = 'bandpass'; bp.frequency.value = 1500; bp.Q.value = 2.2;
+      bp.type = 'bandpass'; bp.frequency.value = 1800; bp.Q.value = 1.6;
       const gate = ac.createGain(); gate.gain.value = 0.5;
       const lfo = ac.createOscillator();
       lfo.type = 'square';
@@ -526,7 +528,7 @@
       const lfoG = ac.createGain(); lfoG.gain.value = 0.5;
       lfo.connect(lfoG); lfoG.connect(gate.gain); lfo.start();
       const out = ac.createGain(); out.gain.value = 0;
-      out.gain.setTargetAtTime(0.058, ac.currentTime, 0.06);
+      out.gain.setTargetAtTime(0.095, ac.currentTime, 0.06);
       const lp = ac.createBiquadFilter();
       lp.type = 'lowpass'; lp.frequency.value = 4200;
       s.connect(bp); bp.connect(gate); gate.connect(lp); lp.connect(out); out.connect(sfxBus);
@@ -534,7 +536,7 @@
       const body = ac.createOscillator();
       body.type = 'triangle'; body.frequency.value = 92;
       const bodyG = ac.createGain(); bodyG.gain.value = 0;
-      bodyG.gain.setTargetAtTime(0.024, ac.currentTime, 0.1);
+      bodyG.gain.setTargetAtTime(0.030, ac.currentTime, 0.1);
       body.connect(bodyG); bodyG.connect(sfxBus); body.start();
 
       reelLoop = { src: s, out: out, filt: bp, lfo: lfo, body: body, bodyG: bodyG };
@@ -554,7 +556,7 @@
       const n = ac.currentTime;
       reelLoop.filt.frequency.setTargetAtTime(1100 + v * 2200, n, 0.10);
       reelLoop.lfo.frequency.setTargetAtTime(18 + v * 30, n, 0.10);
-      reelLoop.out.gain.setTargetAtTime(0.050 + v * 0.075, n, 0.10);
+      reelLoop.out.gain.setTargetAtTime(0.080 + v * 0.120, n, 0.10);
       reelLoop.body.frequency.setTargetAtTime(80 + v * 55, n, 0.12);
     },
     strain: function (v) {
@@ -634,6 +636,26 @@
       const n = ac.currentTime + (delay || 2);
       noiseBurst(n, 3.0, 'lowpass', 200, 0.070, 48, { attack: 0.25, pan: VF.rng.g.range(-0.6, 0.6) });
       tone(n + 0.15, 42, 2.8, 'sine', 0.048, 28, { attack: 0.3, lp: 160 });
+    },
+    /* the case reel: a short mechanical tick that lengthens as it slows */
+    caseTick: function (k) {
+      const n = ac.currentTime;
+      const soft = Math.min(1, 0.35 + k * 0.9);
+      noiseBurst(n, 0.035 + k * 0.04, 'bandpass', 2600 - k * 900, 0.030 * soft, null,
+                 { q: 3.2, attack: 0.002, pink: false });
+      if (k > 0.82) tone(n, 520 - k * 120, 0.07, 'triangle', 0.020, null, { attack: 0.003, lp: 2400 });
+    },
+    caseRoll: function () {
+      const n = ac.currentTime;
+      noiseBurst(n, 0.5, 'lowpass', 1600, 0.055, 500, { attack: 0.02 });
+      tone(n, 180, 0.5, 'sine', 0.030, 320, { attack: 0.04, lp: 900 });
+    },
+    /* the shape passing underneath: felt more than heard */
+    wrongShape: function () {
+      const n = ac.currentTime;
+      ducking = 1;
+      tone(n, 31, 6.0, 'sine', 0.16, 22, { attack: 1.2, lp: 140 });
+      noiseBurst(n + 0.6, 4.0, 'lowpass', 160, 0.045, 40, { attack: 1.4 });
     },
     sell: function () {
       const n = ac.currentTime;

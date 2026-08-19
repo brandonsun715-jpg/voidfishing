@@ -22,6 +22,7 @@
     VF.catchUI.init();
 
     VF.weather.reconcile();
+    VF.secrets.registerFound();
     VF.loot.invalidatePool();
 
     window.addEventListener('resize', onResize, { passive: true });
@@ -96,7 +97,9 @@
 
       if (started) {
         VF.fishing.tick(dt);
+        VF.conditions.tick(dt);
         VF.encounters.tick(dt);
+        VF.wrong.tick(dt);
         VF.achievements.tick(dt);
         VF.state.data.stats.playSeconds += dt;
         VF.save.tick(dt);

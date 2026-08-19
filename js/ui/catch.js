@@ -13,13 +13,17 @@
   function init() {
     host = document.getElementById('modal');
     VF.bus.on('fishing:landed', function (c) { setTimeout(function () { show(c); }, 340); });
+    VF.bus.on('fishing:treasure', function (c) { setTimeout(function () { showTreasure(c); }, 320); });
   }
 
   function banner(c) {
-    if (c.rarity === 'glitch') return { text: 'THIS SHOULD NOT BE HERE', color: '#ff2d55' };
-    if (c.isNew) return { text: 'NEW DISCOVERY', color: VF.rarities.color(c.rarity) };
-    if (c.isGiant) return { text: 'ENORMOUS', color: '#ffb03a' };
-    if (c.isRecord) return { text: 'PERSONAL BEST', color: '#6fd8a4' };
+    const traits = c.traits || [];
+    if (c.rarity === 'glitch') return { text: 'this should not be here', color: '#ff2d55' };
+    if (traits.length >= 3) return { text: traits.length + ' traits', color: VF.traits.color(traits) };
+    if (c.isNew) return { text: 'new discovery', color: VF.rarities.color(c.rarity) };
+    if (traits.length === 2) return { text: 'double trait', color: VF.traits.color(traits) };
+    if (c.isGiant) return { text: 'enormous', color: '#ffb03a' };
+    if (c.isRecord) return { text: 'personal best', color: '#6fd8a4' };
     return { text: VF.rarities.get(c.rarity).name, color: VF.rarities.color(c.rarity) };
   }
 
@@ -32,7 +36,8 @@
     VF.state.rt.panelOpen = 'catch';
 
     const r = VF.rarities.get(c.rarity);
-    const mut = c.mutationDef;
+    const traits = c.traits || [];
+    const topTrait = traits.length ? VF.traits.get(traits[traits.length - 1]) : null;
     const b = banner(c);
     const rank = r.rank;
 
@@ -41,7 +46,8 @@
     if (r.shake > 0) VF.fx.shake(r.shake, 3.6);
     if (rank >= 2) VF.fx.flash(U.rgbToCss(U.hexToRgb(r.glow), 0.20), 0.24 + rank * 0.035, 1.8);
     if (rank >= 4 || c.isGiant) VF.fx.pulse(0.55);
-    if (mut) VF.fx.flash(U.rgbToCss(U.hexToRgb(mut.color), 0.18), 0.22, 2.0);
+    if (topTrait) VF.fx.flash(U.rgbToCss(U.hexToRgb(topTrait.color), 0.14 + traits.length * 0.04),
+                              0.20 + traits.length * 0.05, 2.0);
 
     const scn = VF.scene.L;
     VF.particles.burst(scn.landPoint.x, scn.landPoint.y, 14 + rank * 5, {
@@ -79,15 +85,29 @@
     rr.style.color = b.color;
     body.appendChild(rr);
 
-    body.appendChild(U.el('h2', 'catch-name', c.fish.name));
+    body.appendChild(U.el('h2', 'catch-name', VF.traits.prefix(traits) + c.fish.name));
 
-    if (mut) {
-      const m = U.el('div', 'catch-mut', mut.name + ' · value ×' + mut.mult);
-      m.style.color = mut.color;
-      body.appendChild(m);
+    if (traits.length) {
+      const row = U.el('div', 'trait-row');
+      traits.forEach(function (id) {
+        const t = VF.traits.get(id);
+        if (!t) return;
+        const chip = U.el('span', 'trait-chip', t.name + ' ×' + t.mult);
+        chip.style.color = t.color;
+        chip.style.borderColor = U.rgbToCss(U.hexToRgb(t.color), 0.42);
+        chip.title = t.desc;
+        row.appendChild(chip);
+      });
+      if (traits.length > 1) {
+        const combo = U.el('span', 'trait-chip trait-combo',
+          'combination ×' + (1 + (traits.length - 1) * 0.6).toFixed(1));
+        combo.style.color = '#ffd88a';
+        row.appendChild(combo);
+      }
+      body.appendChild(row);
     }
 
-    body.appendChild(U.el('p', 'catch-desc', mut ? mut.desc : c.fish.desc));
+    body.appendChild(U.el('p', 'catch-desc', topTrait ? topTrait.desc : c.fish.desc));
 
     const metrics = U.el('div', 'catch-metrics');
     metrics.appendChild(metric('Weight', U.weight(c.kg)));
@@ -145,6 +165,125 @@
     setTimeout(function () { sellBtn.focus(); }, 60);
   }
 
+  /* Objects get their own card: no size, no fishdex, and often no price. */
+  function showTreasure(c) {
+    if (!c || open) return;
+    current = c; open = true; resolved = false; gen++;
+    VF.state.rt.panelOpen = 'catch';
+
+    const t = c.treasure;
+    const r = VF.rarities.get(t.rarity);
+    const rank = r.rank;
+    VF.audio.stinger(rank >= 4 ? 'grand' : rank >= 2 ? 'bright' : 'soft', rank);
+    if (rank >= 3) VF.fx.shake(r.shake, 3.6);
+    VF.fx.flash(U.rgbToCss(U.hexToRgb(t.color), 0.16), 0.20 + rank * 0.03, 1.9);
+
+    card = U.el('div', 'catch-card');
+    const ban = U.el('div', 'catch-banner', t.relic ? 'a relic' : 'pulled from the water');
+    ban.style.background = t.color;
+    card.appendChild(ban);
+
+    const hero = U.el('div', 'catch-hero');
+    hero.style.background = 'radial-gradient(ellipse at 50% 55%, ' +
+      U.rgbToCss(U.hexToRgb(t.color), 0.16) + ', rgba(0,0,0,0) 68%)';
+    art = U.el('canvas');
+    art.width = 400; art.height = 168;
+    art.style.width = '100%'; art.style.height = '168px';
+    artCtx = art.getContext('2d');
+    hero.appendChild(art);
+    card.appendChild(hero);
+
+    const body = U.el('div', 'catch-body');
+    const rr = U.el('div', 'catch-rarity', r.name);
+    rr.style.color = t.color;
+    body.appendChild(rr);
+    body.appendChild(U.el('h2', 'catch-name', t.name));
+    body.appendChild(U.el('p', 'catch-desc', t.desc));
+
+    if (t.relic) {
+      const ch = VF.charms.get(t.relic);
+      if (ch) {
+        const note = U.el('div', 'relic-note');
+        note.appendChild(U.el('span', 'k', 'relic'));
+        note.appendChild(U.el('div', null, ch.note));
+        body.appendChild(note);
+      }
+    }
+    if (t.token) {
+      const note = U.el('div', 'relic-note');
+      note.appendChild(U.el('span', 'k', 'the keeper will want this'));
+      note.appendChild(U.el('div', null, 'kept for now. it opens something.'));
+      body.appendChild(note);
+    }
+
+    const sellable = t.value[1] > 0;
+    let amount = 0;
+    if (sellable) {
+      amount = Math.round(VF.rng.g.range(t.value[0], t.value[1]) *
+                          (VF.build ? VF.build.stats().value : 1));
+      const val = U.el('div', 'catch-value');
+      const coin = U.el('span', 'coin', '◈');
+      coin.style.color = 'var(--accent)';
+      val.appendChild(coin);
+      val.appendChild(U.el('span', 'amt', U.money(amount)));
+      body.appendChild(val);
+    }
+
+    const acts = U.el('div', 'catch-actions');
+    acts.style.gridTemplateColumns = sellable ? '1.3fr 1fr' : '1fr';
+    if (sellable) {
+      const sellBtn = U.el('button', 'btn btn-primary', 'sell');
+      sellBtn.addEventListener('click', function () {
+        if (resolved) return;
+        resolved = true;
+        VF.economy.earn(amount, 'treasure');
+        VF.state.data.stats.sold++;
+        VF.audio.sell();
+        VF.toast.show('sold for <strong class="mono">' + U.money(amount) + '</strong>', 'good', 2400);
+        VF.fishing.resolveCatch();
+        close();
+      });
+      acts.appendChild(sellBtn);
+    }
+    const keepBtn = U.el('button', sellable ? 'btn' : 'btn btn-primary', t.relic || t.token ? 'keep' : 'keep');
+    keepBtn.addEventListener('click', function () {
+      if (resolved) return;
+      resolved = true;
+      VF.audio.click();
+      VF.fishing.resolveCatch();
+      close();
+    });
+    acts.appendChild(keepBtn);
+    body.appendChild(acts);
+    card.appendChild(body);
+
+    U.clear(host);
+    host.appendChild(card);
+    host.classList.remove('hidden');
+    VF.achievements.check();
+
+    artT = 0; revealT = 1;
+    lastFrame = performance.now();
+    loopTreasure();
+    setTimeout(function () { acts.firstChild.focus(); }, 60);
+  }
+
+  function loopTreasure() {
+    if (!open || !current || !current.treasure) return;
+    const now = performance.now();
+    const dt = Math.min(0.05, (now - lastFrame) / 1000);
+    lastFrame = now;
+    artT += dt;
+    const g = artCtx;
+    g.clearRect(0, 0, art.width, art.height);
+    g.save();
+    g.translate(art.width / 2, art.height / 2 + Math.sin(artT * 1.3) * 4);
+    g.rotate(Math.sin(artT * 0.7) * 0.06);
+    VF.treasureArt.draw(g, current.treasure, 52, artT);
+    g.restore();
+    raf = requestAnimationFrame(loopTreasure);
+  }
+
   function metric(k, v) {
     const el = U.el('div', 'metric');
     el.appendChild(U.el('span', 'k', k));
@@ -178,7 +317,7 @@
       VF.fishArt.drawSilhouette(g, c.fish, size, 0.9);
       g.globalAlpha = k;
     }
-    VF.fishArt.draw(g, c.fish, size, { time: artT, mutation: c.mutation });
+    VF.fishArt.draw(g, c.fish, size, { time: artT, traits: c.traits });
     g.globalAlpha = 1;
     g.restore();
 
@@ -225,7 +364,8 @@
     if (!open) return;
     if (!resolved && VF.fishing.state() === 'landed') {
       resolved = true;
-      VF.catches.sell();
+      if (current && current.treasure) VF.fishing.resolveCatch();
+      else VF.catches.sell();
     }
     open = false;
     VF.state.rt.panelOpen = null;

@@ -29,7 +29,9 @@
         if (Array.isArray(sv)) target[k] = sv;
       } else if (tv && typeof tv === 'object' && sv && typeof sv === 'object') {
         // free-form maps (fishdex, baitCounts, achievements, flags) copy wholesale
-        if (k === 'fishdex' || k === 'baitCounts' || k === 'achievements' || k === 'flags' || k === 'mutations') {
+        if (k === 'fishdex' || k === 'baitCounts' || k === 'achievements' || k === 'flags' ||
+            k === 'mutations' || k === 'traits' || k === 'traitsSeen' || k === 'treasures' ||
+            k === 'secrets' || k === 'npcs' || k === 'equipped' || k === 'cases') {
           target[k] = sv;
         } else {
           merge(tv, sv);
@@ -58,6 +60,35 @@
     if (!Array.isArray(d.kept)) d.kept = [];
     if (d.kept.length > 400) d.kept = d.kept.slice(-400);
     if (!d.baitCounts || typeof d.baitCounts !== 'object') d.baitCounts = {};
+    if (!Array.isArray(d.charms)) d.charms = [];
+    d.charms = d.charms.filter(function (id) { return !!VF.charms.get(id); });
+    if (!Array.isArray(d.charmSlots)) d.charmSlots = [null, null, null, null, null];
+    d.charmSlots.length = 5;
+    for (let i = 0; i < 5; i++) {
+      if (d.charmSlots[i] && d.charms.indexOf(d.charmSlots[i]) < 0) d.charmSlots[i] = null;
+      if (d.charmSlots[i] === undefined) d.charmSlots[i] = null;
+    }
+    if (!Array.isArray(d.cosmetics)) d.cosmetics = [];
+    if (!Array.isArray(d.journal)) d.journal = [];
+    if (d.journal.length > 300) d.journal = d.journal.slice(-300);
+    if (!d.equipped || typeof d.equipped !== 'object') d.equipped = {};
+    d.caseTokens = Math.max(0, Math.floor(d.caseTokens) || 0);
+
+    /* Schema 1 stored one mutation per catch; traits are a list. */
+    for (const id in d.fishdex) {
+      const e = d.fishdex[id];
+      if (!e || typeof e !== 'object') { delete d.fishdex[id]; continue; }
+      if (!e.traits) {
+        e.traits = {};
+        if (e.mutations) for (const m in e.mutations) e.traits[m] = e.mutations[m];
+      }
+      if (e.record && e.record.mutation && !e.record.traits) e.record.traits = [e.record.mutation];
+      if (e.record && !e.record.traits) e.record.traits = [];
+    }
+    for (let i = 0; i < d.kept.length; i++) {
+      const k = d.kept[i];
+      if (k && !k.traits) k.traits = k.mutation ? [k.mutation] : [];
+    }
     for (const k in d.baitCounts) {
       const n = Math.floor(d.baitCounts[k]);
       if (!isFinite(n) || n <= 0) delete d.baitCounts[k];

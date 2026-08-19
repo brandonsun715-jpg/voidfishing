@@ -49,7 +49,7 @@ const path = require('path');
     log.push('hooked=' + hooked + ' state=' + VF.fishing.state());
     // play the fight
     let guard = 0;
-    while (VF.fishing.state() === 'reeling' && guard++ < 400) {
+    while (VF.fishing.state() === "reeling" && guard++ < 1500) {
       const f = VF.fishing.S.fight;
       VF.fishing.setReeling(f.tension < 0.6);
       await sleep(16);

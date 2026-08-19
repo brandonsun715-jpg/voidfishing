@@ -17,7 +17,8 @@
       'chipLoc', 'gearRod', 'gearBait', 'rodName', 'baitName', 'baitCount',
       'castMeter', 'castFill', 'actionBtn', 'actionLabel', 'actionHint',
       'fightUI', 'fightName', 'fightWarn', 'stamFill', 'stamPct', 'tensFill', 'tensPct',
-      'tensTick', 'distFill', 'distPct', 'prompt', 'hintBox', 'edgeGlow', 'encounter', 'encText'
+      'tensTick', 'distFill', 'distPct', 'prompt', 'hintBox', 'edgeGlow', 'encounter', 'encText',
+      'chipCond', 'condName'
     ].forEach(function (id) { D[id] = document.getElementById(id); });
     D.tensBar = D.tensFill ? D.tensFill.parentNode : null;
 
@@ -83,6 +84,8 @@
         case 'KeyB': e.preventDefault(); VF.panels.open('bag'); break;
         case 'KeyT': e.preventDefault(); VF.panels.open('stats'); break;
         case 'KeyM': e.preventDefault(); VF.panels.open('map'); break;
+        case 'KeyJ': e.preventDefault(); VF.panels.open('journal'); break;
+        case 'KeyC': e.preventDefault(); VF.panels.open('wardrobe'); break;
         case 'KeyR':
           e.preventDefault();
           if (VF.fishing.reelIn()) VF.toast.plain('Line reeled in', null, 1600);
@@ -110,6 +113,14 @@
     VF.bus.on('fishing:cast', function (e) {
       VF.audio.cast(e.power);
       VF.scene.newCastLateral();
+      const cc = VF.cosmetics.cfg('cast');
+      if (cc.n) {
+        const tip = VF.scene.L.rodTip;
+        VF.particles.burst(tip.x, tip.y, 6 * cc.n, {
+          color: cc.col || [220, 210, 180], angle: -0.6, spread: 0.9,
+          speedMin: 60, speedMax: 260, sizeMax: cc.tail ? 3 : 2, grav: 90, lifeMax: 0.9
+        });
+      }
       if (e.sweet) {
         VF.toast.plain('Perfect cast', 'good', 1700);
         VF.fx.pulse(0.28);
@@ -117,12 +128,17 @@
     });
     VF.bus.on('fishing:splash', function () {
       const L = VF.scene.L, b = L.bobber;
+      const sc = VF.cosmetics.cfg('splash');
+      const col = sc.col || [200, 228, 248];
       VF.audio.splash(0.7);
-      VF.fx.ripple(b.x, b.y, L.w * 0.07 * b.scale, 2.0);
-      VF.fx.ripple(b.x, b.y, L.w * 0.04 * b.scale, 1.3);
-      VF.particles.burst(b.x, b.y, 11, {
-        color: [200, 228, 248], angle: -Math.PI / 2, spread: 1.6,
-        speedMin: 30, speedMax: 110, sizeMax: 2.2, grav: 240, lifeMax: 0.7
+      VF.fx.ripple(b.x, b.y, L.w * 0.07 * b.scale, 2.0, col);
+      VF.fx.ripple(b.x, b.y, L.w * 0.04 * b.scale, 1.3, col);
+      for (let i = 0; i < (sc.ring || 0); i++) {
+        VF.fx.ripple(b.x, b.y, L.w * (0.10 + i * 0.05) * b.scale, 2.6 + i * 0.4, col, 1.6);
+      }
+      VF.particles.burst(b.x, b.y, Math.round(11 * (sc.n || 1)), {
+        color: col, angle: -Math.PI / 2, spread: 1.6,
+        speedMin: 30, speedMax: 110 * (sc.shard ? 1.7 : 1), sizeMax: 2.2, grav: 240, lifeMax: 0.7
       });
     });
     VF.bus.on('fishing:nibble', function () {
@@ -200,6 +216,84 @@
     });
     VF.bus.on('encounter:hooked', endEncounterUI);
     VF.bus.on('encounter:end', endEncounterUI);
+
+    VF.bus.on('condition:start', function (c) {
+      VF.toast.show('<strong>' + U.esc(c.name) + '</strong><br><span style="color:var(--ink-3)">' +
+        U.esc(c.blurb) + '</span>', null, 5000);
+      refreshChips();
+      if (c.id === 'thinplace') VF.state.data.flags.sawThinPlace = true;
+      VF.fx.pulse(0.3);
+    });
+    VF.bus.on('condition:end', refreshChips);
+
+    VF.bus.on('fishing:treasure', function (c) {
+      VF.audio.splash(0.6);
+      VF.fx.pulse(0.3);
+    });
+
+    VF.bus.on('secret:found', function (s2) {
+      VF.audio.discover();
+      VF.fx.flash('rgba(200,180,255,0.16)', 0.26, 1.5);
+      VF.fx.pulse(0.6);
+      showPrompt(s2.loc.name, s2.loc.glow, 2.4);
+      VF.toast.show('<strong>' + U.esc(s2.loc.name) + '</strong><br><span style="color:var(--ink-3)">' +
+        U.esc(s2.found) + '</span>', 'good', 8000);
+      flashMenu('map');
+      VF.achievements.check();
+    });
+
+    VF.bus.on('charm:found', function (c) {
+      VF.toast.show('<strong>' + U.esc(c.name) + '</strong><br><span style="color:var(--ink-3)">' +
+        U.esc(c.note) + '</span>', 'good', 6000);
+      flashMenu('shop');
+    });
+    VF.bus.on('cosmetic:found', function (c) {
+      VF.toast.show('<strong>' + U.esc(c.name) + '</strong> — ' +
+        U.esc(VF.rarities.get(c.rarity).name), 'good', 4000);
+    });
+    VF.bus.on('journal:entry', function (e) {
+      VF.toast.show('journal · <strong>' + U.esc(e.title) + '</strong>', null, 3600);
+      flashMenu('journal');
+    });
+    VF.bus.on('npc:advanced', function () { flashMenu('journal'); });
+    VF.bus.on('npc:gives', function (o) {
+      if (o.gives === 'case') {
+        VF.state.data.caseTokens++;
+        VF.toast.show('the keeper hands you <strong>a key</strong>', 'good', 4200);
+      } else if (o.gives === 'cosmetic') {
+        const pool = VF.cosmetics.list.filter(function (c) { return c.secret && !VF.cosmetics.owned(c.id); });
+        if (pool.length) {
+          const pick = VF.rng.g.pick(pool);
+          VF.cosmetics.grant(pick.id);
+          VF.toast.show('the collector gives you <strong>' + U.esc(pick.name) + '</strong>', 'good', 5200);
+        }
+      }
+      VF.save.save();
+    });
+
+    /* --- something is wrong --- */
+    VF.bus.on('wrong:begin', function () {
+      VF.audio.duck(1);
+      D.hud.classList.add('dimmed');
+    });
+    VF.bus.on('wrong:peak', function () {
+      document.body.classList.add('wrong');
+      D.hud.classList.add('gone');
+    });
+    VF.bus.on('wrong:shape', function () {
+      const loc = VF.locations.current();
+      VF.scene.addShadow({ x: -0.6, y: 0.34, sp: 0.085, size: 16, alpha: 0.92, life: 9, max: 9 });
+      VF.audio.wrongShape();
+    });
+    VF.bus.on('wrong:restore', function () {
+      document.body.classList.remove('wrong');
+      D.hud.classList.remove('gone');
+    });
+    VF.bus.on('wrong:end', function () {
+      D.hud.classList.remove('dimmed');
+      document.body.classList.remove('wrong');
+      VF.achievements.check();
+    });
   }
 
   function endEncounterUI() {
@@ -286,11 +380,19 @@
     D.locName.textContent = VF.locations.current().name;
     D.wxName.textContent = VF.weather.name();
     D.timeName.textContent = VF.time.phaseName() + ' · ' + VF.time.clock();
+    const c = VF.conditions.current();
+    D.chipCond.classList.toggle('hidden', !c);
+    if (c) {
+      D.condName.textContent = c.name;
+      D.chipCond.style.borderColor = U.rgbToCss(U.hexToRgb(c.tint), 0.55);
+      D.condName.style.color = c.tint;
+      D.chipCond.title = c.blurb;
+    }
   }
 
   function refreshLevel() {
     const d = VF.state.data;
-    D.levelVal.textContent = 'LV ' + d.level;
+    D.levelVal.textContent = 'LV ' + d.level + (d.streak >= 5 ? '  ×' + d.streak : '');
     const need = VF.progression.xpToNext();
     const pctv = U.clamp(d.xp / Math.max(1, need), 0, 1);
     D.xpFill.style.width = (pctv * 100).toFixed(1) + '%';
@@ -373,7 +475,9 @@
     const f = S.fight;
     if (D.fightUI.classList.contains('hidden')) {
       D.fightUI.classList.remove('hidden');
-      D.fightName.textContent = f.c.isNew ? 'Unknown — something new' : f.c.fish.name;
+      D.fightName.textContent = f.c.kind === 'treasure' ? 'something heavy'
+        : f.c.isNew ? 'unknown — something new'
+        : VF.traits.prefix(f.c.traits) + f.c.fish.name;
       D.fightName.style.color = VF.rarities.color(f.c.rarity);
     }
 

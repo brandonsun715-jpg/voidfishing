@@ -110,8 +110,20 @@
     return out;
   }
 
+  /* Secret spots are appended once discovered, so everything that walks the
+     location list — pools, the map, the palette — sees them automatically. */
+  function register(loc) {
+    if (BY_ID[loc.id]) return false;
+    BY_ID[loc.id] = loc;
+    LIST.push(loc);
+    if (VF.loot) VF.loot.invalidatePool();
+    return true;
+  }
+
   VF.locations = {
     list: LIST,
+    register: register,
+    isRegistered: function (id) { return !!BY_ID[id]; },
     get: function (id) { return BY_ID[id] || LIST[0]; },
     isUnlocked: isUnlocked,
     current: current,

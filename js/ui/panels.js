@@ -155,6 +155,9 @@
       case 'stats': return buildStats(tab || 'stats');
       case 'settings': return buildSettings();
       case 'map': return buildMap();
+      case 'cases': return buildCases();
+      case 'wardrobe': return buildWardrobe(tab || 'all');
+      case 'journal': return buildJournal(tab || 'entries');
       default: return shell('—');
     }
   }
@@ -164,9 +167,14 @@
   function buildShop(tab) {
     const d = VF.state.data;
     const p = shell('Shop', 'Everything you will ever need, eventually · paid in Brophys');
-    p.appendChild(tabs([{ id: 'rods', label: 'Rods' }, { id: 'bait', label: 'Bait' }], tab,
-      function (t) { refresh(t); }));
+    p.appendChild(tabs([
+      { id: 'rods', label: 'rods' }, { id: 'bait', label: 'bait' },
+      { id: 'charms', label: 'charms' }, { id: 'cases', label: 'cases' }
+    ], tab, function (t) { refresh(t); }));
     const b = body();
+
+    if (tab === 'charms') { b.appendChild(charmShop()); p.appendChild(b); return p; }
+    if (tab === 'cases') { b.appendChild(caseList()); p.appendChild(b); return p; }
 
     if (tab === 'rods') {
       const eq = VF.rods.get(d.rod);
@@ -302,6 +310,485 @@
 
   function cmp(a, b) { return a > b + 1e-9 ? 1 : a < b - 1e-9 ? -1 : 0; }
 
+  /* --------------------------------------------------------- charms */
+
+  function charmIcon(c, size) {
+    const cv = U.el('canvas');
+    cv.width = cv.height = size * 2;
+    cv.style.width = cv.style.height = size + 'px';
+    const g = cv.getContext('2d');
+    const col = U.hexToRgb(VF.rarities.color(c.rarity));
+    g.translate(size, size);
+    const R = size * 0.72;
+    const grd = g.createRadialGradient(0, 0, 0, 0, 0, R * 1.6);
+    grd.addColorStop(0, U.rgbToCss(col, 0.30));
+    grd.addColorStop(1, U.rgbToCss(col, 0));
+    g.fillStyle = grd;
+    g.fillRect(-R * 1.6, -R * 1.6, R * 3.2, R * 3.2);
+    g.strokeStyle = U.rgbToCss(col, 0.9);
+    g.lineWidth = Math.max(1.4, size * 0.05);
+    g.beginPath();
+    if (c.kind === 'relic') {
+      // relics are drawn as a broken ring, charms as a closed one
+      g.arc(0, 0, R * 0.62, 0.5, Math.PI * 1.7);
+    } else {
+      g.arc(0, 0, R * 0.62, 0, VF.util.TAU);
+    }
+    g.stroke();
+    g.fillStyle = U.rgbToCss(col, 0.55);
+    const n = c.kind === 'relic' ? 3 : 4;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * VF.util.TAU - 0.6;
+      g.beginPath();
+      g.arc(Math.cos(a) * R * 0.62, Math.sin(a) * R * 0.62, size * 0.07, 0, VF.util.TAU);
+      g.fill();
+    }
+    return cv;
+  }
+
+  function statLine(c) {
+    const parts = [];
+    const st = c.stats || {};
+    const NAMES = { luck: 'luck', rare: 'rarity', value: 'value', xp: 'xp', bite: 'bite time',
+                    reel: 'reel', line: 'line', size: 'size', trait: 'traits',
+                    treasure: 'salvage', encounter: 'encounters', secret: 'discovery', 'void': 'the deep' };
+    for (const k in st) {
+      const v = st[k];
+      if (k === 'luck') { parts.push({ t: 'luck +' + v.toFixed(2), good: v > 0 }); continue; }
+      // a lower bite figure is faster, so it reads as an improvement
+      const better = k === 'bite' ? v < 1 : v > 1;
+      const pctv = Math.round(Math.abs(v - 1) * 100);
+      parts.push({ t: NAMES[k] + ' ' + (v > 1 ? '+' : '−') + pctv + '%', good: better });
+    }
+    const row = U.el('div', 'stat-grid');
+    parts.forEach(function (p) {
+      const cell = U.el('div', 'stat-cell');
+      const val = U.el('span', 'v' + (p.good ? ' up' : ' down'), p.t);
+      cell.appendChild(val);
+      row.appendChild(cell);
+    });
+    return row;
+  }
+
+  function charmShop() {
+    const d = VF.state.data;
+    const wrap = U.el('div');
+
+    wrap.appendChild(slotStrip());
+
+    const list = U.el('div', 'list');
+    VF.charms.list.forEach(function (c) {
+      const own = VF.charms.owned(c.id);
+      if (c.found && !own) return;                 // relics are never for sale
+      const levelOk = !c.level || d.level >= c.level;
+      const can = c.cost ? VF.economy.canAfford(c.cost) : true;
+      const row = U.el('div', 'row' + (own ? ' owned' : '') + (levelOk ? '' : ' locked') +
+                              (VF.charms.isEquipped(c.id) ? ' equipped' : ''));
+      const mark = U.el('div', 'row-mark');
+      mark.style.background = VF.rarities.color(c.rarity);
+      row.appendChild(mark);
+
+      const iconBox = U.el('div', 'rod-art-box');
+      iconBox.style.width = '84px';
+      iconBox.style.flex = '0 0 84px';
+      iconBox.style.display = 'grid';
+      iconBox.style.placeItems = 'center';
+      iconBox.appendChild(charmIcon(c, 56));
+      row.appendChild(iconBox);
+      row.className += ' row-rod';
+
+      const main = U.el('div', 'row-main');
+      const name = U.el('div', 'row-name');
+      name.appendChild(U.el('span', null, c.name));
+      const kt = U.el('span', 'tag', c.kind);
+      kt.style.color = VF.rarities.color(c.rarity);
+      name.appendChild(kt);
+      if (VF.charms.isEquipped(c.id)) {
+        const t = U.el('span', 'tag', 'worn'); t.style.color = 'var(--accent)'; name.appendChild(t);
+      }
+      main.appendChild(name);
+      main.appendChild(U.el('div', 'row-desc', levelOk ? c.desc : 'requires level ' + c.level));
+      const note = U.el('div', 'row-desc');
+      note.style.color = 'var(--ink-2)';
+      note.textContent = c.note;
+      main.appendChild(note);
+      main.appendChild(statLine(c));
+      row.appendChild(main);
+
+      const side = U.el('div', 'row-side');
+      if (own) {
+        const eqd = VF.charms.isEquipped(c.id);
+        const btn = U.el('button', 'btn btn-sm' + (eqd ? '' : ' btn-primary'), eqd ? 'take off' : 'wear');
+        btn.disabled = !eqd && VF.charms.slotCount() === 0;
+        btn.addEventListener('click', function () {
+          if (eqd) VF.charms.unequip(d.charmSlots.indexOf(c.id));
+          else VF.charms.equip(c.id);
+          VF.audio.click(); VF.save.save(); refresh('charms');
+        });
+        side.appendChild(btn);
+      } else {
+        side.appendChild(priceEl(c.cost, can && levelOk));
+        const btn = U.el('button', 'btn btn-sm' + (can && levelOk ? ' btn-primary' : ''), 'buy');
+        btn.disabled = !levelOk || !can;
+        btn.addEventListener('click', function () {
+          if (!VF.economy.spend(c.cost, 'charm')) { VF.audio.error(); return; }
+          VF.charms.grant(c.id);
+          if (VF.charms.slotCount() > VF.charms.equipped().length) VF.charms.equip(c.id);
+          VF.audio.buy();
+          VF.toast.show('<strong>' + U.esc(c.name) + '</strong> — ' + U.esc(c.note), 'good', 4200);
+          VF.achievements.check(); VF.save.save(); refresh('charms');
+        });
+        side.appendChild(btn);
+      }
+      row.appendChild(side);
+      list.appendChild(row);
+    });
+    wrap.appendChild(list);
+    return wrap;
+  }
+
+  /* The worn row, plus what the loadout currently adds up to. */
+  function slotStrip() {
+    const d = VF.state.data;
+    const wrap = U.el('div');
+    const max = VF.charms.slotCount();
+    const row = U.el('div', 'slot-row');
+    for (let i = 0; i < 5; i++) {
+      const id = d.charmSlots[i];
+      const c = VF.charms.get(id);
+      const el = U.el('div', 'slot' + (i >= max ? ' locked' : c ? ' filled' : ''));
+      if (i >= max) {
+        const nx = VF.charms.SLOT_LEVELS[i];
+        el.appendChild(U.el('div', 'slot-name', 'level ' + nx));
+      } else if (c) {
+        el.appendChild(charmIcon(c, 38));
+        el.appendChild(U.el('div', 'slot-name', c.name));
+        el.title = c.note;
+        el.addEventListener('click', function () {
+          VF.charms.unequip(i); VF.audio.back(); VF.save.save(); refresh(current === 'shop' ? 'charms' : 'charms');
+        });
+      } else {
+        el.appendChild(U.el('div', 'slot-name', 'empty'));
+      }
+      row.appendChild(el);
+    }
+    wrap.appendChild(row);
+
+    const bs = VF.build.charmStats();
+    const line = U.el('div', 'build-line');
+    line.appendChild(U.el('span', 'k', 'charms'));
+    const tag = U.el('span', 'v');
+    tag.textContent = VF.build.describe();
+    line.appendChild(tag);
+    const show = [['rarity', bs.rare, false], ['size', bs.size, false], ['traits', bs.trait, false],
+                  ['value', bs.value, false], ['bite time', bs.bite, true], ['line', bs.line, false],
+                  ['salvage', bs.treasure, false], ['discovery', bs.secret, false]];
+    show.forEach(function (row2) {
+      const v = row2[1];
+      if (Math.abs(v - 1) < 0.02) return;
+      const better = row2[2] ? v < 1 : v > 1;
+      const el = U.el('span', 'v ' + (better ? 'good' : 'bad'),
+        row2[0] + ' ' + (v > 1 ? '+' : '−') + Math.round(Math.abs(v - 1) * 100) + '%');
+      line.appendChild(el);
+    });
+    if (bs.luck > 0.01) line.appendChild(U.el('span', 'v good', 'luck +' + bs.luck.toFixed(2)));
+    else if (bs.luck < -0.01) line.appendChild(U.el('span', 'v bad', 'luck ' + bs.luck.toFixed(2)));
+    if (line.children.length <= 2) line.appendChild(U.el('span', 'v', 'nothing worn'));
+    wrap.appendChild(line);
+    return wrap;
+  }
+
+  /* ---------------------------------------------------------- cases */
+
+  function caseIcon(c, size) {
+    const cv = U.el('canvas', 'case-icon');
+    cv.width = cv.height = size * 2;
+    cv.style.width = cv.style.height = size + 'px';
+    const g = cv.getContext('2d');
+    const col = U.hexToRgb(c.color);
+    g.translate(size, size);
+    const S = size * 0.62;
+    const grd = g.createLinearGradient(-S, -S, S, S);
+    grd.addColorStop(0, U.rgbToCss(U.shade(col, -0.25)));
+    grd.addColorStop(1, U.rgbToCss(U.shade(col, -0.62)));
+    g.fillStyle = grd;
+    g.fillRect(-S, -S * 0.78, S * 2, S * 1.56);
+    g.strokeStyle = U.rgbToCss(col, 0.95);
+    g.lineWidth = Math.max(1.4, size * 0.045);
+    g.strokeRect(-S, -S * 0.78, S * 2, S * 1.56);
+    g.fillStyle = U.rgbToCss(col, 0.85);
+    g.fillRect(-S, -S * 0.16, S * 2, S * 0.32);
+    g.fillStyle = U.rgbToCss(U.shade(col, 0.5), 0.95);
+    g.fillRect(-S * 0.18, -S * 0.34, S * 0.36, S * 0.68);
+    return cv;
+  }
+
+  function caseList() {
+    const d = VF.state.data;
+    const wrap = U.el('div');
+
+    if (d.caseTokens > 0) {
+      const note = U.el('div', 'relic-note');
+      note.appendChild(U.el('span', 'k', 'keys'));
+      note.appendChild(U.el('div', null, d.caseTokens + ' spare ' +
+        (d.caseTokens === 1 ? 'key' : 'keys') + ' — the next case is free.'));
+      wrap.appendChild(note);
+    }
+
+    const list = U.el('div', 'list');
+    VF.cases.list.forEach(function (c) {
+      const levelOk = d.level >= c.level;
+      const comp = VF.cases.completion(c.id);
+      const check = VF.caseOpen.canBuy(c.id);
+      const card = U.el('div', 'case-card' + (levelOk ? '' : ' locked'));
+      card.appendChild(caseIcon(c, 62));
+
+      const main = U.el('div');
+      main.appendChild(U.el('div', 'case-name', c.name));
+      main.appendChild(U.el('div', 'case-blurb', levelOk ? c.blurb : 'requires level ' + c.level));
+
+      const odds = U.el('div', 'odds');
+      const eff = VF.cases.effectiveOdds(c);
+      ['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic'].forEach(function (r) {
+        const pc = eff[r] * 100;
+        if (pc <= 0) return;
+        const sp = U.el('span', null, VF.rarities.get(r).name + ' ' +
+          (pc >= 1 ? pc.toFixed(1) : pc.toFixed(2)) + '%');
+        sp.style.color = VF.rarities.color(r);
+        odds.appendChild(sp);
+      });
+      main.appendChild(odds);
+
+      const bar = U.el('div', 'bar-mini');
+      const fill = U.el('div');
+      fill.style.width = (comp.pct * 100).toFixed(1) + '%';
+      fill.style.background = c.color;
+      bar.appendChild(fill);
+      main.appendChild(bar);
+      const cnt = U.el('div', 'case-blurb', 'collection ' + comp.have + ' / ' + comp.total);
+      cnt.style.marginTop = '5px';
+      main.appendChild(cnt);
+      card.appendChild(main);
+
+      const side = U.el('div', 'row-side');
+      side.appendChild(priceEl(check.free ? 0 : c.cost, check.ok));
+      if (check.free) side.lastChild.textContent = 'free — key';
+      const btn = U.el('button', 'btn btn-sm' + (check.ok ? ' btn-primary' : ''), 'open');
+      btn.disabled = !check.ok;
+      btn.addEventListener('click', function () { openCase(c.id); });
+      side.appendChild(btn);
+      card.appendChild(side);
+      list.appendChild(card);
+    });
+    wrap.appendChild(list);
+
+    const foot = U.el('div', 'case-blurb');
+    foot.style.marginTop = '14px';
+    foot.textContent = 'cases contain cosmetics only. nothing inside changes how you fish. ' +
+                       'duplicates are refunded.';
+    wrap.appendChild(foot);
+    return wrap;
+  }
+
+  /* -------------------------------------------------------- wardrobe */
+
+  function cosThumb(cos, w, h, t) {
+    const cv = U.el('canvas', 'cos-art');
+    cv.width = w * 2; cv.height = h * 2;
+    const g = cv.getContext('2d');
+    g.scale(2, 2);
+    VF.cosmeticArt.draw(g, cos, w, h, t || 0);
+    return cv;
+  }
+
+  function buildWardrobe(tab) {
+    const d = VF.state.data;
+    const comp = VF.cosmetics.completion();
+    const p = shell('Wardrobe', comp.have + ' of ' + comp.total + ' owned · ' +
+                    Math.round(comp.pct * 100) + '% complete');
+    const items = [{ id: 'all', label: 'all' }].concat(
+      VF.cosmetics.slots.map(function (s2) { return { id: s2.id, label: s2.name }; }));
+    p.appendChild(tabs(items, tab, function (t) { refresh(t); }));
+    const b = body();
+
+    const bar = U.el('div', 'bar-mini');
+    const fill = U.el('div');
+    fill.style.width = (comp.pct * 100).toFixed(1) + '%';
+    bar.appendChild(fill);
+    b.appendChild(bar);
+    const spacer = U.el('div');
+    spacer.style.height = '14px';
+    b.appendChild(spacer);
+
+    const list = VF.cosmetics.list.filter(function (c) { return tab === 'all' || c.slot === tab; });
+    list.sort(function (a, c) {
+      const ra = VF.rarities.rank(a.rarity), rc = VF.rarities.rank(c.rarity);
+      if (ra !== rc) return rc - ra;
+      return a.name.localeCompare(c.name);
+    });
+
+    const grid = U.el('div', 'cos-grid');
+    list.forEach(function (c, i) {
+      const own = VF.cosmetics.owned(c.id);
+      const on = VF.cosmetics.equippedIn(c.slot) === c;
+      const cell = U.el('div', 'cos-cell' + (own ? '' : ' locked') + (on ? ' on' : ''));
+      const pip = U.el('div', 'cos-pip');
+      pip.style.background = VF.rarities.color(c.rarity);
+      if (own) pip.style.boxShadow = '0 0 8px ' + U.rgbToCss(U.hexToRgb(VF.rarities.get(c.rarity).glow), 0.7);
+      cell.appendChild(pip);
+
+      if (own) {
+        cell.appendChild(cosThumb(c, 118, 54, i * 0.6));
+        cell.appendChild(U.el('div', 'cos-name', c.name));
+      } else {
+        const blank = U.el('canvas', 'cos-art');
+        blank.width = 236; blank.height = 108;
+        const g = blank.getContext('2d');
+        g.scale(2, 2);
+        g.globalAlpha = 0.16;
+        VF.cosmeticArt.draw(g, c, 118, 54, 0);
+        cell.appendChild(blank);
+        cell.appendChild(U.el('div', 'cos-name', '?????'));
+      }
+      cell.appendChild(U.el('div', 'cos-slot',
+        (VF.cosmetics.slots.filter(function (s2) { return s2.id === c.slot; })[0] || {}).name || c.slot));
+
+      if (own) {
+        cell.addEventListener('click', function () {
+          if (on) VF.cosmetics.unequip(c.slot);
+          else VF.cosmetics.equip(c.id);
+          VF.audio.click(); VF.save.save(); refresh(tab);
+        });
+      }
+      grid.appendChild(cell);
+    });
+    b.appendChild(grid);
+    p.appendChild(b);
+    return p;
+  }
+
+  /* --------------------------------------------------- journal + people */
+
+  function buildJournal(tab) {
+    const d = VF.state.data;
+    const p = shell('Journal', d.journal.length + ' entries · ' +
+                    Object.keys(d.secrets).length + ' hidden places found');
+    p.appendChild(tabs([
+      { id: 'entries', label: 'entries' },
+      { id: 'people', label: 'people' + (VF.npcs.anyNew() ? ' •' : '') },
+      { id: 'records', label: 'records' }
+    ], tab, function (t) { refresh(t); }));
+    const b = body();
+
+    if (tab === 'entries') {
+      if (!d.journal.length) {
+        b.appendChild(U.el('div', 'empty', 'nothing written down yet. keep fishing.'));
+      } else {
+        d.journal.slice().reverse().forEach(function (e) {
+          const el = U.el('div', 'entry' + (e.hint ? ' hint' : ''));
+          const head = U.el('div');
+          head.appendChild(U.el('span', 'entry-title', e.title));
+          head.appendChild(U.el('span', 'entry-kind', e.kind));
+          el.appendChild(head);
+          el.appendChild(U.el('div', 'entry-text', e.text));
+          b.appendChild(el);
+        });
+      }
+    } else if (tab === 'people') {
+      VF.npcs.list.forEach(function (n) {
+        const known = VF.npcs.unlocked(n.id);
+        const el = U.el('div', 'npc-row' + (known ? '' : ' locked'));
+        const mark = U.el('div', 'npc-mark');
+        mark.style.background = known ? n.color : 'var(--line-2)';
+        el.appendChild(mark);
+        const main = U.el('div');
+        const nm = U.el('div', 'npc-name', known ? n.name : '?????');
+        main.appendChild(nm);
+        main.appendChild(U.el('div', 'npc-where', known ? n.where : 'you have not run into them yet'));
+        if (known) main.appendChild(U.el('div', 'npc-blurb', n.blurb));
+        el.appendChild(main);
+        const side = U.el('div', 'row-side');
+        if (known) {
+          if (VF.npcs.hasNew(n.id)) side.appendChild(U.el('div', 'npc-new', 'has something to say'));
+          const btn = U.el('button', 'btn btn-sm' + (VF.npcs.hasNew(n.id) ? ' btn-primary' : ''), 'talk');
+          btn.addEventListener('click', function () { speak(n.id); });
+          side.appendChild(btn);
+        }
+        el.appendChild(side);
+        b.appendChild(el);
+      });
+    } else {
+      const R = d.records;
+      const grid = U.el('div', 'stats-grid');
+      function nameOf(id, traits) {
+        const f = VF.fish.byId(id);
+        if (!f) return '—';
+        return (traits && traits.length ? VF.traits.prefix(traits) : '') + f.name;
+      }
+      const tiles = [
+        ['biggest fish', R.biggestKg ? U.weight(R.biggestKg) : '—', nameOf(R.biggestId, R.biggestTraits)],
+        ['most valuable', R.richest ? '◈ ' + U.money(R.richest) : '—', nameOf(R.richestId, R.richestTraits)],
+        ['rarest combination', R.bestComboTraits && R.bestComboTraits.length
+          ? R.bestComboTraits.length + ' traits' : '—', nameOf(R.bestComboId, R.bestComboTraits)],
+        ['longest specimen', R.longestSpecies ? U.length(R.longestSpecies) : '—', nameOf(R.longestId)],
+        ['longest streak', U.commas(R.bestStreak), 'landed without a loss'],
+        ['current streak', U.commas(d.streak), d.streak ? 'still going' : 'start again']
+      ];
+      tiles.forEach(function (t) {
+        const tile = U.el('div', 'stat-tile');
+        tile.appendChild(U.el('span', 'k', t[0]));
+        tile.appendChild(U.el('div', 'v', t[1]));
+        if (t[2]) tile.appendChild(U.el('div', 'sub', t[2]));
+        grid.appendChild(tile);
+      });
+      b.appendChild(grid);
+
+      const th = U.el('div');
+      th.style.marginTop = '18px';
+      th.appendChild(U.el('span', 'k', 'traits recorded'));
+      const tg = U.el('div', 'cos-grid');
+      tg.style.marginTop = '10px';
+      VF.traits.list.forEach(function (tr) {
+        const n = d.traitsSeen[tr.id] | 0;
+        const cell = U.el('div', 'cos-cell' + (n ? '' : ' locked'));
+        cell.style.cursor = 'default';
+        const pip = U.el('div', 'cos-pip');
+        pip.style.background = tr.color;
+        cell.appendChild(pip);
+        const nm = U.el('div', 'cos-name', n ? tr.name : '?????');
+        nm.style.marginTop = '2px';
+        cell.appendChild(nm);
+        cell.appendChild(U.el('div', 'cos-slot', n ? '×' + U.commas(n) + ' · value ×' + tr.mult : 'not yet'));
+        if (n) cell.title = tr.desc;
+        tg.appendChild(cell);
+      });
+      th.appendChild(tg);
+      b.appendChild(th);
+    }
+    p.appendChild(b);
+    return p;
+  }
+
+  function speak(id) {
+    const res = VF.npcs.talk(id);
+    if (!res) return;
+    VF.audio.click();
+    const card = U.el('div', 'speech');
+    const who = U.el('div', 'speech-who', res.npc.name);
+    who.style.color = res.npc.color;
+    card.appendChild(who);
+    res.lines.forEach(function (l) { card.appendChild(U.el('p', 'speech-line', l)); });
+    const acts = U.el('div', 'speech-actions');
+    const back = U.el('button', 'btn btn-primary', 'leave');
+    back.addEventListener('click', function () { VF.audio.back(); refresh('people'); });
+    acts.appendChild(back);
+    card.appendChild(acts);
+    const prev = node;
+    node = card;
+    if (prev && prev.parentNode) prev.parentNode.replaceChild(card, prev);
+    VF.achievements.check();
+  }
+
   /* ------------------------------------------------------------- fishdex */
 
   function buildDex() {
@@ -377,8 +864,10 @@
       cell.appendChild(cv);
 
       cell.appendChild(U.el('div', 'dex-name', has ? f.name : '?????'));
+      const nTraits = has ? Object.keys(entry.traits || {}).length : 0;
       cell.appendChild(U.el('div', 'dex-rec', has
-        ? (entry.record ? U.weight(entry.record.kg) + ' · ×' + entry.caught : '×' + entry.caught)
+        ? (entry.record ? U.weight(entry.record.kg) + ' · ×' + entry.caught +
+            (nTraits ? ' · ' + nTraits + 't' : '') : '×' + entry.caught)
         : r.name));
 
       if (has) {
@@ -428,13 +917,24 @@
     meta.appendChild(kv('Prefers', baits));
     if (f.time.length) meta.appendChild(kv('Active', f.time.join(', ')));
     if (f.weather.length) meta.appendChild(kv('Weather', f.weather.map(function (w) { return VF.weatherData.get(w).name; }).join(', ')));
-    const muts = Object.keys(entry.mutations || {});
-    if (muts.length) {
-      meta.appendChild(kv('Mutations seen', muts.map(function (x) {
-        return VF.mutations.get(x).name + ' ×' + entry.mutations[x];
-      }).join(', ')));
-    }
     bd.appendChild(meta);
+
+    /* every trait, with the ones seen on this species filled in */
+    const tw = U.el('div');
+    tw.appendChild(U.el('span', 'k', 'traits recorded on this species'));
+    const trow = U.el('div', 'trait-row');
+    trow.style.marginTop = '8px';
+    const seen = entry.traits || {};
+    VF.traits.list.forEach(function (tr) {
+      const n = seen[tr.id] | 0;
+      const chip = U.el('span', 'trait-chip', n ? tr.name + ' ×' + n : '?????');
+      chip.style.color = n ? tr.color : 'var(--ink-4)';
+      chip.style.borderColor = n ? U.rgbToCss(U.hexToRgb(tr.color), 0.42) : 'var(--line)';
+      if (n) chip.title = tr.desc;
+      trow.appendChild(chip);
+    });
+    tw.appendChild(trow);
+    bd.appendChild(tw);
 
     const acts = U.el('div', 'catch-actions');
     acts.style.gridTemplateColumns = '1fr';
@@ -470,13 +970,86 @@
     const d = VF.state.data;
     const p = shell('Bag', 'What you are carrying');
     p.appendChild(tabs([
-      { id: 'catches', label: 'Catches (' + d.kept.length + ')' },
-      { id: 'rods', label: 'Rods' },
-      { id: 'bait', label: 'Bait' }
+      { id: 'catches', label: 'catches (' + d.kept.length + ')' },
+      { id: 'rods', label: 'rods' },
+      { id: 'bait', label: 'bait' },
+      { id: 'charms', label: 'charms' },
+      { id: 'salvage', label: 'salvage' }
     ], tab, function (t) { refresh(t); }));
     const b = body();
 
-    if (tab === 'catches') {
+    if (tab === 'charms') {
+      b.appendChild(slotStrip());
+      const owned = d.charms.map(function (id) { return VF.charms.get(id); }).filter(Boolean);
+      if (!owned.length) {
+        b.appendChild(U.el('div', 'empty', 'no charms yet. the shop sells some; the water gives up the rest.'));
+      } else {
+        const list = U.el('div', 'list');
+        owned.forEach(function (c) {
+          const eqd = VF.charms.isEquipped(c.id);
+          const row = U.el('div', 'row row-rod' + (eqd ? ' equipped' : ' owned'));
+          const mark = U.el('div', 'row-mark');
+          mark.style.background = VF.rarities.color(c.rarity);
+          row.appendChild(mark);
+          const iconBox = U.el('div', 'rod-art-box');
+          iconBox.style.cssText = 'width:84px;flex:0 0 84px;display:grid;place-items:center';
+          iconBox.appendChild(charmIcon(c, 56));
+          row.appendChild(iconBox);
+          const main = U.el('div', 'row-main');
+          const nm = U.el('div', 'row-name');
+          nm.appendChild(U.el('span', null, c.name));
+          const kt = U.el('span', 'tag', c.kind);
+          kt.style.color = VF.rarities.color(c.rarity);
+          nm.appendChild(kt);
+          main.appendChild(nm);
+          main.appendChild(U.el('div', 'row-desc', c.desc));
+          const note = U.el('div', 'row-desc');
+          note.style.color = 'var(--ink-2)';
+          note.textContent = c.note;
+          main.appendChild(note);
+          main.appendChild(statLine(c));
+          row.appendChild(main);
+          const side = U.el('div', 'row-side');
+          const btn = U.el('button', 'btn btn-sm' + (eqd ? '' : ' btn-primary'), eqd ? 'take off' : 'wear');
+          btn.addEventListener('click', function () {
+            if (eqd) VF.charms.unequip(d.charmSlots.indexOf(c.id));
+            else VF.charms.equip(c.id);
+            VF.audio.click(); VF.save.save(); refresh('charms');
+          });
+          side.appendChild(btn);
+          row.appendChild(side);
+          list.appendChild(row);
+        });
+        b.appendChild(list);
+      }
+    } else if (tab === 'salvage') {
+      const ids = Object.keys(d.treasures);
+      if (!ids.length) {
+        b.appendChild(U.el('div', 'empty', 'nothing but fish so far.'));
+      } else {
+        const grid = U.el('div', 'cos-grid');
+        VF.treasureData.list.forEach(function (t) {
+          const n = d.treasures[t.id] | 0;
+          const cell = U.el('div', 'cos-cell' + (n ? '' : ' locked'));
+          cell.style.cursor = 'default';
+          const pip = U.el('div', 'cos-pip');
+          pip.style.background = VF.rarities.color(t.rarity);
+          cell.appendChild(pip);
+          const cv = U.el('canvas', 'cos-art');
+          cv.width = 236; cv.height = 108;
+          const g = cv.getContext('2d');
+          g.scale(2, 2); g.translate(59, 27);
+          if (!n) g.globalAlpha = 0.18;
+          VF.treasureArt.draw(g, t, 22, 1.1);
+          cell.appendChild(cv);
+          cell.appendChild(U.el('div', 'cos-name', n ? t.name : '?????'));
+          cell.appendChild(U.el('div', 'cos-slot', n ? '×' + n : VF.rarities.get(t.rarity).name));
+          if (n) cell.title = t.desc;
+          grid.appendChild(cell);
+        });
+        b.appendChild(grid);
+      }
+    } else if (tab === 'catches') {
       if (!d.kept.length) {
         b.appendChild(U.el('div', 'empty', 'Nothing kept. Choose "Keep" on a catch to store it here.'));
       } else {
@@ -498,16 +1071,22 @@
           const f = VF.fish.byId(k.id);
           if (!f) return;
           const r = VF.rarities.get(f.rarity);
-          const mut = VF.mutations.get(k.mutation);
+          const kTraits = k.traits || (k.mutation ? [k.mutation] : []);
           const row = U.el('div', 'row');
           const mark = U.el('div', 'row-mark');
           mark.style.background = r.color;
           row.appendChild(mark);
           const main = U.el('div', 'row-main');
           const name = U.el('div', 'row-name');
-          name.appendChild(U.el('span', null, f.name));
+          name.appendChild(U.el('span', null, VF.traits.prefix(kTraits) + f.name));
           const tg = U.el('span', 'tag', r.name); tg.style.color = r.color; name.appendChild(tg);
-          if (mut) { const mt = U.el('span', 'tag', mut.name); mt.style.color = mut.color; name.appendChild(mt); }
+          kTraits.forEach(function (tid) {
+            const tr = VF.traits.get(tid);
+            if (!tr) return;
+            const mt = U.el('span', 'tag', tr.name);
+            mt.style.color = tr.color;
+            name.appendChild(mt);
+          });
           main.appendChild(name);
           main.appendChild(U.el('div', 'row-desc',
             U.weight(k.kg) + ' · ' + U.length(k.m) + ' · ' + U.ordinalPercentile(k.pct) +
@@ -671,6 +1250,9 @@
     VF.locations.list.forEach(function (loc) {
       const unlocked = VF.locations.isUnlocked(loc.id);
       const isCur = d.location === loc.id;
+      const secret = VF.secrets.isSecretLoc(loc.id);
+      // a secret spot only exists on the map once it has been found
+      if (secret && !unlocked) return;
       // only tease the next locked spot, so the map keeps its mystery
       if (!unlocked) { shownLocked++; if (shownLocked > 1) return; }
 
@@ -680,7 +1262,15 @@
       el.appendChild(mark);
 
       const main = U.el('div');
-      main.appendChild(U.el('div', 'loc-name', unlocked ? loc.name : '???'));
+      const nameRow = U.el('div', 'loc-name');
+      nameRow.appendChild(U.el('span', null, unlocked ? loc.name : '???'));
+      if (secret) {
+        const t = U.el('span', 'tag', 'found');
+        t.style.color = 'var(--warn)';
+        t.style.marginLeft = '8px';
+        nameRow.appendChild(t);
+      }
+      main.appendChild(nameRow);
       main.appendChild(U.el('div', 'loc-tag', unlocked ? loc.tag : loc.hint));
       if (unlocked) {
         main.appendChild(U.el('div', 'loc-desc', loc.desc));
@@ -690,7 +1280,7 @@
         meta.appendChild(U.el('span', null, 'xp ×' + loc.xpBoost.toFixed(1)));
         main.appendChild(meta);
       } else {
-        main.appendChild(U.el('div', 'loc-desc', 'Unlocks at level ' + loc.level + ' · you are level ' + d.level));
+        main.appendChild(U.el('div', 'loc-desc', 'unlocks at level ' + loc.level + ' · you are level ' + d.level));
       }
       el.appendChild(main);
 
@@ -708,6 +1298,15 @@
     });
 
     b.appendChild(list);
+
+    const nFound = VF.secrets.countFound();
+    const foot = U.el('div', 'case-blurb');
+    foot.style.marginTop = '14px';
+    foot.textContent = nFound
+      ? nFound + ' hidden ' + (nFound === 1 ? 'place' : 'places') + ' found. there are others.'
+      : 'not every stretch of water is on this list.';
+    b.appendChild(foot);
+
     p.appendChild(b);
     return p;
   }
@@ -898,5 +1497,125 @@
     if (prev && prev.parentNode) prev.parentNode.replaceChild(dlg, prev);
   }
 
-  VF.panels = { init: init, open: open, close: close, isOpen: isOpen, refresh: refresh };
+  /* ------------------------------------------------- the case opening
+     The result is decided before the animation starts. The strip is then
+     positioned so it lands on it, easing out over roughly six seconds. */
+  function openCase(caseId) {
+    const res = VF.caseOpen.buy(caseId);
+    if (!res) { VF.audio.error(); return; }
+
+    stopRodLoop();
+    const rank = VF.rarities.rank(res.rarity);
+    const box = U.el('div', 'opener');
+
+    const head = U.el('div', 'opener-head');
+    head.appendChild(U.el('div', 'opener-title', res.caseDef.name));
+    box.appendChild(head);
+
+    const win = U.el('div', 'reel-window');
+    const strip = U.el('div', 'reel-strip');
+    const ITEM = 118, GAP = 8, STEP = ITEM + GAP;
+    res.strip.forEach(function (it, i) {
+      const cell = U.el('div', 'reel-item');
+      cell.appendChild(cosThumb(it, 118, 70, i * 0.4));
+      cell.appendChild(U.el('div', 'rn', it.name));
+      const bar = U.el('div', 'rbar');
+      bar.style.background = VF.rarities.color(it.rarity);
+      cell.appendChild(bar);
+      strip.appendChild(cell);
+    });
+    win.appendChild(strip);
+    win.appendChild(U.el('div', 'reel-fade'));
+    win.appendChild(U.el('div', 'reel-marker'));
+    box.appendChild(win);
+
+    const resultBox = U.el('div', 'opener-result');
+    resultBox.style.display = 'none';
+    box.appendChild(resultBox);
+
+    const acts = U.el('div', 'opener-actions');
+    acts.style.display = 'none';
+    box.appendChild(acts);
+
+    const prev = node;
+    node = box;
+    if (prev && prev.parentNode) prev.parentNode.replaceChild(box, prev);
+
+    // land the winning cell under the marker
+    const winW = win.clientWidth || 720;
+    const target = -(res.winIndex * STEP) + winW / 2 - ITEM / 2 - 8;
+    const start = 0;
+    const DUR = 6.1;
+    let t0 = 0, lastTick = -1, raf = 0;
+
+    VF.audio.caseRoll();
+
+    function frame(now) {
+      if (!t0) t0 = now;
+      const el = (now - t0) / 1000;
+      const k = Math.min(1, el / DUR);
+      // strong ease-out: fast blur, long slow crawl into the result
+      const e = 1 - Math.pow(1 - k, 4.2);
+      const x = start + (target - start) * e;
+      strip.style.transform = 'translateX(' + x.toFixed(2) + 'px)';
+
+      // one tick per cell that passes the marker, thinning out as it slows
+      const idx = Math.floor(-x / STEP);
+      if (idx !== lastTick) { lastTick = idx; VF.audio.caseTick(k); }
+
+      if (k < 1) { raf = requestAnimationFrame(frame); return; }
+      finish();
+    }
+
+    function finish() {
+      cancelAnimationFrame(raf);
+      if (rank >= 5) box.classList.add('hit-mythic');
+      else if (rank >= 4) box.classList.add('hit-legendary');
+      VF.audio.stinger(rank >= 4 ? 'grand' : rank >= 2 ? 'bright' : 'soft', rank);
+      if (rank >= 3) VF.fx.shake(2 + rank * 1.6, 3.4);
+      if (rank >= 2) VF.fx.flash(U.rgbToCss(U.hexToRgb(VF.rarities.get(res.rarity).glow), 0.18),
+                                 0.16 + rank * 0.04, 1.8);
+
+      resultBox.style.display = '';
+      resultBox.appendChild(cosThumb(res.item, 300, 96, 1.4));
+      resultBox.appendChild(U.el('div', 'result-name', res.item.name));
+      const slotName = (VF.cosmetics.slots.filter(function (s2) { return s2.id === res.item.slot; })[0] || {}).name;
+      resultBox.appendChild(U.el('div', 'result-slot', slotName || res.item.slot));
+      const rr = U.el('div', 'result-rarity', VF.rarities.get(res.rarity).name);
+      rr.style.color = VF.rarities.color(res.rarity);
+      resultBox.appendChild(rr);
+      if (res.duplicate) {
+        resultBox.appendChild(U.el('div', 'result-dupe',
+          'already owned — refunded ◈ ' + U.money(res.refund)));
+      }
+
+      acts.style.display = '';
+      if (!res.duplicate) {
+        const eq = U.el('button', 'btn btn-primary', 'wear it');
+        eq.addEventListener('click', function () {
+          VF.cosmetics.equip(res.item.id);
+          VF.audio.click(); VF.save.save();
+          VF.toast.show('wearing <strong>' + U.esc(res.item.name) + '</strong>', 'good', 2600);
+          refresh('cases');
+        });
+        acts.appendChild(eq);
+      }
+      const again = U.el('button', 'btn', 'open another');
+      again.addEventListener('click', function () {
+        if (VF.caseOpen.canBuy(caseId).ok) openCase(caseId);
+        else { VF.audio.error(); refresh('cases'); }
+      });
+      acts.appendChild(again);
+      const done = U.el('button', 'btn', 'done');
+      done.addEventListener('click', function () { VF.audio.back(); refresh('cases'); });
+      acts.appendChild(done);
+
+      VF.achievements.check();
+    }
+
+    raf = requestAnimationFrame(frame);
+  }
+
+  VF.panels = { init: init, open: open, close: close, isOpen: isOpen, refresh: refresh,
+                openCase: openCase };
 })(window.VF = window.VF || {});

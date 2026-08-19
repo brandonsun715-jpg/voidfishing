@@ -327,3 +327,9 @@
   .bar-block { margin-bottom: 6px; }
   .hint-box { display: none; }
 }
+
+/* the interface is simply not there for a moment */
+#hud.gone { opacity: 0; transition: opacity 700ms var(--ease); pointer-events: none; }
+body.wrong #vignette { opacity: 0.2; }
+body.wrong #edgeGlow { opacity: 0; }
+body.wrong .toasts { opacity: 0; transition: opacity 500ms var(--ease); }

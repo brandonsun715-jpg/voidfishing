@@ -95,7 +95,60 @@
     { id: 'patient', name: 'Patient', desc: 'Spend two hours at the water.', reward: 5000,
       test: function (d) { return d.stats.playSeconds >= 7200; } },
     { id: 'best_rod', name: 'Nothing Left To Buy', desc: 'Own every rod.', hidden: true, reward: 100000000,
-      test: function (d) { return d.ownedRods.length >= VF.rods.list.length; } }
+      test: function (d) { return d.ownedRods.length >= VF.rods.list.length; } },
+
+    /* --- traits --- */
+    { id: 'trait_golden', name: 'Struck Gold', desc: 'Land a Golden fish.', reward: 6000,
+      test: function (d) { return !!d.flags.trait_golden; } },
+    { id: 'trait_ancient', name: 'Older Than The Water', desc: 'Land an Ancient fish.', reward: 60000,
+      test: function (d) { return !!d.flags.trait_ancient; } },
+    { id: 'trait_massive', name: 'Massive', desc: 'Land a Massive fish.', reward: 9000,
+      test: function (d) { return !!d.flags.trait_massive; } },
+    { id: 'multi_2', name: 'Two At Once', desc: 'Land a fish carrying two traits.', reward: 25000,
+      test: function (d) { return d.stats.multiTrait >= 1; } },
+    { id: 'multi_3', name: 'Improbable', desc: 'Land a fish carrying three traits.', hidden: true, reward: 900000,
+      test: function (d) { return !!d.flags.combo3; } },
+    { id: 'multi_4', name: 'Statistically Rude', desc: 'Land a fish carrying four traits.', hidden: true, reward: 12000000,
+      test: function (d) { return !!d.flags.combo4; } },
+    { id: 'traits_all', name: 'Every Variation', desc: 'Record all ten traits.', reward: 3000000,
+      test: function (d) { return Object.keys(d.traitsSeen).length >= VF.traits.list.length; } },
+
+    /* --- salvage and secrets --- */
+    { id: 'treasure_1', name: 'Not A Fish', desc: 'Pull something else out of the water.', reward: 400,
+      test: function (d) { return d.stats.treasuresFound >= 1; } },
+    { id: 'treasure_50', name: 'Salvager', desc: 'Pull up 50 objects.', reward: 40000,
+      test: function (d) { return d.stats.treasuresFound >= 50; } },
+    { id: 'relic_1', name: 'It Does Something', desc: 'Find your first relic.', reward: 20000,
+      test: function (d) { return d.charms.some(function (id) {
+        const c = VF.charms.get(id); return c && c.kind === 'relic'; }); } },
+    { id: 'secret_1', name: 'Off The Chart', desc: 'Find water nobody put on a map.', hidden: true, reward: 120000,
+      test: function (d) { return d.stats.secretsFound >= 1; } },
+    { id: 'secret_all', name: 'Everywhere There Is', desc: 'Find every hidden spot.', hidden: true, reward: 40000000,
+      test: function (d) { return d.stats.secretsFound >= VF.secrets.list.length; } },
+    { id: 'wrong_1', name: '??????', desc: 'Be there when it stops.', hidden: true, reward: 250000,
+      test: function (d) { return d.stats.wrongEvents >= 1; } },
+
+    /* --- people and the record --- */
+    { id: 'met_all', name: 'Everyone Who Is Here', desc: 'Speak to all five of them.', reward: 15000,
+      test: function (d) { return Object.keys(d.npcs).length >= VF.npcs.list.length; } },
+    { id: 'journal_10', name: 'Keeping Notes', desc: 'Write ten journal entries.', reward: 8000,
+      test: function (d) { return d.journal.length >= 10; } },
+    { id: 'streak_25', name: 'Not One Lost', desc: 'Land 25 in a row without losing one.', reward: 30000,
+      test: function (d) { return d.records.bestStreak >= 25; } },
+
+    /* --- cosmetics --- */
+    { id: 'case_1', name: 'Purely Decorative', desc: 'Open your first case.', reward: 2000,
+      test: function (d) { return d.stats.casesOpened >= 1; } },
+    { id: 'case_25', name: 'A Serious Habit', desc: 'Open 25 cases.', reward: 90000,
+      test: function (d) { return d.stats.casesOpened >= 25; } },
+    { id: 'cos_15', name: 'Dressed For It', desc: 'Own 15 cosmetics.', reward: 25000,
+      test: function (d) { return d.cosmetics.length >= 15; } },
+    { id: 'cos_all', name: 'The Whole Wardrobe', desc: 'Own every cosmetic.', hidden: true, reward: 60000000,
+      test: function (d) { return VF.cosmetics.completion().pct >= 1; } },
+
+    /* --- the end --- */
+    { id: 'the_last', name: '??????????', desc: 'Reach the last water.', hidden: true, reward: 250000000,
+      test: function (d) { return VF.secrets.found('the_last_water'); } }
   ];
 
   const BY_ID = VF.util.byId(LIST);

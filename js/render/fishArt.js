@@ -738,16 +738,32 @@
 
   /* --------------------------------------------------------------- main */
 
-  function palette(art, mutation) {
-    let c1 = art.c1, c2 = art.c2, c3 = art.c3;
-    const m = VF.mutations.get(mutation);
-    if (m) {
-      const t = m.id === 'shadow' ? 0.82 : m.id === 'voidtouched' ? 0.62 : 0.68;
-      c1 = U.rgbToCss(U.mixRgb(U.hexToRgb(c1), U.hexToRgb(m.color), t));
-      c2 = U.rgbToCss(U.mixRgb(U.hexToRgb(c2), U.hexToRgb(m.color), t * 0.75));
-      c3 = m.tint;
+  /* Traits stack: each one tints the body further, the rarest one hardest, so a
+     four-trait fish is visibly the sum of its parts. */
+  function palette(art, traits) {
+    let c1 = U.hexToRgb(art.c1), c2 = U.hexToRgb(art.c2), c3 = U.hexToRgb(art.c3);
+    const ids = !traits ? [] : (typeof traits === 'string' ? [traits] : traits);
+    let top = null;
+    const fx = { glow: 0, shimmer: 0, metal: 0, facet: 0, crust: 0, fracture: 0, darken: 0 };
+
+    for (let i = 0; i < ids.length; i++) {
+      const m = VF.traits.get(ids[i]);
+      if (!m || !m.color) continue;
+      if (!top || m.tier > top.tier) top = m;
+      const col = U.hexToRgb(m.color);
+      // later, rarer traits pull the body further toward their own colour
+      const w = 0.26 + m.tier * 0.055;
+      c1 = U.mixRgb(c1, col, w);
+      c2 = U.mixRgb(c2, col, w * 0.72);
+      c3 = U.mixRgb(c3, U.hexToRgb(m.tint || m.color), w * 0.85);
+      for (const k in fx) if (m[k]) fx[k] = Math.max(fx[k], m[k]);
     }
-    return { c1: c1, c2: c2, c3: c3, mut: m };
+    if (fx.darken) { c1 = U.shade(c1, -fx.darken * 0.45); c2 = U.shade(c2, -fx.darken * 0.5); }
+
+    return {
+      c1: U.rgbToCss(c1), c2: U.rgbToCss(c2), c3: U.rgbToCss(c3),
+      mut: top, traits: ids, fx: fx
+    };
   }
 
   /* size = half the body length in px. */
@@ -758,8 +774,8 @@
     const sway = Math.sin(tm * 2.1) * 0.55;
     const rnd = VF.rng.make(hash(fish.id));
     const L = size * 2;
-    const pal = palette(art, opts.mutation);
-    const glow = art.glow * (pal.mut ? 1.25 : 1);
+    const pal = palette(art, opts.traits || opts.mutation);
+    const glow = Math.min(1.4, art.glow * (pal.mut ? 1.25 : 1) + pal.fx.glow * 0.7);
     const j = jitter(fish.id);
     // below roughly 22px the fine detail is sub-pixel noise, so skip it
     const detail = opts.detail === undefined ? size >= 22 : opts.detail;
@@ -790,6 +806,7 @@
     // body
     const H = bodyPath(ctx, art.body, L, sway, probe);
     const c1 = U.hexToRgb(pal.c1), c2 = U.hexToRgb(pal.c2), c3 = U.hexToRgb(pal.c3);
+    const rnd2 = VF.rng.make(hash(fish.id) ^ 0x1234);
 
     /* Counter-shading: dark along the back, pale along the belly. This is the
        single thing that stops a fish reading as a flat coloured shape. */
@@ -826,6 +843,61 @@
       bl.addColorStop(1, U.rgbToCss(c3, 0));
       ctx.fillStyle = bl;
       ctx.fillRect(-L, -H * 1.2, L * 2, H * 2.4);
+    }
+
+    /* trait surface treatments */
+    if (pal.fx.metal) {
+      const g = ctx.createLinearGradient(-L * 0.4, -H, L * 0.4, H);
+      g.addColorStop(0, U.rgbToCss(c3, 0));
+      g.addColorStop(0.42, U.rgbToCss(U.mixRgb(c3, [255, 255, 255], 0.6), 0.42));
+      g.addColorStop(0.56, U.rgbToCss(c3, 0.08));
+      g.addColorStop(1, U.rgbToCss(c3, 0));
+      ctx.fillStyle = g;
+      ctx.fillRect(-L, -H * 1.3, L * 2, H * 2.6);
+    }
+    if (pal.fx.facet) {
+      ctx.strokeStyle = U.rgbToCss(U.mixRgb(c3, [255, 255, 255], 0.5), 0.34);
+      ctx.lineWidth = Math.max(0.6, L * 0.006);
+      for (let i = 0; i < 7; i++) {
+        const x0 = -L * 0.5 + (i / 6) * L;
+        ctx.beginPath();
+        ctx.moveTo(x0, -H * 1.2);
+        ctx.lineTo(x0 + L * 0.16, H * 1.2);
+        ctx.stroke();
+      }
+    }
+    if (pal.fx.crust) {
+      ctx.fillStyle = U.rgbToCss(U.shade(c2, -0.3), 0.5);
+      for (let i = 0; i < 14; i++) {
+        const x = (rnd2() - 0.5) * L * 0.85;
+        const y = (rnd2() - 0.5) * H * 1.7;
+        ctx.beginPath();
+        ctx.arc(x, y, L * (0.008 + rnd() * 0.017), 0, TAU);
+        ctx.fill();
+      }
+    }
+    if (pal.fx.shimmer) {
+      const g = ctx.createLinearGradient(-L * 0.5, 0, L * 0.5, 0);
+      const hue = (tm * 40) % 360;
+      for (let i = 0; i <= 4; i++) {
+        const h = (hue + i * 72) % 360;
+        g.addColorStop(i / 4, 'hsla(' + h.toFixed(0) + ',85%,72%,0.22)');
+      }
+      ctx.fillStyle = g;
+      ctx.fillRect(-L, -H * 1.3, L * 2, H * 2.6);
+    }
+    if (pal.fx.fracture) {
+      ctx.strokeStyle = U.rgbToCss(U.mixRgb(c3, [255, 255, 255], 0.4), 0.6);
+      ctx.lineWidth = Math.max(0.7, L * 0.007);
+      for (let i = 0; i < 4; i++) {
+        let x = (rnd() - 0.5) * L * 0.6, y = (rnd() - 0.5) * H * 1.2;
+        ctx.beginPath(); ctx.moveTo(x, y);
+        for (let k = 0; k < 4; k++) {
+          x += (rnd() - 0.5) * L * 0.24; y += (rnd() - 0.5) * H * 0.7;
+          ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
     }
 
     if (detail) {

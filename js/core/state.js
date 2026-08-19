@@ -3,7 +3,7 @@
 (function (VF) {
   'use strict';
 
-  const SCHEMA = 1;
+  const SCHEMA = 2;
 
   function defaults() {
     return {
@@ -21,6 +21,8 @@
       ownedRods: ['wood'],
       bait: 'worm',
       baitCounts: {},         // id -> count. 'worm' is unlimited and not tracked here.
+      charms: [],             // owned charm and relic ids
+      charmSlots: [null, null, null, null, null],
 
       /* --- world --- */
       location: 'shore',
@@ -31,6 +33,24 @@
          fishdex[id] = { caught, record: {kg, m, pct, mutation}, firstSeen, mutations: {id:count} } */
       fishdex: {},
       kept: [],               // array of catch records the player chose to keep
+      traitsSeen: {},         // trait id -> times landed
+      treasures: {},          // treasure id -> times pulled up
+      secrets: {},            // secret id -> discovery timestamp
+      journal: [],            // { id, title, text, at, kind }
+      npcs: {},               // npc id -> { met, stage, heard: [] }
+      cosmetics: [],          // owned cosmetic ids
+      equipped: {},           // cosmetic slot -> id
+      cases: {},              // case id -> times opened
+      caseTokens: 0,          // spare keys found in the water
+
+      records: {
+        biggestKg: 0, biggestId: null, biggestTraits: [],
+        richest: 0, richestId: null, richestTraits: [],
+        bestCombo: 0, bestComboId: null, bestComboTraits: [],
+        longestSpecies: 0, longestId: null,
+        bestStreak: 0
+      },
+      streak: 0,              // consecutive catches without losing one
 
       /* --- meta --- */
       stats: {
@@ -52,7 +72,12 @@
         encounters: 0,
         playSeconds: 0,
         perfectReels: 0,
-        linesSnapped: 0
+        linesSnapped: 0,
+        treasuresFound: 0,
+        casesOpened: 0,
+        secretsFound: 0,
+        multiTrait: 0,
+        wrongEvents: 0
       },
       achievements: {},       // id -> unlock timestamp
       tutorial: { step: 0, done: false },

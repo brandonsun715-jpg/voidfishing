@@ -407,6 +407,7 @@
 
   function draw() {
     const P = VF.palette.P;
+    const wrongK = VF.wrong ? VF.wrong.intensity() : 0;
     const q = VF.state.data.settings.quality;
     const shakeOff = VF.fx.shakeOffset();
 
@@ -430,6 +431,7 @@
     mark('overlay', function () { VF.fx.drawOverlay(ctx, W, H); });
     syncVignette();
 
+    if (wrongK > 0.01) drawWrong(wrongK);
     if (prof) { prof.frames++; }
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   }
@@ -770,7 +772,9 @@
     const hy = L.horizonY, wh = L.waterH;
     const lines = q === 'low' ? 18 : q === 'medium' ? 30 : 44;
     const seg = q === 'low' ? 12 : 22;
-    const calm = VF.encounters ? VF.encounters.calm() : 0;
+    const calm = Math.max(VF.encounters ? VF.encounters.calm() : 0,
+                          VF.conditions ? VF.conditions.flag('calm') * 0.8 : 0,
+                          VF.wrong ? VF.wrong.intensity() : 0);
     const wind = (0.35 + VF.weather.wind() * 1.3) * (1 - calm * 0.88);
     const chop = (1 + VF.weather.rain() * 0.9 + VF.weather.wind() * 0.8) * (1 - calm * 0.92);
 
@@ -885,8 +889,22 @@
     const my = (tip.y + b.y) / 2 + sag;
 
     const shake = (S.state === 'reeling' && S.fight) ? S.fight.shakeAmt : 0;
-    ctx.strokeStyle = U.rgbToCss(U.mixRgb(P.glow, [255, 255, 255], 0.4),
-                                 0.30 + tension * 0.35 + shake * 0.3);
+    const lineCfg = VF.cosmetics.cfg('line');
+    const lineRgb = lineCfg.col ? U.hexToRgb(lineCfg.col) : U.mixRgb(P.glow, [255, 255, 255], 0.4);
+    const lineA = (lineCfg.a === undefined ? 0.30 : lineCfg.a * 0.7) + tension * 0.35 + shake * 0.3;
+    if (lineCfg.glow) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = U.rgbToCss(lineRgb, 0.22);
+      ctx.lineWidth = 3.4;
+      ctx.beginPath();
+      ctx.moveTo(tip.x, tip.y);
+      ctx.quadraticCurveTo(mx, my, b.x, b.y + b.bob);
+      ctx.stroke();
+      ctx.restore();
+    }
+    const pulse = lineCfg.pulse ? 0.75 + 0.25 * Math.sin(t * 4) : 1;
+    ctx.strokeStyle = U.rgbToCss(lineRgb, lineA * pulse);
     ctx.lineWidth = 1 + shake * 0.8;
     ctx.beginPath();
     ctx.moveTo(tip.x, tip.y);
@@ -905,13 +923,54 @@
     ctx.beginPath(); ctx.ellipse(b.x, by + r * 0.9, r * 1.5, r * 0.45, 0, 0, TAU); ctx.fill();
     ctx.globalAlpha = 1;
 
-    ctx.fillStyle = '#c8402f';
-    ctx.beginPath(); ctx.arc(b.x, by - r * 0.3, r, Math.PI, TAU); ctx.fill();
-    ctx.fillStyle = '#e8e4dc';
-    ctx.beginPath(); ctx.arc(b.x, by - r * 0.3, r, 0, Math.PI); ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,0.45)';
-    ctx.lineWidth = 0.8;
-    ctx.beginPath(); ctx.arc(b.x, by - r * 0.3, r, 0, TAU); ctx.stroke();
+    const bc = VF.cosmetics.cfg('bobber');
+    const cy2 = by - r * 0.3;
+    if (bc.glow) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const g = ctx.createRadialGradient(b.x, cy2, 0, b.x, cy2, r * 5);
+      g.addColorStop(0, U.rgbToCss(U.hexToRgb(bc.bot || '#ffd060'), 0.5));
+      g.addColorStop(1, U.rgbToCss(U.hexToRgb(bc.bot || '#ffd060'), 0));
+      ctx.fillStyle = g;
+      ctx.fillRect(b.x - r * 5, cy2 - r * 5, r * 10, r * 10);
+      ctx.restore();
+    }
+    if (bc.hole) {
+      ctx.fillStyle = '#05030a';
+      ctx.beginPath(); ctx.arc(b.x, cy2, r, 0, TAU); ctx.fill();
+      ctx.strokeStyle = U.rgbToCss(U.hexToRgb(bc.bot || '#1a1030'), 0.9);
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(b.x, cy2, r, 0, TAU); ctx.stroke();
+    } else {
+      ctx.fillStyle = bc.top || '#c8402f';
+      ctx.beginPath(); ctx.arc(b.x, cy2, r, Math.PI, TAU); ctx.fill();
+      ctx.fillStyle = bc.bot || '#e8e4dc';
+      ctx.beginPath(); ctx.arc(b.x, cy2, r, 0, Math.PI); ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath(); ctx.arc(b.x, cy2, r, 0, TAU); ctx.stroke();
+    }
+    if (bc.lamp) {
+      ctx.fillStyle = '#ffe8a0';
+      ctx.beginPath(); ctx.arc(b.x, cy2 - r * 0.2, r * 0.42, 0, TAU); ctx.fill();
+    }
+    if (bc.eye) {
+      ctx.fillStyle = '#f4efe4';
+      ctx.beginPath(); ctx.arc(b.x, cy2, r * 0.44, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#0a0810';
+      ctx.beginPath(); ctx.arc(b.x + Math.sin(t * 0.8) * r * 0.12, cy2, r * 0.2, 0, TAU); ctx.fill();
+    }
+    if (bc.star) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = '#fff6d0';
+      for (let i = 0; i < 4; i++) {
+        ctx.beginPath();
+        ctx.ellipse(b.x, cy2, r * 2.6, r * 0.16, t * 0.5 + i * Math.PI / 2, 0, TAU);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
     ctx.fillStyle = U.rgbToCss(P.glow, 0.7);
     ctx.fillRect(b.x - r * 0.18, by - r * 1.5, r * 0.36, r * 0.7);
   }
@@ -921,14 +980,27 @@
     const k = 1 - U.clamp(f.distance, 0, 1);
     if (k < 0.12) return;
     const sc = scaleAt(b.y);
-    const size = Math.min(W, H) * 0.055 * sc * (0.5 + k) * (0.7 + VF.rarities.rank(c.rarity) * 0.09);
+    const rank = VF.rarities.rank(c.rarity);
+    const size = Math.min(W, H) * 0.055 * sc * (0.5 + k) * (0.7 + rank * 0.09);
     const y = b.y + 14 * sc + Math.sin(t * 4) * 3 * f.surge;
     const x = b.x + Math.sin(t * 2.3) * 8 * sc * (0.4 + f.surge);
     ctx.save();
     ctx.globalAlpha = U.clamp((k - 0.1) * 1.4, 0, 1) * 0.85;
     ctx.translate(x, y);
     ctx.rotate(Math.sin(t * 3.4) * 0.22 * (0.5 + f.surge));
-    VF.fishArt.drawSilhouette(ctx, c.fish, size, k * 0.9);
+    if (c.kind === 'treasure') {
+      // an object has no species art, so it comes up as a plain dark mass
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, size * 0.85, size * 0.62, 0, 0, TAU);
+      ctx.fill();
+      ctx.globalAlpha *= 0.55;
+      ctx.strokeStyle = c.treasure.color;
+      ctx.lineWidth = Math.max(1, size * 0.07);
+      ctx.stroke();
+    } else if (c.fish && c.fish.id) {
+      VF.fishArt.drawSilhouette(ctx, c.fish, size, k * 0.9);
+    }
     ctx.restore();
     ctx.globalAlpha = 1;
   }
@@ -966,110 +1038,22 @@
     ctx.quadraticCurveTo(seatX + fh * 0.62, lipY + fh * 0.10, seatX + fh * 0.98, lipY + fh * 0.52);
     ctx.stroke();
 
-    drawAngler(seatX, seatY, fh, dark, rim);
+    ctx.save();
+    ctx.translate(seatX, seatY);
+    VF.anglerArt.draw(ctx, VF.cosmetics.cfg('outfit'), fh, t, false,
+                      { x: L.rodHand.x - seatX, y: L.rodHand.y - seatY }, rim);
+    ctx.restore();
     drawRod(P);
   }
 
-  /* A seated figure in near-profile, facing the water.
-     Proportions: total seated height fh, head about a seventh of it. */
-  function drawAngler(x, y, fh, dark, rim) {
-    const br = Math.sin(t * 0.85) * fh * 0.008;      // breathing
-    const headR = fh * 0.082;
-    const headX = x + fh * 0.12;
-    const headY = y - fh * 0.855 + br;
-    const neckY = y - fh * 0.735 + br;
-    const shX = x + fh * 0.045, shY = y - fh * 0.685 + br;
-    const hipX = x, hipY = y - fh * 0.055;
-    const kneeX = x + fh * 0.52, kneeY = y - fh * 0.28;
-    const footX = x + fh * 0.46, footY = y + fh * 0.10;
-
-    ctx.fillStyle = dark;
-    ctx.strokeStyle = dark;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-
-    /* far leg, slightly behind */
-    ctx.lineWidth = fh * 0.115;
-    ctx.beginPath();
-    ctx.moveTo(hipX + fh * 0.02, hipY);
-    ctx.lineTo(kneeX - fh * 0.05, kneeY + fh * 0.05);
-    ctx.lineTo(footX - fh * 0.06, footY);
-    ctx.stroke();
-
-    /* torso: hip to shoulder, hunched forward over the rod */
-    ctx.beginPath();
-    ctx.moveTo(hipX - fh * 0.15, hipY + fh * 0.06);
-    ctx.quadraticCurveTo(hipX - fh * 0.21, y - fh * 0.42 + br, shX - fh * 0.10, shY);
-    ctx.quadraticCurveTo(shX + fh * 0.09, shY - fh * 0.06, shX + fh * 0.17, shY + fh * 0.05);
-    ctx.quadraticCurveTo(hipX + fh * 0.24, y - fh * 0.30, hipX + fh * 0.19, hipY + fh * 0.06);
-    ctx.closePath();
-    ctx.fill();
-
-    /* near leg, knee up */
-    ctx.lineWidth = fh * 0.125;
-    ctx.beginPath();
-    ctx.moveTo(hipX + fh * 0.06, hipY + fh * 0.01);
-    ctx.lineTo(kneeX, kneeY);
-    ctx.lineTo(footX, footY);
-    ctx.stroke();
-    /* boot */
-    ctx.beginPath();
-    ctx.ellipse(footX + fh * 0.04, footY + fh * 0.02, fh * 0.10, fh * 0.055, -0.12, 0, TAU);
-    ctx.fill();
-
-    /* neck + head */
-    ctx.lineWidth = fh * 0.055;
-    ctx.beginPath();
-    ctx.moveTo(shX + fh * 0.03, shY);
-    ctx.lineTo(headX - fh * 0.01, neckY);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(headX, headY, headR, 0, TAU);
-    ctx.fill();
-    /* hood, drawn back over the skull and down the neck */
-    ctx.beginPath();
-    ctx.moveTo(headX - headR * 1.15, headY + headR * 0.55);
-    ctx.quadraticCurveTo(headX - headR * 1.5, headY - headR * 1.5, headX + headR * 0.15, headY - headR * 1.35);
-    ctx.quadraticCurveTo(headX + headR * 1.25, headY - headR * 1.1, headX + headR * 0.95, headY - headR * 0.15);
-    ctx.quadraticCurveTo(headX - headR * 0.2, headY - headR * 0.75, headX - headR * 1.15, headY + headR * 0.55);
-    ctx.closePath();
-    ctx.fill();
-
-    /* arm reaching out to the rod hand */
-    ctx.lineWidth = fh * 0.075;
-    ctx.beginPath();
-    ctx.moveTo(shX + fh * 0.12, shY + fh * 0.06);
-    ctx.quadraticCurveTo(x + fh * 0.30, y - fh * 0.60, L.rodHand.x, L.rodHand.y);
-    ctx.stroke();
-    /* second hand steadying the butt of the rod */
-    ctx.lineWidth = fh * 0.062;
-    ctx.beginPath();
-    ctx.moveTo(shX + fh * 0.10, shY + fh * 0.12);
-    ctx.quadraticCurveTo(x + fh * 0.16, y - fh * 0.44, L.rodHand.x - fh * 0.20, L.rodHand.y + fh * 0.12);
-    ctx.stroke();
-
-    /* rim light down the back and over the hood — the only thing separating
-       the figure from the water behind it */
-    ctx.strokeStyle = rim;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(hipX - fh * 0.15, hipY + fh * 0.02);
-    ctx.quadraticCurveTo(hipX - fh * 0.21, y - fh * 0.42 + br, shX - fh * 0.10, shY);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(headX - headR * 1.15, headY + headR * 0.5);
-    ctx.quadraticCurveTo(headX - headR * 1.5, headY - headR * 1.5, headX + headR * 0.15, headY - headR * 1.35);
-    ctx.stroke();
-    ctx.lineWidth = 1.1;
-    ctx.beginPath();
-    ctx.moveTo(hipX + fh * 0.06, hipY);
-    ctx.lineTo(kneeX, kneeY - fh * 0.05);
-    ctx.stroke();
-  }
-
-  /* Geometry lives here; the drawing itself is shared with the shop preview. */
+  /* Rod geometry lives here; the drawing is shared with the shop previews. */
   function drawRod(P) {
-    const rod = VF.rods.get(VF.state.data.rod);
+    let rod = VF.rods.get(VF.state.data.rod);
+    const skin = VF.cosmetics.cfg('rodSkin');
+    if (skin && skin.c1) {
+      // a finish repaints the rod without touching its length or its stats
+      rod = { art: Object.assign({}, rod.art, skin, { len: rod.art.len }) };
+    }
     const tip = rodTipPoint();
     const hand = L.rodHand;
     const a = tip.a;
@@ -1082,6 +1066,34 @@
       tx: tip.x, ty: tip.y,
       len: tip.len, angle: a
     }, t, { spin: reeling ? t * 12 : t * 0.4 });
+  }
+
+  /* Nothing dramatic — the colour drains, the frame stops, and a few lights
+     appear where there is no reason for lights. */
+  function drawWrong(k) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'saturation';
+    ctx.fillStyle = 'hsl(0,' + Math.round((1 - k) * 100) + '%,50%)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const n = 5;
+    for (let i = 0; i < n; i++) {
+      const seed = i * 12.9898;
+      const x = ((Math.sin(seed) * 43758.5453) % 1 + 1) % 1 * W;
+      const y = L.horizonY - H * (0.05 + (((Math.sin(seed * 1.7) * 43758.5453) % 1 + 1) % 1) * 0.25);
+      const r = H * 0.02 * (0.6 + Math.sin(t * 0.6 + i) * 0.4);
+      const a = k * 0.5 * (0.4 + 0.6 * Math.sin(t * 0.35 + i * 2));
+      if (a <= 0.01 || r <= 0) continue;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, Math.max(1, r * 6));
+      g.addColorStop(0, 'rgba(210,225,255,' + a.toFixed(3) + ')');
+      g.addColorStop(1, 'rgba(210,225,255,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(x - r * 6, y - r * 6, r * 12, r * 12);
+    }
+    ctx.restore();
   }
 
   /* The vignette is a CSS layer; only its pulse strength is driven from here. */

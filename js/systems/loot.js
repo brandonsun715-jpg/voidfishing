@@ -13,11 +13,15 @@
     const rod = VF.rods.get(d.rod);
     const bait = VF.bait.get(d.bait);
     const loc = VF.locations.current();
+    const build = VF.build ? VF.build.stats() : null;
+    const cond = VF.conditions ? VF.conditions.mods() : null;
     const sum = Math.max(0,
       (rod.rare - 1) +
       (bait.rare - 1) +
       (VF.weather.rare() - 1) +
       (loc.rarityBoost - 1) +
+      (build ? build.rare - 1 : 0) +
+      (cond ? cond.rare - 1 : 0) +
       VF.progression.luck() * 0.5
     );
     // diminishing returns: stacking every bonus is strong, never runaway
@@ -131,9 +135,10 @@
 
   /* Size roll. Low exponent = the tail gets fatter, so luck genuinely produces
      bigger fish rather than just more of them. */
-  function rollSize(f, luck) {
+  function rollSize(f, luck, scale) {
     const exp = U.clamp(2.45 - luck * 0.30, 1.15, 2.45);
-    let t = Math.pow(VF.rng.g(), exp);
+    const u = VF.rng.g();          // the raw draw, before the curve is applied
+    let t = Math.pow(u, exp);
     // rare "surge" roll: a small chance to re-roll high, creating trophy moments
     if (VF.rng.g() < 0.012 + luck * 0.006) t = Math.max(t, Math.pow(VF.rng.g(), 0.35));
     t = U.clamp(t, 0, 1);
@@ -141,9 +146,10 @@
     const kMin = Math.max(f.kg[0], 1e-4), kMax = Math.max(f.kg[1], kMin * 1.0001);
     const mMin = Math.max(f.m[0], 1e-4), mMax = Math.max(f.m[1], mMin * 1.0001);
     // exponential interpolation keeps most catches modest and makes the top end feel earned
-    const kg = kMin * Math.pow(kMax / kMin, t);
-    const m = mMin * Math.pow(mMax / mMin, U.clamp(t + VF.rng.g.range(-0.06, 0.06), 0, 1));
-    return { kg: kg, m: m, pct: t };
+    const sc = scale || 1;
+    const kg = kMin * Math.pow(kMax / kMin, t) * sc;
+    const m = mMin * Math.pow(mMax / mMin, U.clamp(t + VF.rng.g.range(-0.06, 0.06), 0, 1)) * Math.pow(sc, 0.4);
+    return { kg: kg, m: m, pct: t, u: u };
   }
 
   /* Build the full catch record. */
@@ -154,24 +160,36 @@
     const luck = VF.progression.luck();
 
     const f = opts.forceFish ? (VF.fish.byId(opts.forceFish) || pickFish(opts)) : pickFish(opts);
-    const size = rollSize(f, luck);
-    const mut = VF.mutations.roll(luck + (opts.mutBoost || 0), VF.rng.g);
+    const build = VF.build ? VF.build.stats() : null;
+
+    // traits are rolled against the size percentile, then the size is nudged by
+    // whichever of them changes how big the fish is
+    let size = rollSize(f, luck);
+    const traitBoost = (1 + (opts.traitBoost || 0)) * (build ? build.traitChance : 1);
+    const traits = VF.traits.roll(luck + (opts.mutBoost || 0), size.u, VF.rng.g, traitBoost);
+    const scale = VF.traits.sizeScale(traits);
+    if (scale !== 1) size = { kg: size.kg * scale, m: size.m * Math.pow(scale, 0.4), pct: size.pct, u: size.u };
+
     const rarity = VF.rarities.get(f.rarity);
+    const traitMult = VF.traits.multiplier(traits);
 
     const sizeValue = 0.55 + size.pct * 1.75;
     const value = Math.max(1, Math.round(
-      f.value * sizeValue * (mut ? mut.mult : 1) * loc.valueBoost
+      f.value * sizeValue * traitMult * loc.valueBoost * (build ? build.value : 1)
     ));
-    const xp = Math.max(1, Math.round(rarity.xp * (0.8 + size.pct * 0.6) * loc.xpBoost));
+    const xp = Math.max(1, Math.round(
+      rarity.xp * (0.8 + size.pct * 0.6) * loc.xpBoost * (build ? build.xp : 1)
+    ));
 
     const prev = d.fishdex[f.id];
     const isNew = !prev;
     const isRecord = !!prev && size.kg > (prev.record ? prev.record.kg : 0);
-    const isGiant = size.pct >= 0.985;
+    const isGiant = size.pct >= 0.985 || traits.indexOf('massive') >= 0;
 
     return {
       id: f.id, fish: f, rarity: f.rarity, rarityDef: rarity,
-      mutation: mut ? mut.id : null, mutationDef: mut,
+      traits: traits,
+      mutation: traits.length ? traits[0] : null,     // kept for older save data
       kg: size.kg, m: size.m, pct: size.pct,
       value: value, xp: xp,
       isNew: isNew, isRecord: isRecord, isGiant: isGiant,
@@ -183,18 +201,20 @@
   /* Fight parameters derived from the fish and the player's rod. */
   function fightParams(c) {
     const rod = VF.rods.get(VF.state.data.rod);
+    const build = VF.build ? VF.build.stats() : null;
     const f = c.fish;
     const rank = VF.rarities.rank(c.rarity);
+    const tf = VF.traits.fight(c.traits);
     // difficulty grows with species difficulty, rarity and how big this individual is
     const raw = f.diff * 0.55 + rank * 0.100 + c.pct * 0.16;
-    const power = U.clamp(raw, 0.08, 1.35);
+    const power = U.clamp(raw * tf.power, 0.08, 1.9);
     return {
-      power: power,                                   // how hard it pulls
-      stamina: U.clamp(0.55 + raw * 0.85, 0.5, 1.6),  // how long it lasts
-      surgeRate: U.clamp(0.55 + rank * 0.13 + f.diff * 0.5, 0.5, 2.1),
-      lineStrength: rod.line,
-      reelForce: rod.reel,
-      erratic: U.clamp(f.diff * 0.8 + rank * 0.06, 0.1, 1.1)
+      power: power,                                              // how hard it pulls
+      stamina: U.clamp(0.55 + raw * 0.85, 0.5, 1.6) * tf.stamina, // how long it lasts
+      surgeRate: U.clamp(0.55 + rank * 0.13 + f.diff * 0.5, 0.5, 2.1) * tf.surge,
+      lineStrength: rod.line * (build ? build.line : 1),
+      reelForce: rod.reel * (build ? build.reel : 1),
+      erratic: U.clamp(f.diff * 0.8 + rank * 0.06, 0.1, 1.1) * tf.surge
     };
   }
 

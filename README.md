@@ -38,7 +38,30 @@ something back.
 - **94 species** across eight rarity tiers, from Smallmouth up through Void and
   whatever `!@#$%^&$#` is. Every creature is drawn procedurally from a spec of
   body type, fins, extras and palette — none of them are recoloured duplicates.
-- **Six mutations** (Glowing through Void-Touched) multiplying value 4× to 100×.
+- **Ten traits** that stack. A catch can be Ancient *and* Golden *and* Massive
+  *and* Aggressive at once, each multiplying its value, with a further bonus for
+  the combination. Tiny and Massive are read off the size roll rather than
+  rolled, so they always mean what they say.
+- **Charms and relics** in up to five slots. Charms are bought; relics are found
+  in the water. Almost every one costs you something — the Broken Compass finds
+  far rarer fish and takes much longer to find them — so a loadout has a shape
+  rather than just a size.
+- **Salvage**: coins, bottles, fossils, keys, charts, lenses and relics come up
+  on the line instead of fish. Some sell. Some are how you find the rest.
+- **Conditions** that change a spot for a few minutes — migrations, glowing
+  water, dead calm, feeding frenzies, thin places — layered on top of weather.
+- **Hidden water.** Five spots that are never listed until found, each behind a
+  different condition. The last one is not a level unlock: you have to have been
+  told where it is.
+- **Five people** with dialogue that moves as you do, and a journal that writes
+  itself as you turn things up.
+- **Cosmetic cases** bought with Brophys, containing cosmetics and nothing else:
+  rod finishes, bobbers, line and splash effects, cast trails, catch effects,
+  interface themes and outfits. The odds are printed, per case, after folding in
+  what that case actually stocks. Duplicates are refunded.
+- **"Something is wrong"**, very rarely. The water stops, the music cuts, the
+  interface goes, something passes underneath, and then everything is exactly as
+  it was and nothing is said about it.
 - **Eight fishing spots**, unlocked by level, each with its own palette, horizon
   feature, distant land, fish pool, weather set and musical scale.
 - **Twelve rods and ten baits**, each a real change to cast distance, reel force,
@@ -78,6 +101,12 @@ rod's line strength, not by raw fish size. An over-matched rod is genuinely
 dangerous and a well-matched one is calm, which is what makes buying the next rod
 feel like something. A slack-line rule and a snap grace period mean a fight
 always resolves — the rod can never be left unusable.
+
+**Traits and builds.** Traits are rolled independently, so a combination is the
+product of its odds rather than a special case — which is what makes a four-trait
+fish genuinely rare instead of merely tagged as rare. Charm effects fold into one
+build object that the loot roll, the fight and the treasure roll all read, so a
+loadout changes the whole game rather than one number.
 
 **Rarity.** Gear, bait, location and weather feed one combined "rarity power"
 with diminishing returns, so stacking every bonus is strong without being
@@ -120,6 +149,8 @@ node tools/gallery.js      renders the whole catalogue to one sheet
 node tools/closeup.js      renders a few species large, to judge surface detail
 node tools/rods.js         renders every rod preview to one sheet
 node tools/audio.js        measures output level, spectral balance and clipping
+node tools/systems.js      traits, builds, conditions, salvage, secrets, cases
+node tools/newui.js        screenshots the charm, case, wardrobe and journal panels
 ```
 
 ## Building a single file
