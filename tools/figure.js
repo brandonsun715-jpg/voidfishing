@@ -3,7 +3,7 @@ const { chromium } = require('playwright');
 const path = require('path');
 (async () => {
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
-  const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
+  const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 2 });
   page.on('pageerror', e => console.log('PAGEERROR', e.message));
   await page.goto('file://' + path.join(__dirname, '..', 'index.html'), { waitUntil: 'load' });
   await page.waitForTimeout(500);
@@ -32,7 +32,7 @@ const path = require('path');
     }
     // crop tight on the angler
     await page.screenshot({ path: 'tools/fig-' + name + '.png',
-      clip: { x: 0, y: 0, width: 900, height: 800 } });
+      clip: { x: 220, y: 500, width: 340, height: 190 } });
   }
   await browser.close();
 })();

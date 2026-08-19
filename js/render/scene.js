@@ -1124,6 +1124,47 @@
 
   /* ------------------------------------------------------- foreground */
 
+  /* Where the top of the ledge is at a given x. Both quadratics of the lip are
+     inverted numerically so a figure can stand anywhere along it. */
+  function quadSolve(p0, p1, p2, x) {
+    const a = p0 - 2 * p1 + p2, b = 2 * (p1 - p0), c = p0 - x;
+    if (Math.abs(a) < 1e-6) return b === 0 ? 0 : U.clamp(-c / b, 0, 1);
+    const disc = b * b - 4 * a * c;
+    if (disc < 0) return 0.5;
+    const r = Math.sqrt(disc);
+    const u1 = (-b + r) / (2 * a), u2 = (-b - r) / (2 * a);
+    if (u1 >= -0.001 && u1 <= 1.001) return U.clamp(u1, 0, 1);
+    return U.clamp(u2, 0, 1);
+  }
+  function quadY(p0, p1, p2, u) {
+    const m = 1 - u;
+    return m * m * p0 + 2 * m * u * p1 + u * u * p2;
+  }
+
+  function groundY(x) {
+    const fh = L.figureH, seatX = L.seatX, lipY = L.seatY + fh * 0.16;
+    const midX = seatX + fh * 0.10;
+    if (x <= midX) {
+      const u = quadSolve(-12, W * 0.07, midX, U.clamp(x, -12, midX));
+      return quadY(lipY - fh * 0.10, lipY - fh * 0.16, lipY - fh * 0.03, u);
+    }
+    const endX = seatX + fh * 0.98;
+    const u = quadSolve(midX, seatX + fh * 0.62, endX, U.clamp(x, midX, endX));
+    return quadY(lipY - fh * 0.03, lipY + fh * 0.10, lipY + fh * 0.52, u);
+  }
+
+  /* Where the two of you end up standing. The angler steps off the seat and
+     turns; the visitor comes in along the shore from the left. */
+  function visitSpots() {
+    const fh = L.figureH, seatX = L.seatX;
+    return {
+      anglerFrom: seatX,
+      anglerTo: seatX + fh * 0.04,
+      npcFrom: -fh * 0.55,
+      npcTo: seatX - fh * 0.60
+    };
+  }
+
   function drawForeground(P) {
     const fh = L.figureH;
     const seatX = L.seatX, seatY = L.seatY;
@@ -1155,6 +1196,8 @@
     ctx.quadraticCurveTo(seatX + fh * 0.62, lipY + fh * 0.10, seatX + fh * 0.98, lipY + fh * 0.52);
     ctx.stroke();
 
+    if (VF.visit && VF.visit.active()) { drawVisit(P, rim); return; }
+
     ctx.save();
     ctx.translate(seatX, seatY);
     const look = L.bobber.visible ? L.bobber : L.castTarget;
@@ -1171,6 +1214,71 @@
     // the hand closes over the grip, so it goes on after the rod
     VF.anglerArt.drawHand(ctx, VF.cosmetics.cfg('outfit'), fh, L.rodHand,
                           rodState.angle + rodState.sway);
+  }
+
+  /* Both figures on the near shore. The rod stays behind, propped on the ledge
+     where it was put down, because you do not carry a rod to a conversation. */
+  function drawVisit(P, rim) {
+    const V = VF.visit.S;
+    const fh = L.figureH;
+    const sp = visitSpots();
+    const out = V.phase === 'out';
+    const back = V.phase === 'back';
+    const k = U.smoothstep(V.k);
+
+    const ax = back ? U.lerp(sp.anglerTo, sp.anglerFrom, k)
+                    : out ? U.lerp(sp.anglerFrom, sp.anglerTo, k) : sp.anglerTo;
+    const nx = back ? U.lerp(sp.npcTo, sp.npcFrom, k)
+                    : out ? U.lerp(sp.npcFrom, sp.npcTo, k) : sp.npcTo;
+
+    drawRestingRod(P);
+
+    // the visitor: walks in facing the way they are going, then turns to you
+    if (V.npc) {
+      ctx.save();
+      ctx.translate(nx, groundY(nx));
+      VF.npcArt.draw(ctx, V.npc, fh, t, {
+        facing: back ? -1 : 1,
+        rim: rim,
+        walk: V.walk,
+        phase: t * 6.2,
+        talking: V.phase === 'talk' && !!VF.visit.line()
+      });
+      ctx.restore();
+    }
+
+    // the angler, standing, facing whoever they came to see
+    // the angler does not walk anywhere — they get up off the ledge and turn.
+    // The visitor is the one crossing the shore.
+    ctx.save();
+    ctx.translate(ax, groundY(ax));
+    VF.anglerArt.draw(ctx, VF.cosmetics.cfg('outfit'), fh, t, {
+      mode: 'stand',
+      rim: rim,
+      walk: 0,
+      phase: 0,
+      facing: back ? 1 : -1,
+      // look at whoever you came to see
+      aim: { x: (nx - ax) * 0.6, y: -fh * 0.55 }
+    });
+    ctx.restore();
+  }
+
+  /* The rod, left leaning against the ledge at the seat. */
+  function drawRestingRod(P) {
+    const fh = L.figureH;
+    let rod = VF.rods.get(VF.state.data.rod);
+    const skin = VF.cosmetics.cfg('rodSkin');
+    if (skin && skin.c1) rod = { art: Object.assign({}, rod.art, skin, { len: rod.art.len }) };
+    const len = fh * 1.30 * rod.art.len;
+    const bx = L.seatX + fh * 0.46, by = L.seatY + fh * 0.22;
+    const a = -1.06;
+    const tx = bx + Math.cos(a) * len, ty = by + Math.sin(a) * len;
+    VF.rodArt.draw(ctx, rod, {
+      bx: bx, by: by,
+      cx: (bx + tx) / 2 + fh * 0.02, cy: (by + ty) / 2,
+      tx: tx, ty: ty, len: len, angle: a
+    }, t, { spin: t * 0.25 });
   }
 
   /* Rod geometry lives here; the drawing is shared with the shop previews. */
@@ -1235,6 +1343,7 @@
   VF.scene = {
     init: init, resize: resize, update: update, draw: draw,
     L: L, addShadow: addShadow, newCastLateral: newCastLateral,
+    groundY: groundY, visitSpots: visitSpots,
     spawnMeteor: spawnMeteor, seedAmbient: seedAmbient,
     rebuild: function () { backdropKey = ''; buildStars(); },
     profile: function (on) {

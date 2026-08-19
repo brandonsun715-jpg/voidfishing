@@ -33,6 +33,8 @@
   function pressStart(e) {
     if (VF.state.rt.panelOpen) return;
     if (e && e.type === 'pointerdown' && e.button !== undefined && e.button !== 0) return;
+    // a conversation owns the input while it is running
+    if (VF.visit.active()) { VF.visit.advance(); return; }
     if (pressed) return;
     pressed = true;
     const st = VF.fishing.state();
@@ -68,7 +70,13 @@
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
       if (e.code === 'Escape') {
-        if (VF.panels.isOpen()) { e.preventDefault(); VF.panels.close(); }
+        if (VF.panels.isOpen()) { e.preventDefault(); VF.panels.close(); return; }
+        if (VF.visit.talking()) { e.preventDefault(); VF.visit.leave(); }
+        return;
+      }
+      if (VF.visit.active()) {
+        // nothing else is reachable until the two of you are done
+        if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); VF.visit.advance(); }
         return;
       }
       if (e.code === 'Space' || e.code === 'Enter') {
@@ -337,6 +345,55 @@
 
   /* ------------------------------------------------------------ prompts */
 
+  /* ------------------------------------------------------------ captions */
+
+  let capLine = null, capNpc = null, capReady = false;
+
+  function tickCaption() {
+    const el = document.getElementById('caption');
+    if (!el) return;
+    const V = VF.visit;
+    const hudEl = document.getElementById('hud');
+
+    if (!V.active()) {
+      if (!el.classList.contains('hidden')) {
+        el.classList.add('hidden');
+        el.classList.remove('fading', 'ready');
+        capLine = null; capNpc = null;
+      }
+      if (hudEl) hudEl.classList.remove('visiting');
+      return;
+    }
+    if (hudEl) hudEl.classList.add('visiting');
+
+    const line = V.line();
+    if (!line) {
+      // walking out or walking back — the shore, and nothing written on it
+      if (!el.classList.contains('hidden')) el.classList.add('fading');
+      capLine = null;
+      return;
+    }
+    const npc = V.npc();
+    if (line !== capLine || npc !== capNpc) {
+      capLine = line; capNpc = npc; capReady = false;
+      document.getElementById('captionWho').textContent = npc ? npc.name.toLowerCase() : '';
+      document.getElementById('captionWho').style.color = npc ? npc.color : 'var(--ink-3)';
+      const txt = document.getElementById('captionText');
+      txt.textContent = line;
+      // restart the entry animation for each new line
+      txt.style.animation = 'none';
+      void txt.offsetWidth;
+      txt.style.animation = '';
+      el.classList.remove('hidden', 'fading', 'ready');
+    }
+    // the prompt only appears once the line has had time to be read
+    const ready = VF.visit.S.lineT >= 0.55;
+    if (ready !== capReady) {
+      capReady = ready;
+      el.classList.toggle('ready', ready);
+    }
+  }
+
   function showPrompt(text, color, hold) {
     D.prompt.textContent = text;
     D.prompt.style.color = color || 'var(--ink)';
@@ -406,6 +463,8 @@
   function tick(dt) {
     const d = VF.state.data;
     const S = VF.fishing.S;
+
+    tickCaption();
 
     /* money counts up rather than snapping */
     if (Math.abs(shownMoney - d.money) > 0.5) {

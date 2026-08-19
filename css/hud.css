@@ -333,3 +333,66 @@
 body.wrong #vignette { opacity: 0.2; }
 body.wrong #edgeGlow { opacity: 0; }
 body.wrong .toasts { opacity: 0; transition: opacity 500ms var(--ease); }
+
+/* -------------------------------------------------------------- captions
+   A conversation happens out on the shore. All that belongs on the interface
+   is the name, the line, and the fact that there is more of it. */
+
+.caption {
+  position: fixed;
+  left: 50%;
+  bottom: 44px;
+  transform: translateX(-50%);
+  width: min(640px, calc(100vw - 64px));
+  z-index: 46;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 420ms var(--ease);
+}
+.caption.hidden { display: none; }
+.caption.fading { opacity: 0; }
+
+.caption-inner { text-align: center; }
+
+.caption-who {
+  font-size: 10px;
+  letter-spacing: 0.30em;
+  text-transform: lowercase;
+  margin-bottom: 12px;
+  opacity: 0.85;
+}
+
+.caption-text {
+  font-size: 15px;
+  line-height: 1.72;
+  color: var(--ink);
+  text-shadow: 0 2px 22px rgba(0, 0, 0, 0.92), 0 1px 4px rgba(0, 0, 0, 0.8);
+  letter-spacing: 0.012em;
+  animation: capIn 460ms var(--ease) both;
+}
+
+.caption-more {
+  margin-top: 16px;
+  font-size: 10px;
+  letter-spacing: 0.24em;
+  color: var(--ink-4);
+  opacity: 0;
+  transition: opacity 500ms var(--ease);
+}
+.caption.ready .caption-more { opacity: 1; }
+
+@keyframes capIn {
+  from { opacity: 0; transform: translateY(7px); filter: blur(3px); }
+  to   { opacity: 1; transform: none; filter: none; }
+}
+
+/* while somebody is talking the rest of the interface gets out of the way */
+#hud.visiting .hud-bottom,
+#hud.visiting .fight,
+#hud.visiting .prompt { opacity: 0; pointer-events: none; transition: opacity 420ms var(--ease); }
+#hud.visiting .hud-top { opacity: 0.28; transition: opacity 420ms var(--ease); }
+
+@media (max-width: 760px) {
+  .caption { bottom: 34px; width: calc(100vw - 40px); }
+  .caption-text { font-size: 14px; line-height: 1.68; }
+}

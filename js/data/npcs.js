@@ -147,8 +147,11 @@
     return false;
   }
 
-  /* Talking is what actually advances things — being eligible is not enough. */
-  function talk(id) {
+  /* Talking is what actually advances things — being eligible is not enough.
+     The stage advances the moment the conversation starts, but what comes out
+     of it — a journal entry, a key, a gift — is handed over by `commit`, which
+     the visit calls once the last line has been read. */
+  function talk(id, opts) {
     const npc = BY_ID[id];
     if (!npc) return null;
     const r = rec(id);
@@ -156,16 +159,24 @@
     if (avail < 0) return null;
     const stage = Math.min(avail, r.stage);
     const def = npc.stages[stage];
+    const first = stage >= r.stage;
     r.met++;
-    if (stage >= r.stage) {
-      r.stage = stage + 1;
-      if (r.heard.indexOf(stage) < 0) r.heard.push(stage);
+    let done = false;
+    function commit() {
+      if (done || !first) return;
+      done = true;
       if (def.journal) VF.journal.add(def.journal);
       if (def.gives) VF.bus.emit('npc:gives', { npc: npc, gives: def.gives });
       VF.bus.emit('npc:advanced', { npc: npc, stage: stage });
       VF.save.save();
     }
-    return { npc: npc, stage: stage, lines: def.lines, fresh: stage === r.stage - 1 };
+    if (first) {
+      r.stage = stage + 1;
+      if (r.heard.indexOf(stage) < 0) r.heard.push(stage);
+    }
+    const res = { npc: npc, stage: stage, lines: def.lines, fresh: first, commit: commit };
+    if (!(opts && opts.defer)) commit();
+    return res;
   }
 
   function unlocked(id) {

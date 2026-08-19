@@ -710,7 +710,8 @@
         const side = U.el('div', 'row-side');
         if (known) {
           if (VF.npcs.hasNew(n.id)) side.appendChild(U.el('div', 'npc-new', 'has something to say'));
-          const btn = U.el('button', 'btn btn-sm' + (VF.npcs.hasNew(n.id) ? ' btn-primary' : ''), 'talk');
+          const btn = U.el('button', 'btn btn-sm' + (VF.npcs.hasNew(n.id) ? ' btn-primary' : ''),
+                           'go and see them');
           btn.addEventListener('click', function () { speak(n.id); });
           side.appendChild(btn);
         }
@@ -769,24 +770,16 @@
     return p;
   }
 
+  /* Talking is not a card any more — the panel closes and the two of you go
+     and have the conversation out on the shore where it can be seen. */
   function speak(id) {
-    const res = VF.npcs.talk(id);
-    if (!res) return;
-    VF.audio.click();
-    const card = U.el('div', 'speech');
-    const who = U.el('div', 'speech-who', res.npc.name);
-    who.style.color = res.npc.color;
-    card.appendChild(who);
-    res.lines.forEach(function (l) { card.appendChild(U.el('p', 'speech-line', l)); });
-    const acts = U.el('div', 'speech-actions');
-    const back = U.el('button', 'btn btn-primary', 'leave');
-    back.addEventListener('click', function () { VF.audio.back(); refresh('people'); });
-    acts.appendChild(back);
-    card.appendChild(acts);
-    const prev = node;
-    node = card;
-    if (prev && prev.parentNode) prev.parentNode.replaceChild(card, prev);
-    VF.achievements.check();
+    if (!VF.visit.canVisit()) {
+      VF.toast.show('not now', 'reel in before you walk off.');
+      return;
+    }
+    close();
+    // let the panel finish getting out of the way first
+    setTimeout(function () { VF.visit.start(id); }, 190);
   }
 
   /* ------------------------------------------------------------- fishdex */

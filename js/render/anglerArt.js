@@ -274,11 +274,13 @@
         y: rodHand.y + Math.sin(ra) * along + Math.cos(ra) * perp + (cranking ? Math.sin(P.phase) * orb : 0)
       };
     } else {
-      // walking: the arms swing instead
-      const sw = (opts.walk || 0) * fh * 0.13;
+      // standing or walking: the arms hang and swing. They have to hang far
+      // enough that the elbow does not fold out into a wedge.
+      const sw = (opts.walk || 0) * fh * 0.11;
       const a = Math.sin((opts.phase || 0) + Math.PI);
-      rodHand = { x: s.shN.x + face * (a * sw + fh * 0.03), y: s.shN.y + fh * 0.34 };
-      reelHand = { x: s.shF.x - face * (a * sw - fh * 0.02), y: s.shF.y + fh * 0.34 };
+      const drop = fh * 0.545;
+      rodHand = { x: s.shN.x + face * (a * sw + fh * 0.015), y: s.shN.y + drop };
+      reelHand = { x: s.shF.x - face * (a * sw - fh * 0.010), y: s.shF.y + drop * 0.98 };
     }
 
     ctx.save();
@@ -288,7 +290,7 @@
 
     const bodyRgb = U.hexToRgb(dark);
     const backPaint = limbPaint(ctx, bodyRgb, -0.66, 0.13);   // limbs behind read darker
-    const frontPaint = limbPaint(ctx, bodyRgb, -0.48, 0.36);
+    const frontPaint = limbPaint(ctx, bodyRgb, -0.48, mode === 'sit' ? 0.36 : 0.24);
     const legPaint = limbPaint(ctx, bodyRgb, -0.62, 0.20);
     const backLegPaint = limbPaint(ctx, bodyRgb, -0.75, 0.01);
 
@@ -296,7 +298,8 @@
     drawLeg(ctx, s.legs[0], fh, face, mode, backLegPaint, bodyRgb, -0.75, 0.01);
     const fl = { u: fh * 0.300, f: fh * 0.290 };
     const elbowF = solve(s.shF.x, s.shF.y, reelHand.x, reelHand.y, fl.u, fl.f, face > 0 ? 1 : -1);
-    limb(ctx, s.shF, elbowF, reelHand, fh * 0.080, fh * 0.062, fh * 0.048, backPaint);
+    const fw = mode === 'sit' ? 1 : 0.88;
+    limb(ctx, s.shF, elbowF, reelHand, fh * 0.080 * fw, fh * 0.062 * fw, fh * 0.048 * fw, backPaint);
     disc(ctx, reelHand.x, reelHand.y, fh * 0.032);
 
     /* ---- torso and coat ---- */
@@ -309,7 +312,8 @@
 
     const elbowN = solve(s.shN.x, s.shN.y, rodHand.x, rodHand.y, fh * 0.300, fh * 0.275,
                          face > 0 ? 1 : -1);
-    limb(ctx, s.shN, elbowN, rodHand, fh * 0.092, fh * 0.070, fh * 0.050, frontPaint);
+    const aw = mode === 'sit' ? 1 : 0.88;
+    limb(ctx, s.shN, elbowN, rodHand, fh * 0.092 * aw, fh * 0.070 * aw, fh * 0.050 * aw, frontPaint);
     // the shoulder cap, so the arm grows out of the coat instead of poking through
     frontPaint(s.shN.x, s.shN.y - fh * 0.04, s.shN.x, s.shN.y + fh * 0.04, fh * 0.046);
     disc(ctx, s.shN.x, s.shN.y, fh * 0.046);

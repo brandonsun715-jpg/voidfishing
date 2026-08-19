@@ -96,6 +96,7 @@
       VF.palette.update();
 
       if (started) {
+        VF.visit.tick(dt);
         VF.fishing.tick(dt);
         VF.conditions.tick(dt);
         VF.encounters.tick(dt);

@@ -186,6 +186,9 @@
 
   function updateFight(dt) {
     const f = S.fight;
+    // reeling without a fight is not a state the game can produce, but a bad
+    // save or an interrupted transition should drop the rod, not the frame
+    if (!f) { hardReset(); return; }
     const p = f.p;
     f.elapsed += dt;
 

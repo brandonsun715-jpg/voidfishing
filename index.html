@@ -126,6 +126,15 @@
     <div id="prompt" class="prompt" aria-live="polite"></div>
   </div>
 
+  <!-- conversations happen out on the shore, with the words down here -->
+  <div id="caption" class="caption hidden" aria-live="polite">
+    <div class="caption-inner">
+      <div id="captionWho" class="caption-who"></div>
+      <div id="captionText" class="caption-text"></div>
+      <div id="captionMore" class="caption-more">click to continue</div>
+    </div>
+  </div>
+
   <div id="toasts" class="toasts" aria-live="polite"></div>
   <div id="encounter" class="encounter hidden"><div class="enc-inner"><div id="encText" class="enc-text"></div></div></div>
   <div id="overlay" class="overlay hidden"></div>
@@ -169,6 +178,7 @@
 <script src="js/systems/encounters.js"></script>
 <script src="js/systems/wrong.js"></script>
 <script src="js/systems/caseOpen.js"></script>
+<script src="js/systems/visit.js"></script>
 <!-- render -->
 <script src="js/render/palette.js"></script>
 <script src="js/render/particles.js"></script>
@@ -177,6 +187,7 @@
 <script src="js/render/rodArt.js"></script>
 <script src="js/render/treasureArt.js"></script>
 <script src="js/render/anglerArt.js"></script>
+<script src="js/render/npcArt.js"></script>
 <script src="js/render/cosmeticArt.js"></script>
 <script src="js/render/scene.js"></script>
 <!-- audio -->
