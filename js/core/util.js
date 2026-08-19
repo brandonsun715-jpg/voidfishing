@@ -77,12 +77,17 @@
   }
   function pct(t, digits) { return (t * 100).toFixed(digits === undefined ? 1 : digits) + '%'; }
 
+  /* Describe where a catch sits in its species' size range.
+     Only genuinely large fish get the flattering "top n%" phrasing. */
   function ordinalPercentile(p) {
-    // p 0..1 -> "top 3%" style descriptor
     const top = (1 - p) * 100;
-    if (top < 0.1) return 'top 0.1%';
+    if (top < 0.15) return 'top 0.1%';
     if (top < 1) return 'top ' + top.toFixed(1) + '%';
-    return 'top ' + Math.max(1, Math.round(top)) + '%';
+    if (top < 25) return 'top ' + Math.max(1, Math.round(top)) + '%';
+    if (p < 0.12) return 'runt';
+    if (p < 0.35) return 'small';
+    if (p < 0.65) return 'average';
+    return 'large';
   }
 
   /* --- dom helpers --- */
