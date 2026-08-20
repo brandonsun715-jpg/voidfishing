@@ -24,6 +24,16 @@
     };
   }
 
+  /* Point, unit tangent and unit normal at k. The flourishes past the ordinary
+     tiers all build shapes off the blank rather than along it, and every one of
+     them needs the same three vectors. */
+  function nAt(g, k) {
+    const p = ptAt(g, k);
+    const m = Math.hypot(p.dx, p.dy) || 1;
+    const tx = p.dx / m, ty = p.dy / m;
+    return { x: p.x, y: p.y, tx: tx, ty: ty, nx: -ty, ny: tx };
+  }
+
   /* A tapered ribbon along the blank between two k values. Widths are in
      pixels and interpolate along the run. */
   function taper(ctx, g, k0, k1, w0, w1, steps) {
@@ -178,6 +188,7 @@
     }
 
     drawReel(ctx, g, art, t, scale, opts, under, tipRgb, c1, c2);
+    drawReelStyle(ctx, art, g, t, scale, under, tipRgb, c1, c2);
   }
 
   /* A spinning reel: seat, stem, spool with a line wrap, bail and a crank
@@ -592,7 +603,9 @@
         // it is every rod, so it runs every mechanism — three at a time,
         // rotating, so the blank never looks the same twice
         const all = ['storm', 'bone', 'chorus', 'eclipse', 'origin',
-                     'celestial', 'void', 'runic', 'lunar', 'glitch'];
+                     'celestial', 'void', 'runic', 'lunar', 'glitch',
+                     'kraken', 'shatter', 'thunder', 'glacier', 'hemo',
+                     'halo', 'plume', 'twinsun', 'neon', 'corded'];
         const base = Math.floor(t * 0.5) % all.length;
         for (let i = 0; i < 3; i++) {
           const which = all[(base + i * 3) % all.length];
@@ -615,7 +628,763 @@
         ctx.restore();
         break;
       }
+
+      /* --------------------------------------------------- the strange shelf
+         The ten below are meant to be too much. Each is built from a mechanism
+         that could not belong to any of the others, and each is drawn off the
+         blank rather than on it, so the shape of the rod changes and not only
+         its colour. */
+
+      case 'glacier': {
+        // an instant of freezing water, caught mid-spike: blades sheathing the
+        // upper blank, wider than the blank and still going wider
+        ctx.save();
+        const white = [235, 252, 255];
+        const shards = 12;
+        for (let i = 0; i < shards; i++) {
+          const k = 0.24 + (i / (shards - 1)) * 0.72;
+          const p = nAt(g, k);
+          const side = i % 2 ? 1 : -1;
+          const grow = 0.55 + 0.45 * Math.sin(t * 0.5 + i * 0.9);
+          const out = (4 + k * 10) * scale * grow;
+          const along = (6 + k * 8) * scale;
+          ctx.beginPath();
+          ctx.moveTo(p.x - p.tx * along * 0.55, p.y - p.ty * along * 0.55);
+          ctx.lineTo(p.x + p.nx * out * side, p.y + p.ny * out * side);
+          ctx.lineTo(p.x + p.tx * along, p.y + p.ty * along);
+          ctx.closePath();
+          const grd = ctx.createLinearGradient(p.x, p.y, p.x + p.nx * out * side, p.y + p.ny * out * side);
+          grd.addColorStop(0, U.rgbToCss([70, 190, 240], 0.92));
+          grd.addColorStop(0.5, U.rgbToCss([120, 220, 250], 0.66));
+          grd.addColorStop(1, U.rgbToCss(white, 0.10));
+          ctx.fillStyle = grd;
+          ctx.fill();
+          ctx.strokeStyle = U.rgbToCss(white, 0.6);
+          ctx.lineWidth = Math.max(0.4, 0.6 * scale);
+          ctx.stroke();
+        }
+        // and the point it froze into: a spear of clear ice past the tip
+        const pIce = nAt(g, 1);
+        const sp = 17 * scale;
+        ctx.beginPath();
+        ctx.moveTo(pIce.x - pIce.nx * 3.2 * scale, pIce.y - pIce.ny * 3.2 * scale);
+        ctx.lineTo(pIce.x + pIce.tx * sp, pIce.y + pIce.ty * sp);
+        ctx.lineTo(pIce.x + pIce.nx * 3.2 * scale, pIce.y + pIce.ny * 3.2 * scale);
+        ctx.closePath();
+        const sg = ctx.createLinearGradient(pIce.x, pIce.y, pIce.x + pIce.tx * sp, pIce.y + pIce.ty * sp);
+        sg.addColorStop(0, U.rgbToCss([90, 205, 245], 0.95));
+        sg.addColorStop(1, U.rgbToCss(white, 0.18));
+        ctx.fillStyle = sg;
+        ctx.fill();
+        ctx.strokeStyle = U.rgbToCss(white, 0.75);
+        ctx.lineWidth = Math.max(0.4, 0.7 * scale);
+        ctx.stroke();
+        // cold coming off it
+        ctx.globalCompositeOperation = 'lighter';
+        for (let i = 0; i < 6; i++) {
+          const ph = ((t * 0.22 + i / 6) % 1);
+          const p = nAt(g, 0.30 + ph * 0.66);
+          ctx.fillStyle = U.rgbToCss(white, (1 - ph) * 0.30);
+          ctx.beginPath();
+          ctx.arc(p.x + p.nx * ph * 14 * scale, p.y + p.ny * ph * 14 * scale,
+                  Math.max(0.6, (1 + ph * 2.6) * scale), 0, TAU);
+          ctx.fill();
+        }
+        ctx.restore();
+        break;
+      }
+
+      case 'shatter': {
+        // it broke and the pieces have not landed. The chips drift a little
+        // further out every year and take the dark cubes of the break with them
+        ctx.save();
+        const dk = U.hexToRgb(art.c2 || '#2e2450');
+        const rs = VF.rng.make(0x5eed1234);
+        for (let i = 0; i < 16; i++) {
+          const k = 0.14 + (i / 15) * 0.82;
+          const p = nAt(g, k);
+          const side = rs() < 0.5 ? -1 : 1;
+          const drift = (0.35 + rs() * 0.95) * (3 + k * 13) * scale;
+          const bob = Math.sin(t * (0.5 + rs() * 0.5) + i * 1.7);
+          const ox = p.nx * (drift + bob * 2 * scale) * side + p.tx * bob * 1.6 * scale;
+          const oy = p.ny * (drift + bob * 2 * scale) * side + p.ty * bob * 1.6 * scale;
+          const r = Math.max(1, (1.6 + rs() * 3.6) * scale);
+          ctx.save();
+          ctx.translate(p.x + ox, p.y + oy);
+          ctx.rotate(t * (0.15 + rs() * 0.3) * side + i);
+          ctx.beginPath();
+          // a chip, not a circle: four unequal corners
+          ctx.moveTo(-r, -r * 0.55);
+          ctx.lineTo(r * 0.7, -r);
+          ctx.lineTo(r, r * 0.6);
+          ctx.lineTo(-r * 0.6, r * 0.9);
+          ctx.closePath();
+          const isDark = rs() < 0.28;
+          ctx.fillStyle = isDark ? U.rgbToCss(U.shade(dk, -0.35), 0.94)
+                                 : U.rgbToCss(U.mixRgb(tipRgb, [150, 110, 255], 0.45), 0.72);
+          ctx.fill();
+          ctx.strokeStyle = U.rgbToCss(U.mixRgb(tipRgb, [255, 255, 255], 0.6), isDark ? 0.35 : 0.85);
+          ctx.lineWidth = Math.max(0.35, 0.55 * scale);
+          ctx.stroke();
+          ctx.restore();
+        }
+        // the spearhead the break left pointing forward
+        const pSh = nAt(g, 1);
+        const L2 = 22 * scale, W2 = 7 * scale;
+        ctx.beginPath();
+        ctx.moveTo(pSh.x + pSh.tx * L2, pSh.y + pSh.ty * L2);
+        ctx.lineTo(pSh.x + pSh.nx * W2, pSh.y + pSh.ny * W2);
+        ctx.lineTo(pSh.x - pSh.tx * L2 * 0.38, pSh.y - pSh.ty * L2 * 0.38);
+        ctx.lineTo(pSh.x - pSh.nx * W2, pSh.y - pSh.ny * W2);
+        ctx.closePath();
+        const hg = ctx.createLinearGradient(pSh.x - pSh.nx * W2, pSh.y - pSh.ny * W2,
+                                            pSh.x + pSh.nx * W2, pSh.y + pSh.ny * W2);
+        hg.addColorStop(0, U.rgbToCss(U.mixRgb(tipRgb, [120, 90, 255], 0.55), 0.92));
+        hg.addColorStop(0.5, 'rgba(255,255,255,0.88)');
+        hg.addColorStop(1, U.rgbToCss(tipRgb, 0.7));
+        ctx.fillStyle = hg;
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.78)';
+        ctx.lineWidth = Math.max(0.4, 0.7 * scale);
+        ctx.stroke();
+        ctx.restore();
+        break;
+      }
+
+      case 'corded': {
+        // sixty years of binding. The cord sits ON the blank rather than beside
+        // it, so the wraps hug the taper: short, dense, all leaning the same
+        // way, with a dark band every few turns where he stopped for the night.
+        ctx.save();
+        const cord = U.hexToRgb(art.tip);
+        const dkc = U.hexToRgb(art.c2 || '#12141f');
+        const turns = 44;
+        ctx.lineCap = 'round';
+        for (let i = 0; i < turns; i++) {
+          const k = 0.045 + (i / turns) * 0.93;
+          const p = nAt(g, k);
+          // the blank's own half-width here, plus just enough to sit proud
+          const w = U.lerp(3.1, 0.8, k) * scale;
+          const lean = 0.75;
+          const band = i % 7 === 0;
+          ctx.strokeStyle = band ? U.rgbToCss(U.shade(dkc, 0.30), 0.95)
+                                 : U.rgbToCss(U.shade(cord, i % 2 ? -0.10 : -0.40), 0.92);
+          ctx.lineWidth = Math.max(0.7, U.lerp(2.6, 1.0, k) * scale) * (band ? 1.5 : 1);
+          ctx.beginPath();
+          ctx.moveTo(p.x - p.nx * w - p.tx * w * lean, p.y - p.ny * w - p.ty * w * lean);
+          ctx.quadraticCurveTo(p.x, p.y,
+                               p.x + p.nx * w + p.tx * w * lean, p.y + p.ny * w + p.ty * w * lean);
+          ctx.stroke();
+          // the lit edge of each turn, which is what makes it cord and not paint
+          if (!band) {
+            ctx.strokeStyle = U.rgbToCss(U.mixRgb(cord, [255, 225, 225], 0.55), 0.5);
+            ctx.lineWidth = Math.max(0.3, 0.5 * scale);
+            ctx.beginPath();
+            ctx.moveTo(p.x - p.nx * w * 0.8 - p.tx * w * lean * 0.8,
+                       p.y - p.ny * w * 0.8 - p.ty * w * lean * 0.8);
+            ctx.quadraticCurveTo(p.x - p.nx * w * 0.2, p.y - p.ny * w * 0.2,
+                                 p.x + p.nx * w * 0.5 + p.tx * w * lean * 0.5,
+                                 p.y + p.ny * w * 0.5 + p.ty * w * lean * 0.5);
+            ctx.stroke();
+          }
+        }
+        // the thread itself, running the whole length under the wraps
+        ctx.strokeStyle = U.rgbToCss(cord, 0.85);
+        ctx.lineWidth = Math.max(0.5, 1.0 * scale);
+        ctx.beginPath();
+        for (let i = 0; i <= 20; i++) {
+          const p = nAt(g, 0.04 + (i / 20) * 0.95);
+          const off = Math.sin(i * 0.9) * 1.6 * scale;
+          const x = p.x + p.nx * off, y = p.y + p.ny * off;
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        // ends he never trimmed, still moving in water that is not moving
+        for (let i = 0; i < 5; i++) {
+          const p = nAt(g, 0.16 + i * 0.175);
+          const side = i % 2 ? 1 : -1;
+          const len = (5 + i * 1.6) * scale;
+          const wob = Math.sin(t * 1.1 + i * 2.2) * 2.4 * scale;
+          ctx.strokeStyle = U.rgbToCss(cord, 0.7);
+          ctx.lineWidth = Math.max(0.4, 0.9 * scale);
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          ctx.quadraticCurveTo(p.x + p.nx * len * 0.6 * side + wob,
+                               p.y + p.ny * len * 0.6 * side + wob,
+                               p.x + p.nx * len * side - p.tx * len * 0.6,
+                               p.y + p.ny * len * side - p.ty * len * 0.6);
+          ctx.stroke();
+        }
+        ctx.restore();
+        break;
+      }
+
+      case 'kraken': {
+        // eight arms hold the blank. They are not a pattern: each leaves at its
+        // own angle, reaches its own distance and hooks back, and the suckers
+        // on the inside curve are the whole reason it reads as an arm.
+        ctx.save();
+        const arm = U.hexToRgb(art.c2 || '#3c1216');
+        const skin = U.hexToRgb(art.c1 || '#8e2f34');
+        const rk = VF.rng.make(0x0c70b005);
+        for (let a = 0; a < 8; a++) {
+          const k0 = 0.10 + a * 0.098 + rk() * 0.03;
+          const side = (a % 2 ? 1 : -1) * (rk() < 0.18 ? -1 : 1);
+          const span = 0.13 + rk() * 0.10;
+          const reach = (9 + rk() * 13) * scale *
+                        (0.72 + 0.34 * Math.sin(t * (0.6 + a * 0.12) + a * 1.7));
+          const base = (5.4 - a * 0.22) * scale;
+          const segs = 10;
+          // the centreline, so the fill and the suckers agree where the arm is
+          const cl = [];
+          for (let i = 0; i <= segs; i++) {
+            const u = i / segs;
+            const p = nAt(g, Math.min(0.995, k0 + u * span));
+            const curl = Math.sin(u * Math.PI * 1.28) * reach;
+            cl.push({ p: p, x: p.x + p.nx * curl * side, y: p.y + p.ny * curl * side,
+                      th: base * (1 - u * 0.88) });
+          }
+          ctx.beginPath();
+          for (let i = 0; i <= segs; i++) {
+            const c = cl[i];
+            const x = c.x + c.p.tx * c.th, y = c.y + c.p.ty * c.th;
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+          }
+          for (let i = segs; i >= 0; i--) {
+            const c = cl[i];
+            ctx.lineTo(c.x - c.p.tx * c.th, c.y - c.p.ty * c.th);
+          }
+          ctx.closePath();
+          const ag = ctx.createLinearGradient(cl[0].x, cl[0].y, cl[segs].x, cl[segs].y);
+          ag.addColorStop(0, U.rgbToCss(U.shade(arm, 0.16)));
+          ag.addColorStop(0.55, U.rgbToCss(skin));
+          ag.addColorStop(1, U.rgbToCss(U.mixRgb(skin, tipRgb, 0.55)));
+          ctx.fillStyle = ag;
+          ctx.fill();
+          ctx.strokeStyle = U.rgbToCss(U.shade(arm, -0.5), 0.8);
+          ctx.lineWidth = Math.max(0.3, 0.5 * scale);
+          ctx.stroke();
+          // suckers, crowding toward the tip of the arm where it grips
+          ctx.fillStyle = U.rgbToCss(U.mixRgb(tipRgb, [255, 225, 205], 0.45), 0.8);
+          for (let i = 1; i < segs; i++) {
+            const c = cl[i];
+            const r = Math.max(0.25, c.th * 0.26);
+            ctx.beginPath();
+            ctx.arc(c.x - c.p.nx * c.th * 0.45 * side, c.y - c.p.ny * c.th * 0.45 * side, r, 0, TAU);
+            ctx.fill();
+          }
+        }
+        // the ninth: one thin arm the whole length and out past the tip, which
+        // is the one actually doing the fishing
+        ctx.strokeStyle = U.rgbToCss(U.mixRgb(skin, tipRgb, 0.6), 0.9);
+        ctx.lineWidth = Math.max(0.6, 1.6 * scale);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        for (let i = 0; i <= 22; i++) {
+          const u = i / 22;
+          const p = nAt(g, 0.14 + u * 0.85);
+          const wig = Math.sin(u * 6.5 + t * 1.5) * (1 - u * 0.35) * 6 * scale;
+          const x = p.x + p.nx * wig, y = p.y + p.ny * wig;
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        ctx.restore();
+        break;
+      }
+
+      case 'hemo': {
+        // it came up wet and never dried. What comes off the blank is torn, not
+        // poured: barbed sheets with a point on them, thrown the same way each
+        // time because whatever did this only did it once.
+        ctx.save();
+        const rh = VF.rng.make(0xb100d);
+        const red = U.hexToRgb(art.tip);
+        const deep = U.hexToRgb(art.c1 || '#6a0f18');
+        ctx.globalAlpha = 0.88;
+        for (let i = 0; i < 10; i++) {
+          const k = 0.10 + (i / 9) * 0.86;
+          const p = nAt(g, k);
+          const side = rh() < 0.5 ? -1 : 1;
+          const puls = 0.62 + 0.38 * Math.sin(t * 1.9 + i * 1.3);
+          const out = (4 + rh() * 9) * scale * puls;
+          const along = (7 + rh() * 9) * scale;
+          const skew = (rh() - 0.3) * along * 0.6;
+          ctx.beginPath();
+          ctx.moveTo(p.x - p.tx * along * 0.22, p.y - p.ty * along * 0.22);
+          ctx.lineTo(p.x + p.nx * out * side * 0.6 - p.tx * along * 0.35,
+                     p.y + p.ny * out * side * 0.6 - p.ty * along * 0.35);
+          ctx.lineTo(p.x + p.nx * out * side + p.tx * (along * 0.5 + skew),
+                     p.y + p.ny * out * side + p.ty * (along * 0.5 + skew));
+          ctx.lineTo(p.x + p.nx * out * side * 0.42 + p.tx * along * 0.55,
+                     p.y + p.ny * out * side * 0.42 + p.ty * along * 0.55);
+          ctx.lineTo(p.x + p.nx * out * side * 0.66 + p.tx * along,
+                     p.y + p.ny * out * side * 0.66 + p.ty * along);
+          ctx.lineTo(p.x + p.tx * along * 0.28, p.y + p.ty * along * 0.28);
+          ctx.closePath();
+          const rg = ctx.createLinearGradient(p.x, p.y,
+                                              p.x + p.nx * out * side, p.y + p.ny * out * side);
+          rg.addColorStop(0, U.rgbToCss(U.shade(deep, -0.35), 0.95));
+          rg.addColorStop(0.4, U.rgbToCss(red, 0.88));
+          rg.addColorStop(1, U.rgbToCss(U.mixRgb(red, [255, 150, 150], 0.55), 0.12));
+          ctx.fillStyle = rg;
+          ctx.fill();
+          ctx.strokeStyle = U.rgbToCss(U.mixRgb(red, [255, 210, 210], 0.5), 0.5);
+          ctx.lineWidth = Math.max(0.3, 0.45 * scale);
+          ctx.stroke();
+        }
+        // streaks flung clear, and drops that leave going the wrong way
+        ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = 'lighter';
+        for (let i = 0; i < 16; i++) {
+          const ph = ((t * 0.5 + i / 16) % 1);
+          const p = nAt(g, 0.12 + ((i * 0.41) % 1) * 0.84);
+          const side = i % 2 ? 1 : -1;
+          const dd = (4 + ph * 18) * scale;
+          const r = Math.max(0.4, (1.7 - ph * 1.2) * scale);
+          ctx.fillStyle = U.rgbToCss(red, (1 - ph) * 0.85);
+          ctx.beginPath();
+          ctx.ellipse(p.x + p.nx * dd * side - p.tx * ph * 8 * scale,
+                      p.y + p.ny * dd * side - p.ty * ph * 8 * scale,
+                      r * 0.55, r * 1.4, Math.atan2(p.ny * side, p.nx * side), 0, TAU);
+          ctx.fill();
+        }
+        ctx.restore();
+        break;
+      }
+
+      case 'thunder': {
+        // struck through, and the strike is still in there looking for ground.
+        // Molten seams branch down the blank and what leaves the top is not
+        // sparks — it arcs, and it falls.
+        ctx.save();
+        const gold = U.hexToRgb(art.tip);
+        ctx.globalCompositeOperation = 'lighter';
+        const seed = Math.floor(t * 7);
+        const rt = VF.rng.make((seed * 2246822519) ^ 0x7fed);
+        for (let f = 0; f < 4; f++) {
+          const k0 = 0.10 + rt() * 0.30;
+          const k1 = Math.min(1, k0 + 0.30 + rt() * 0.55);
+          ctx.strokeStyle = U.rgbToCss(U.mixRgb(gold, [255, 255, 220], rt() * 0.5), 0.45 + rt() * 0.5);
+          ctx.lineWidth = Math.max(0.5, (0.7 + rt() * 1.8) * scale);
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          const steps = 7;
+          for (let i = 0; i <= steps; i++) {
+            const u = i / steps;
+            const p = nAt(g, k0 + (k1 - k0) * u);
+            const off = (rt() - 0.5) * U.lerp(9, 3, u) * scale;
+            const x = p.x + p.nx * off, y = p.y + p.ny * off;
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+          }
+          ctx.stroke();
+        }
+        // a core of molten gold sitting inside the char
+        ctx.strokeStyle = U.rgbToCss(gold, 0.30 + 0.14 * Math.sin(t * 4.1));
+        ctx.lineWidth = Math.max(1.2, 2.2 * scale);
+        ctx.beginPath();
+        ctx.moveTo(g.bx, g.by);
+        ctx.quadraticCurveTo(g.cx, g.cy, g.tx, g.ty);
+        ctx.stroke();
+        // and the throw-off from the top
+        const pT = nAt(g, 1);
+        for (let i = 0; i < 10; i++) {
+          const ph = ((t * 0.7 + i / 10) % 1);
+          const side = (i % 3) - 1;
+          const r = Math.max(0.6, (2.6 - ph * 1.8) * scale);
+          const up = ph * 28 * scale;
+          const out = side * ph * 15 * scale;
+          ctx.fillStyle = U.rgbToCss(U.mixRgb(gold, [255, 245, 200], ph * 0.6), (1 - ph) * 0.95);
+          ctx.beginPath();
+          ctx.arc(pT.x + pT.tx * up + pT.nx * out - pT.tx * ph * ph * 17 * scale,
+                  pT.y + pT.ty * up + pT.ny * out - pT.ty * ph * ph * 17 * scale, r, 0, TAU);
+          ctx.fill();
+        }
+        ctx.restore();
+        break;
+      }
+
+      case 'neon': {
+        // nothing about this is decorative: a bright line inside a black tube,
+        // the charge running up it, and hazard banding where a hand goes
+        ctx.save();
+        const neon = U.hexToRgb(art.tip);
+        ctx.globalCompositeOperation = 'lighter';
+        [[7.0, 0.10], [3.2, 0.22], [1.1, 0.95]].forEach(function (pair) {
+          ctx.strokeStyle = U.rgbToCss(neon, pair[1]);
+          ctx.lineWidth = Math.max(0.5, pair[0] * scale);
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(g.bx, g.by);
+          ctx.quadraticCurveTo(g.cx, g.cy, g.tx, g.ty);
+          ctx.stroke();
+        });
+        for (let i = 0; i < 4; i++) {
+          const ph = ((t * 0.75 + i / 4) % 1);
+          const p = nAt(g, 0.10 + ph * 0.88);
+          const w = U.lerp(9, 3, ph) * scale;
+          ctx.strokeStyle = U.rgbToCss(U.mixRgb(neon, [255, 255, 255], 0.45), (1 - ph) * 0.85);
+          ctx.lineWidth = Math.max(0.5, 1.4 * scale);
+          ctx.beginPath();
+          ctx.moveTo(p.x - p.nx * w, p.y - p.ny * w);
+          ctx.lineTo(p.x + p.nx * w, p.y + p.ny * w);
+          ctx.stroke();
+        }
+        ctx.restore();
+        // banding, unlit, so the lit parts have something to be lit against
+        ctx.save();
+        ctx.strokeStyle = U.rgbToCss(U.shade(neon, -0.55), 0.85);
+        ctx.lineWidth = Math.max(0.5, 1.1 * scale);
+        for (let i = 0; i < 6; i++) {
+          const p = nAt(g, 0.20 + i * 0.045);
+          const w = U.lerp(6.5, 4.5, i / 6) * scale;
+          ctx.beginPath();
+          ctx.moveTo(p.x - p.nx * w, p.y - p.ny * w);
+          ctx.lineTo(p.x + p.nx * w, p.y + p.ny * w);
+          ctx.stroke();
+        }
+        ctx.restore();
+        break;
+      }
+
+      case 'halo': {
+        // rings of things believed long enough to become furniture. They orbit
+        // at their own rates and none of them are level.
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const gold = U.hexToRgb(art.tip);
+        for (let i = 0; i < 6; i++) {
+          const p = nAt(g, 0.22 + i * 0.135);
+          const spin = t * (0.35 + i * 0.11) + i * 1.4;
+          const rx = (10 + i * 3.2) * scale;
+          const ry = rx * (0.20 + 0.16 * Math.abs(Math.sin(spin)));
+          const ang = Math.atan2(p.ty, p.tx) + Math.sin(spin * 0.7) * 0.55;
+          ctx.strokeStyle = U.rgbToCss(U.mixRgb(gold, [255, 255, 240], 0.3),
+                                       0.55 + 0.35 * Math.sin(t * 1.1 + i));
+          ctx.lineWidth = Math.max(0.5, 1.5 * scale);
+          ctx.beginPath();
+          ctx.ellipse(p.x, p.y, rx, Math.max(0.6, ry), ang, 0, TAU);
+          ctx.stroke();
+          // one bead riding each ring
+          const bx = p.x + Math.cos(ang) * Math.cos(spin * 1.6) * rx - Math.sin(ang) * Math.sin(spin * 1.6) * ry;
+          const by = p.y + Math.sin(ang) * Math.cos(spin * 1.6) * rx + Math.cos(ang) * Math.sin(spin * 1.6) * ry;
+          ctx.fillStyle = 'rgba(255,250,225,0.9)';
+          ctx.beginPath();
+          ctx.arc(bx, by, Math.max(0.5, 1.2 * scale), 0, TAU);
+          ctx.fill();
+        }
+        // the light it is filed under
+        const pH = nAt(g, 1);
+        const r = Math.max(2.4, 5.4 * scale) * (0.9 + 0.15 * Math.sin(t * 1.3));
+        const gr = ctx.createRadialGradient(pH.x, pH.y, 0, pH.x, pH.y, r * 3.2);
+        gr.addColorStop(0, 'rgba(255,252,235,0.92)');
+        gr.addColorStop(0.28, U.rgbToCss(gold, 0.42));
+        gr.addColorStop(1, U.rgbToCss(gold, 0));
+        ctx.fillStyle = gr;
+        ctx.beginPath(); ctx.arc(pH.x, pH.y, r * 3.2, 0, TAU); ctx.fill();
+        // rays, uneven, the way a thing that answers is always drawn
+        ctx.strokeStyle = U.rgbToCss(gold, 0.55);
+        ctx.lineWidth = Math.max(0.4, 0.8 * scale);
+        for (let i = 0; i < 9; i++) {
+          const a = t * 0.25 + i * (TAU / 9);
+          const len = r * (1.4 + 0.9 * Math.abs(Math.sin(t * 1.6 + i * 2.1)));
+          ctx.beginPath();
+          ctx.moveTo(pH.x + Math.cos(a) * r * 0.8, pH.y + Math.sin(a) * r * 0.8);
+          ctx.lineTo(pH.x + Math.cos(a) * len, pH.y + Math.sin(a) * len);
+          ctx.stroke();
+        }
+        ctx.restore();
+        break;
+      }
+
+      case 'plume': {
+        // every colour is in the shaft rather than on it, and what is at the
+        // top was moulted rather than made
+        ctx.save();
+        const band = ctx.createLinearGradient(g.bx, g.by, g.tx, g.ty);
+        for (let i = 0; i <= 6; i++) {
+          band.addColorStop(i / 6, 'hsla(' + (((t * 22) + i * 58) % 360).toFixed(0) + ',92%,66%,0.85)');
+        }
+        ctx.strokeStyle = band;
+        ctx.lineWidth = Math.max(0.6, 1.6 * scale);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        for (let i = 0; i <= 12; i++) {
+          const p = nAt(g, 0.08 + (i / 12) * 0.88);
+          const off = 2.4 * scale;
+          const x = p.x + p.nx * off, y = p.y + p.ny * off;
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        // collars down the shaft
+        ctx.strokeStyle = U.rgbToCss(U.hexToRgb(art.c2 || '#8a7aa8'), 0.85);
+        for (let i = 0; i < 7; i++) {
+          const p = nAt(g, 0.16 + i * 0.105);
+          const w = U.lerp(6, 2.4, i / 7) * scale;
+          ctx.lineWidth = Math.max(0.5, U.lerp(2.0, 0.9, i / 7) * scale);
+          ctx.beginPath();
+          ctx.moveTo(p.x - p.nx * w, p.y - p.ny * w);
+          ctx.lineTo(p.x + p.nx * w, p.y + p.ny * w);
+          ctx.stroke();
+        }
+        // and the feather. It has to be the largest thing on the rod or it is a
+        // leaf: a wide fan of barbs, the two longest laid over the rest.
+        const pF = nAt(g, 0.96);
+        const barbs = 7, mid = (barbs - 1) / 2;
+        const baseA = Math.atan2(pF.ty, pF.tx);
+        for (let pass = 0; pass < 2; pass++) {
+          for (let i = 0; i < barbs; i++) {
+            const off = (i - mid) / mid;                  // -1 .. 1
+            const isLong = Math.abs(off) < 0.34;
+            if ((pass === 0) === isLong) continue;        // long ones drawn last
+            const wob = Math.sin(t * 0.8 + i * 0.9) * 0.07;
+            const a = baseA + off * 0.34 + wob;
+            const len = (86 - Math.abs(off) * 30) * scale;
+            const ex = pF.x + Math.cos(a) * len, ey = pF.y + Math.sin(a) * len;
+            const nx = -Math.sin(a), ny = Math.cos(a);
+            const w = (7.5 - Math.abs(off) * 3.0) * scale;
+            ctx.beginPath();
+            ctx.moveTo(pF.x, pF.y);
+            ctx.bezierCurveTo(pF.x + Math.cos(a) * len * 0.30 + nx * w,
+                              pF.y + Math.sin(a) * len * 0.30 + ny * w,
+                              pF.x + Math.cos(a) * len * 0.78 + nx * w * 0.85,
+                              pF.y + Math.sin(a) * len * 0.78 + ny * w * 0.85, ex, ey);
+            ctx.bezierCurveTo(pF.x + Math.cos(a) * len * 0.78 - nx * w * 0.85,
+                              pF.y + Math.sin(a) * len * 0.78 - ny * w * 0.85,
+                              pF.x + Math.cos(a) * len * 0.30 - nx * w,
+                              pF.y + Math.sin(a) * len * 0.30 - ny * w, pF.x, pF.y);
+            ctx.closePath();
+            const fg = ctx.createLinearGradient(pF.x, pF.y, ex, ey);
+            const h = ((t * 20) + i * 34 + 268) % 360;
+            fg.addColorStop(0, 'hsla(' + h.toFixed(0) + ',72%,50%,0.95)');
+            fg.addColorStop(0.55, 'hsla(' + ((h + 26) % 360).toFixed(0) + ',88%,68%,0.80)');
+            fg.addColorStop(1, 'hsla(' + ((h + 62) % 360).toFixed(0) + ',96%,82%,0.10)');
+            ctx.fillStyle = fg;
+            ctx.fill();
+            // barbules: the fine combing that separates a feather from a blade
+            ctx.strokeStyle = 'rgba(255,255,255,0.28)';
+            ctx.lineWidth = Math.max(0.25, 0.4 * scale);
+            for (let b = 1; b < 7; b++) {
+              const u = b / 7;
+              const bx = pF.x + Math.cos(a) * len * u, by = pF.y + Math.sin(a) * len * u;
+              const bw = w * Math.sin(u * Math.PI * 0.92);
+              ctx.beginPath();
+              ctx.moveTo(bx - nx * bw, by - ny * bw);
+              ctx.lineTo(bx + nx * bw, by + ny * bw);
+              ctx.stroke();
+            }
+            // the rachis, without which a feather is just a leaf
+            ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+            ctx.lineWidth = Math.max(0.3, 0.6 * scale);
+            ctx.beginPath();
+            ctx.moveTo(pF.x, pF.y); ctx.lineTo(ex, ey);
+            ctx.stroke();
+          }
+        }
+        ctx.restore();
+        break;
+      }
+
+      case 'twinsun': {
+        // one at each end, and the dark between them is the rod. Whatever is
+        // burning is not on the blank, it is where the blank stops.
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const white = [255, 255, 255];
+        [[nAt(g, 1), 1.0], [nAt(g, 0.16), 0.78]].forEach(function (pair) {
+          const p = pair[0], k = pair[1];
+          const r = Math.max(2.2, 6.6 * scale) * k * (0.92 + 0.08 * Math.sin(t * 1.5 + k * 3));
+          const gr = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 3.6);
+          gr.addColorStop(0, U.rgbToCss(white, 1));
+          gr.addColorStop(0.18, U.rgbToCss(white, 0.85));
+          gr.addColorStop(0.40, U.rgbToCss(tipRgb, 0.28));
+          gr.addColorStop(1, U.rgbToCss(tipRgb, 0));
+          ctx.fillStyle = gr;
+          ctx.beginPath(); ctx.arc(p.x, p.y, r * 3.6, 0, TAU); ctx.fill();
+          ctx.fillStyle = U.rgbToCss(white, 1);
+          ctx.beginPath(); ctx.arc(p.x, p.y, r * 0.82, 0, TAU); ctx.fill();
+        });
+        // a thin seam of light running between them along the dark blank
+        ctx.strokeStyle = U.rgbToCss(white, 0.22 + 0.10 * Math.sin(t * 2.2));
+        ctx.lineWidth = Math.max(0.4, 0.7 * scale);
+        ctx.beginPath();
+        ctx.moveTo(g.bx, g.by);
+        ctx.quadraticCurveTo(g.cx, g.cy, g.tx, g.ty);
+        ctx.stroke();
+        // and motes off both, going nowhere in particular
+        for (let i = 0; i < 10; i++) {
+          const ph = ((t * 0.30 + i / 10) % 1);
+          const p = nAt(g, 0.16 + ((i * 0.37) % 1) * 0.84);
+          const side = i % 2 ? 1 : -1;
+          ctx.fillStyle = U.rgbToCss(white, (1 - ph) * 0.55);
+          ctx.beginPath();
+          ctx.arc(p.x + p.nx * ph * 15 * scale * side, p.y + p.ny * ph * 15 * scale * side,
+                  Math.max(0.3, (1.1 - ph * 0.7) * scale), 0, TAU);
+          ctx.fill();
+        }
+        ctx.restore();
+        break;
+      }
     }
+  }
+
+  /* Some of the strange rods do not have a reel so much as something sitting
+     where a reel would be. This runs over the top of the drawn one, so the
+     housing underneath still reads as a housing. */
+  const REEL_STYLES = { kraken: 1, thunder: 1, corded: 1, neon: 1, hemo: 1,
+                        twinsun: 1, glacier: 1, halo: 1 };
+
+  function drawReelStyle(ctx, art, g, t, scale, under, tipRgb, c1, c2) {
+    if (!REEL_STYLES[art.style]) return;
+    const a = g.angle;
+    const rr = Math.max(2.8, 6.0 * scale);
+    const nx = -Math.sin(a) * under, ny = Math.cos(a) * under;
+    const sx = g.bx + Math.cos(a) * g.len * 0.215;
+    const sy = g.by + Math.sin(a) * g.len * 0.215;
+    const cx = sx + nx * rr * 1.9, cy = sy + ny * rr * 1.9;
+
+    ctx.save();
+    switch (art.style) {
+      case 'kraken': {
+        // the mantle, over the housing, with the eye on the near side
+        const mg = ctx.createRadialGradient(cx - nx * rr * 0.5, cy - ny * rr * 0.5, rr * 0.1,
+                                            cx, cy, rr * 2.1);
+        mg.addColorStop(0, U.rgbToCss(U.mixRgb(c1, [255, 210, 190], 0.30)));
+        mg.addColorStop(0.6, U.rgbToCss(c1));
+        mg.addColorStop(1, U.rgbToCss(U.shade(c2, -0.2)));
+        ctx.fillStyle = mg;
+        ctx.beginPath();
+        ctx.ellipse(cx + nx * rr * 0.35, cy + ny * rr * 0.35, rr * 1.6, rr * 1.3, a, 0, TAU);
+        ctx.fill();
+        ctx.strokeStyle = U.rgbToCss(U.shade(c2, -0.5), 0.8);
+        ctx.lineWidth = Math.max(0.4, 0.7 * scale);
+        ctx.stroke();
+        // the eye: a horizontal slit, which is the whole tell
+        const ex = cx + nx * rr * 0.15 - Math.cos(a) * rr * 0.55;
+        const ey = cy + ny * rr * 0.15 - Math.sin(a) * rr * 0.55;
+        ctx.fillStyle = U.rgbToCss(U.mixRgb(tipRgb, [255, 240, 200], 0.5), 0.95);
+        ctx.beginPath();
+        ctx.ellipse(ex, ey, rr * 0.58, rr * 0.44, a, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = '#080408';
+        ctx.beginPath();
+        ctx.ellipse(ex, ey, rr * 0.46, rr * 0.14, a + 0.15 * Math.sin(t * 0.6), 0, TAU);
+        ctx.fill();
+        // and short arms hanging clear of the mantle
+        ctx.strokeStyle = U.rgbToCss(U.shade(c1, -0.1), 0.9);
+        ctx.lineCap = 'round';
+        for (let i = 0; i < 3; i++) {
+          const sw = Math.sin(t * 1.3 + i * 1.9) * rr * 0.8;
+          ctx.lineWidth = Math.max(0.6, (1.7 - i * 0.35) * scale);
+          ctx.beginPath();
+          ctx.moveTo(cx + nx * rr * (0.9 + i * 0.25), cy + ny * rr * (0.9 + i * 0.25));
+          ctx.quadraticCurveTo(cx + nx * rr * 2.2 + sw, cy + ny * rr * 2.2 + sw,
+                               cx + nx * rr * 2.7 - Math.cos(a) * rr * (1 + i),
+                               cy + ny * rr * 2.7 - Math.sin(a) * rr * (1 + i));
+          ctx.stroke();
+        }
+        break;
+      }
+      case 'thunder': {
+        // the strike found the reel and stayed there
+        ctx.globalCompositeOperation = 'lighter';
+        const gr = ctx.createRadialGradient(cx, cy, rr * 0.2, cx, cy, rr * 3.0);
+        gr.addColorStop(0, U.rgbToCss(U.mixRgb(tipRgb, [255, 250, 210], 0.5), 0.75));
+        gr.addColorStop(0.45, U.rgbToCss(tipRgb, 0.25));
+        gr.addColorStop(1, U.rgbToCss(tipRgb, 0));
+        ctx.fillStyle = gr;
+        ctx.beginPath(); ctx.arc(cx, cy, rr * 3.0, 0, TAU); ctx.fill();
+        ctx.strokeStyle = U.rgbToCss(tipRgb, 0.7);
+        ctx.lineWidth = Math.max(0.4, 0.8 * scale);
+        for (let i = 0; i < 7; i++) {
+          const ang = t * 1.1 + i * (TAU / 7);
+          const len = rr * (1.3 + 0.8 * Math.abs(Math.sin(t * 2.4 + i)));
+          ctx.beginPath();
+          ctx.moveTo(cx + Math.cos(ang) * rr * 1.0, cy + Math.sin(ang) * rr * 1.0);
+          ctx.lineTo(cx + Math.cos(ang) * len, cy + Math.sin(ang) * len);
+          ctx.stroke();
+        }
+        break;
+      }
+      case 'corded': {
+        // he wound the spool too, and it went round one more time than it needed
+        ctx.strokeStyle = U.rgbToCss(tipRgb, 0.8);
+        ctx.lineWidth = Math.max(0.4, 0.7 * scale);
+        ctx.beginPath();
+        for (let i = 0; i <= 46; i++) {
+          const u = i / 46;
+          const ang = u * TAU * 2.4 + t * 0.25;
+          const r = rr * (0.16 + u * 0.78);
+          const x = cx + Math.cos(ang) * r, y = cy + Math.sin(ang) * r * 0.94;
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        break;
+      }
+      case 'neon': {
+        ctx.globalCompositeOperation = 'lighter';
+        const gr = ctx.createRadialGradient(cx, cy, 0, cx, cy, rr * 2.8);
+        gr.addColorStop(0, U.rgbToCss(tipRgb, 0.70));
+        gr.addColorStop(0.4, U.rgbToCss(tipRgb, 0.18));
+        gr.addColorStop(1, U.rgbToCss(tipRgb, 0));
+        ctx.fillStyle = gr;
+        ctx.beginPath(); ctx.arc(cx, cy, rr * 2.8, 0, TAU); ctx.fill();
+        ctx.strokeStyle = U.rgbToCss(tipRgb, 0.9);
+        ctx.lineWidth = Math.max(0.5, 1.0 * scale);
+        ctx.beginPath(); ctx.arc(cx, cy, rr * 1.0, 0, TAU); ctx.stroke();
+        break;
+      }
+      case 'hemo': {
+        // it runs off the housing and never reaches the water
+        for (let i = 0; i < 5; i++) {
+          const ph = ((t * 0.5 + i / 5) % 1);
+          ctx.fillStyle = U.rgbToCss(U.shade(tipRgb, -0.25), (1 - ph) * 0.75);
+          ctx.beginPath();
+          ctx.ellipse(cx + nx * rr * (1.1 + ph * 1.7), cy + ny * rr * (1.1 + ph * 1.7),
+                      rr * 0.16, rr * (0.32 - ph * 0.13), a, 0, TAU);
+          ctx.fill();
+        }
+        break;
+      }
+      case 'twinsun': {
+        ctx.globalCompositeOperation = 'lighter';
+        const gr = ctx.createRadialGradient(cx, cy, 0, cx, cy, rr * 2.2);
+        gr.addColorStop(0, 'rgba(255,255,255,0.85)');
+        gr.addColorStop(0.35, 'rgba(255,255,255,0.22)');
+        gr.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = gr;
+        ctx.beginPath(); ctx.arc(cx, cy, rr * 2.2, 0, TAU); ctx.fill();
+        break;
+      }
+      case 'glacier': {
+        // the housing has frozen into the seat
+        ctx.strokeStyle = U.rgbToCss(U.mixRgb(tipRgb, [255, 255, 255], 0.5), 0.7);
+        ctx.lineWidth = Math.max(0.4, 0.7 * scale);
+        for (let i = 0; i < 6; i++) {
+          const ang = i * (TAU / 6) + 0.4;
+          const len = rr * (1.5 + 0.5 * Math.sin(t * 0.7 + i));
+          ctx.beginPath();
+          ctx.moveTo(cx + Math.cos(ang) * rr * 0.9, cy + Math.sin(ang) * rr * 0.9);
+          ctx.lineTo(cx + Math.cos(ang) * len, cy + Math.sin(ang) * len);
+          ctx.stroke();
+        }
+        break;
+      }
+      case 'halo': {
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = U.rgbToCss(tipRgb, 0.5);
+        ctx.lineWidth = Math.max(0.4, 0.8 * scale);
+        for (let i = 0; i < 2; i++) {
+          const ph = ((t * 0.4 + i / 2) % 1);
+          ctx.globalAlpha = (1 - ph) * 0.7;
+          ctx.beginPath();
+          ctx.ellipse(cx, cy, rr * (1 + ph * 1.8), rr * (1 + ph * 1.8) * 0.32,
+                      a + t * 0.3, 0, TAU);
+          ctx.stroke();
+        }
+        break;
+      }
+    }
+    ctx.restore();
   }
 
   /* Lay a rod out across a box, butt at the lower left, tip at the upper

@@ -179,7 +179,8 @@
     VF.fx.flash(U.rgbToCss(U.hexToRgb(t.color), 0.16), 0.20 + rank * 0.03, 1.9);
 
     card = U.el('div', 'catch-card');
-    const ban = U.el('div', 'catch-banner', t.relic ? 'a relic' : 'pulled from the water');
+    const ban = U.el('div', 'catch-banner',
+      t.rodGift ? 'a rod, and nobody made it' : t.relic ? 'a relic' : 'pulled from the water');
     ban.style.background = t.color;
     card.appendChild(ban);
 
@@ -213,6 +214,14 @@
       const note = U.el('div', 'relic-note');
       note.appendChild(U.el('span', 'k', 'the keeper will want this'));
       note.appendChild(U.el('div', null, 'kept for now. it opens something.'));
+      body.appendChild(note);
+    }
+    if (t.rodGift) {
+      // the wrapping comes off on the bank, so this is where it gets a name
+      const rod = VF.rods.get(t.rodGift);
+      const note = U.el('div', 'relic-note');
+      note.appendChild(U.el('span', 'k', 'unwrapped: ' + rod.name.toLowerCase()));
+      note.appendChild(U.el('div', null, rod.desc));
       body.appendChild(note);
     }
 

@@ -268,6 +268,15 @@
       if (o.gives === 'case') {
         VF.state.data.caseTokens++;
         VF.toast.show('the keeper hands you <strong>a key</strong>', 'good', 4200);
+      } else if (o.gives === 'rod') {
+        // a rod that is not for sale, handed over. It goes straight into the hand.
+        const rod = VF.rods.get(o.rod);
+        if (o.rod && VF.rods.grant(o.rod)) {
+          VF.toast.show('<strong>' + U.esc(rod.name) + '</strong><br>' +
+            '<span style="color:var(--ink-3)">' + U.esc(o.npc.name.toLowerCase()) +
+            ' hands it over — it is in your hands</span>', 'good', 7000);
+          flashMenu('shop');   // grant() already emitted gear:changed
+        }
       } else if (o.gives === 'cosmetic') {
         const pool = VF.cosmetics.list.filter(function (c) { return c.secret && !VF.cosmetics.owned(c.id); });
         if (pool.length) {

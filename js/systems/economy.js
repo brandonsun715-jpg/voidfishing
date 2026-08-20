@@ -28,10 +28,10 @@
     const rod = VF.rods.get(id);
     const d = VF.state.data;
     if (!rod || d.ownedRods.indexOf(id) >= 0) return { ok: false, why: 'owned' };
-    if (d.level < rod.level) return { ok: false, why: 'level' };
-    if (rod.requiresVoidCatch && d.stats.voidCatches < 1) return { ok: false, why: 'void' };
-    if (rod.requiresGlitchCatch && (d.stats.glitchCatches | 0) < 1) return { ok: false, why: 'glitch' };
-    if (rod.requiresSecret && !VF.secrets.found(rod.requiresSecret)) return { ok: false, why: 'secret' };
+    // some rods are never sold — they are handed over, or the water returns them
+    if (rod.noShop) return { ok: false, why: 'notforsale' };
+    const block = VF.rods.blocked(rod);
+    if (block) return { ok: false, why: block.why };
     if (!spend(rod.cost, 'rod')) return { ok: false, why: 'money' };
     d.ownedRods.push(id);
     d.rod = id;

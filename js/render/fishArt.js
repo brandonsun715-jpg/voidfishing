@@ -1,6 +1,7 @@
 /* VOID FISHING — procedural creature rendering.
    Every species is drawn from its art{} spec: a body silhouette, fins, a set of
-   extras, and eyes. Randomness is seeded from the species id so a given fish
+   extras, and eyes. The exception is body 'object', which is not a creature at
+   all and takes the object pipeline near the bottom of this file instead. Randomness is seeded from the species id so a given fish
    always looks the same. Fish face right; local origin is the body centre. */
 (function (VF) {
   'use strict';
@@ -24,7 +25,12 @@
     hole: 0.34, swarm: 0.33, mirror: 0.32, spiral: 0.40,
     tally: 0.30, unfinished: 0.31, folded: 0.35, column: 0.44
   };
-  function bodyRatio(kind) { return BODY_H[kind] === undefined ? 0.30 : BODY_H[kind]; }
+  /* `obj` is only consulted for body 'object', where the proportions belong to
+     the thing itself rather than to any fish silhouette. */
+  function bodyRatio(kind, obj) {
+    if (kind === 'object') return OBJ_H[obj] === undefined ? 0.50 : OBJ_H[obj];
+    return BODY_H[kind] === undefined ? 0.30 : BODY_H[kind];
+  }
 
   /* ------------------------------------------------------------- bodies
      Each returns the path on ctx and reports its bounding half-height. */
@@ -288,6 +294,11 @@
         ctx.closePath();
         break;
       }
+
+      case 'object':
+        // objects are not silhouetted from a path; this is only a safety net
+        ctx.rect(-L * 0.40, -H * 0.80, L * 0.80, H * 1.60);
+        break;
 
       default: /* torpedo */
         ctx.moveTo(L * 0.52, 0);
@@ -1084,6 +1095,8 @@
   function draw(ctx, fish, size, opts) {
     opts = opts || {};
     const art = fish.art;
+    // an object is not a fish and takes none of the fish treatment
+    if (art.body === 'object') return drawObject(ctx, fish, size, opts);
     const tm = opts.time === undefined ? 0 : opts.time;
     const sway = Math.sin(tm * 2.1) * 0.55;
     const rnd = VF.rng.make(hash(fish.id));
@@ -1284,7 +1297,7 @@
     ctx.restore();
   }
 
-  function measureH(kind, L) { return L * bodyRatio(kind); }
+  function measureH(kind, L, obj) { return L * bodyRatio(kind, obj); }
 
   /* Deterministic proportion jitter keyed to the species id. */
   const jitterCache = Object.create(null);
@@ -1300,6 +1313,11 @@
   /* The largest half-size a creature can be drawn at and still fit a box. */
   function fitSize(fish, box) {
     const kind = fish.art.body;
+    if (kind === 'object') {
+      // an object fills its box in both directions, so fit the taller of the two
+      const ro = bodyRatio(kind, fish.art.object);
+      return Math.max(6, Math.min(box * 0.40, (box * 0.42) / (ro * 2)));
+    }
     const r = bodyRatio(kind);
     // the paths overshoot the nominal half-height, most of all on the winged bodies
     const over = kind === 'ray' ? 3.3 : kind === 'jelly' ? 2.2
@@ -1315,6 +1333,20 @@
   function drawSilhouette(ctx, fish, size, alpha, near) {
     const art = fish.art;
     const L = size * 2;
+    /* An object comes up as the object. The same shape code runs with all three
+       colours collapsed to one, so what surfaces out of the dark is a
+       chair-shaped absence rather than a fish-shaped one. */
+    if (art.body === 'object') {
+      const lift0 = U.clamp(near === undefined ? 0 : near, 0, 1);
+      const flat = U.rgbToCss(U.mixRgb([2, 3, 6], U.shade(U.hexToRgb(art.c1), -0.40),
+                                       lift0 * 0.85));
+      ctx.save();
+      ctx.globalAlpha = alpha === undefined ? 0.8 : alpha;
+      objectShape(ctx, art.object, L, L * bodyRatio('object', art.object),
+                  { a: flat, b: flat, c: flat }, 0);
+      ctx.restore();
+      return;
+    }
     const rnd = VF.rng.make(hash(fish.id));
     const H = measureH(art.body, L);
     const j = jitter(fish.id);
@@ -1344,6 +1376,942 @@
     ctx.restore();
   }
 
+
+  /* ------------------------------------------------------------- objects
+     Nothing in the !@#$%^&$# tier is a fish, and none of it should be drawn
+     like one. A hook is a hook. A chair is a chair. These get no body, no
+     fins, no gills and no counter-shading — they are the object, at whatever
+     size the line brought it up at, with only the wrongness laid over the top.
+
+     Every one is drawn into a box 2L wide and 2L*OBJ_H high, centred on the
+     origin, from three colours. `flat` collapses all three to one, which is
+     how the same code draws the shape rising through the dark water. */
+
+  const OBJ_H = {
+    hook: 0.62, chair: 0.60, door: 0.78, boot: 0.44, bulb: 0.56, clock: 0.50,
+    key: 0.30, sign: 0.72, ladder: 0.80, bench: 0.40, screen: 0.40,
+    window: 0.62, umbrella: 0.52, cage: 0.66, bucket: 0.48, calendar: 0.52,
+    hands: 0.44, pricetag: 0.40, cursor: 0.52, counter: 0.34, missing: 0.44,
+    angler: 0.62, viewer: 0.58, lamp: 0.70, cup: 0.42, stairs: 0.56
+  };
+
+  /* Line weight that survives being drawn at 20px and at 300px. */
+  function ow(L, k) { return Math.max(0.6, L * k); }
+
+  function objectShape(ctx, kind, L, H, P, t) {
+    const w = ow(L, 0.016);
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    switch (kind) {
+
+      case 'hook': {
+        // one hook: eye at the top, shank down, the bend under it, and the
+        // point turning back up. Nothing else — it is a hook.
+        const hx = -L * 0.04, hy = H * 0.16, hr = L * 0.30;
+        ctx.strokeStyle = P.b;
+        ctx.lineWidth = ow(L, 0.080);
+        ctx.beginPath();
+        ctx.moveTo(-L * 0.34, -H * 0.82);
+        ctx.lineTo(-L * 0.34, hy);
+        // left, under, right, and a little past the horizontal
+        ctx.arc(hx, hy, hr, Math.PI, -Math.PI * 0.22, true);
+        ctx.stroke();
+        // the lit side of the wire, which is what makes it steel
+        ctx.strokeStyle = P.c;
+        ctx.lineWidth = ow(L, 0.026);
+        ctx.beginPath();
+        ctx.moveTo(-L * 0.365, -H * 0.78);
+        ctx.lineTo(-L * 0.365, hy);
+        ctx.arc(hx, hy, hr * 1.09, Math.PI, -Math.PI * 0.10, true);
+        ctx.stroke();
+        // the eye
+        ctx.strokeStyle = P.b;
+        ctx.lineWidth = ow(L, 0.048);
+        ctx.beginPath();
+        ctx.ellipse(-L * 0.34, -H * 0.88, L * 0.075, L * 0.055, 0, 0, TAU);
+        ctx.stroke();
+        // the point, carrying on past where the bend stops
+        const pa = -Math.PI * 0.22;
+        const px = hx + Math.cos(pa) * hr, py = hy + Math.sin(pa) * hr;
+        ctx.fillStyle = P.c;
+        ctx.beginPath();
+        ctx.moveTo(px - L * 0.035, py + L * 0.030);
+        ctx.lineTo(px + L * 0.090, py - L * 0.260);
+        ctx.lineTo(px + L * 0.045, py + L * 0.015);
+        ctx.closePath();
+        ctx.fill();
+        // and the barb behind it
+        ctx.strokeStyle = P.b;
+        ctx.lineWidth = ow(L, 0.028);
+        ctx.beginPath();
+        ctx.moveTo(px + L * 0.055, py - L * 0.14);
+        ctx.lineTo(px + L * 0.150, py - L * 0.02);
+        ctx.stroke();
+        break;
+      }
+
+      case 'chair': {
+        // a dining chair, side-on, four legs and a slatted back
+        ctx.strokeStyle = P.b;
+        ctx.lineWidth = ow(L, 0.055);
+        ctx.beginPath();
+        // back uprights
+        ctx.moveTo(-L * 0.30, H * 0.92); ctx.lineTo(-L * 0.30, -H * 0.95);
+        ctx.moveTo(-L * 0.20, H * 0.92); ctx.lineTo(-L * 0.20, -H * 0.95);
+        // front legs
+        ctx.moveTo(L * 0.26, H * 0.92); ctx.lineTo(L * 0.26, H * 0.02);
+        ctx.moveTo(L * 0.16, H * 0.92); ctx.lineTo(L * 0.16, H * 0.02);
+        // stretcher
+        ctx.moveTo(-L * 0.28, H * 0.58); ctx.lineTo(L * 0.24, H * 0.58);
+        ctx.stroke();
+        // the seat
+        ctx.fillStyle = P.a;
+        ctx.beginPath();
+        ctx.moveTo(-L * 0.34, H * 0.06);
+        ctx.lineTo(L * 0.32, -H * 0.02);
+        ctx.lineTo(L * 0.32, H * 0.14);
+        ctx.lineTo(-L * 0.34, H * 0.22);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = P.b;
+        ctx.lineWidth = ow(L, 0.020);
+        ctx.stroke();
+        // back slats
+        ctx.lineWidth = ow(L, 0.038);
+        ctx.strokeStyle = P.c;
+        for (let i = 0; i < 3; i++) {
+          const y = -H * (0.30 + i * 0.26);
+          ctx.beginPath();
+          ctx.moveTo(-L * 0.31, y); ctx.lineTo(-L * 0.19, y);
+          ctx.stroke();
+        }
+        // top rail
+        ctx.lineWidth = ow(L, 0.060);
+        ctx.strokeStyle = P.a;
+        ctx.beginPath();
+        ctx.moveTo(-L * 0.33, -H * 0.94); ctx.lineTo(-L * 0.17, -H * 0.94);
+        ctx.stroke();
+        break;
+      }
+
+      case 'door': {
+        // a door, in a frame, standing open onto nothing
+        ctx.fillStyle = P.a;
+        ctx.fillRect(-L * 0.26, -H * 0.94, L * 0.52, H * 1.88);
+        ctx.strokeStyle = P.b;
+        ctx.lineWidth = ow(L, 0.030);
+        ctx.strokeRect(-L * 0.26, -H * 0.94, L * 0.52, H * 1.88);
+        // two panels, which is what makes a rectangle a door
+        ctx.lineWidth = ow(L, 0.022);
+        ctx.strokeRect(-L * 0.17, -H * 0.78, L * 0.34, H * 0.66);
+        ctx.strokeRect(-L * 0.17, H * 0.06, L * 0.34, H * 0.72);
+        // the handle
+        ctx.fillStyle = P.c;
+        ctx.beginPath();
+        ctx.arc(L * 0.17, H * 0.02, ow(L, 0.035), 0, TAU);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(L * 0.13, H * 0.02, L * 0.045, L * 0.018, 0, 0, TAU);
+        ctx.fill();
+        // and the gap it is open by, which is not dark, it is bright
+        ctx.fillStyle = P.c;
+        ctx.globalAlpha = 0.30 + 0.20 * Math.sin(t * 1.3);
+        ctx.fillRect(-L * 0.32, -H * 0.94, L * 0.055, H * 1.88);
+        ctx.globalAlpha = 1;
+        break;
+      }
+
+      case 'boot': {
+        // the boot. Every fisherman has heard of it. Nobody has seen one.
+        ctx.fillStyle = P.a;
+        ctx.beginPath();
+        ctx.moveTo(-L * 0.20, -H * 0.90);
+        ctx.lineTo(L * 0.04, -H * 0.90);
+        ctx.lineTo(L * 0.06, H * 0.20);
+        ctx.quadraticCurveTo(L * 0.10, H * 0.42, L * 0.34, H * 0.50);
+        ctx.quadraticCurveTo(L * 0.44, H * 0.56, L * 0.42, H * 0.76);
+        ctx.lineTo(-L * 0.20, H * 0.76);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = P.b;
+        ctx.lineWidth = ow(L, 0.026);
+        ctx.stroke();
+        // sole
+        ctx.fillStyle = P.b;
+        ctx.beginPath();
+        ctx.moveTo(-L * 0.22, H * 0.76);
+        ctx.lineTo(L * 0.44, H * 0.76);
+        ctx.lineTo(L * 0.44, H * 0.94);
+        ctx.lineTo(-L * 0.22, H * 0.94);
+        ctx.closePath();
+        ctx.fill();
+        // eyelets, and the lace that is still done up
+        ctx.strokeStyle = P.c;
+        ctx.lineWidth = ow(L, 0.022);
+        for (let i = 0; i < 4; i++) {
+          const y = -H * (0.74 - i * 0.26);
+          ctx.beginPath();
+          ctx.moveTo(-L * 0.16, y); ctx.lineTo(L * 0.00, y + H * 0.10);
+          ctx.moveTo(L * 0.00, y); ctx.lineTo(-L * 0.16, y + H * 0.10);
+          ctx.stroke();
+        }
+        break;
+      }
+
+      case 'bulb': {
+        // a bulb, still lit, with no fitting and nothing to be lit by
+        const on = 0.7 + 0.3 * Math.sin(t * 2.2);
+        ctx.fillStyle = P.a;
+        ctx.beginPath();
+        ctx.arc(0, -H * 0.22, L * 0.30, 0, TAU);
+        ctx.fill();
+        ctx.strokeStyle = P.c;
+        ctx.lineWidth = ow(L, 0.020);
+        ctx.stroke();
+        // the neck and the screw cap
+        ctx.fillStyle = P.b;
+        ctx.beginPath();
+        ctx.moveTo(-L * 0.12, H * 0.14);
+        ctx.lineTo(L * 0.12, H * 0.14);
+        ctx.lineTo(L * 0.10, H * 0.34);
+        ctx.lineTo(-L * 0.10, H * 0.34);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillRect(-L * 0.10, H * 0.34, L * 0.20, H * 0.52);
+        ctx.strokeStyle = P.a;
+        ctx.lineWidth = ow(L, 0.018);
+        for (let i = 0; i < 4; i++) {
+          const y = H * (0.40 + i * 0.12);
+          ctx.beginPath();
+          ctx.moveTo(-L * 0.10, y); ctx.lineTo(L * 0.10, y);
+          ctx.stroke();
+        }
+        // the filament, which is the only part doing anything
+        ctx.strokeStyle = P.c;
+        ctx.globalAlpha = on;
+        ctx.lineWidth = ow(L, 0.024);
+        ctx.beginPath();
+        ctx.moveTo(-L * 0.06, H * 0.12);
+        for (let i = 0; i <= 8; i++) {
+          ctx.lineTo(-L * 0.06 + (i / 8) * L * 0.12, -H * 0.10 + (i % 2 ? -H * 0.16 : 0));
+        }
+        ctx.lineTo(L * 0.06, H * 0.12);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+        break;
+      }
+
+      case 'clock': {
+        // a wall clock. The hands are at a time that does not occur.
+        ctx.fillStyle = P.a;
+        ctx.beginPath();
+        ctx.arc(0, 0, L * 0.44, 0, TAU);
+        ctx.fill();
+        ctx.strokeStyle = P.b;
+        ctx.lineWidth = ow(L, 0.045);
+        ctx.stroke();
+        ctx.strokeStyle = P.b;
+        ctx.lineWidth = ow(L, 0.020);
+        for (let i = 0; i < 12; i++) {
+          const a = i * (TAU / 12);
+          const r0 = L * (i % 3 === 0 ? 0.31 : 0.35);
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(a) * r0, Math.sin(a) * r0);
+          ctx.lineTo(Math.cos(a) * L * 0.39, Math.sin(a) * L * 0.39);
+          ctx.stroke();
+        }
+        // both hands on the same number, and the second hand going backwards
+        ctx.strokeStyle = P.b;
+        ctx.lineWidth = ow(L, 0.036);
+        [0.22, 0.32].forEach(function (r) {
+          const a = -Math.PI * 0.5 + 0.06;
+          ctx.beginPath();
+          ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a) * L * r, Math.sin(a) * L * r);
+          ctx.stroke();
+        });
+        ctx.strokeStyle = P.c;
+        ctx.lineWidth = ow(L, 0.018);
+        const sa = -t * 1.1;
+        ctx.beginPath();
+        ctx.moveTo(0, 0); ctx.lineTo(Math.cos(sa) * L * 0.36, Math.sin(sa) * L * 0.36);
+        ctx.stroke();
+        ctx.fillStyle = P.b;
+        ctx.beginPath(); ctx.arc(0, 0, ow(L, 0.030), 0, TAU); ctx.fill();
+        break;
+      }
+
+      case 'key': {
+        // a house key. Not brass, not ancient — the one on your keyring.
+        ctx.strokeStyle = P.b;
+        ctx.lineWidth = ow(L, 0.085);
+        ctx.beginPath();
+        ctx.moveTo(-L * 0.22, 0); ctx.lineTo(L * 0.40, 0);
+        ctx.stroke();
+        ctx.fillStyle = P.a;
+        ctx.beginPath();
+        ctx.ellipse(-L * 0.34, 0, L * 0.16, L * 0.16, 0, 0, TAU);
+        ctx.fill();
+        ctx.strokeStyle = P.b;
+        ctx.lineWidth = ow(L, 0.030);
+        ctx.stroke();
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.beginPath(); ctx.arc(-L * 0.34, 0, L * 0.07, 0, TAU); ctx.fill();
+        ctx.globalCompositeOperation = 'source-over';
+        // the bitting
+        ctx.fillStyle = P.b;
+        const teeth = [0.24, 0.42, 0.20, 0.46, 0.30];
+        for (let i = 0; i < teeth.length; i++) {
+          const x = L * (0.16 + i * 0.055);
+          ctx.fillRect(x, 0, L * 0.042, H * teeth[i]);
+        }
+        break;
+      }
+
+      case 'sign': {
+        // a road sign, on its post, for a road
+        ctx.strokeStyle = P.b;
+        ctx.lineWidth = ow(L, 0.045);
+        ctx.beginPath();
+        ctx.moveTo(0, -H * 0.20); ctx.lineTo(0, H * 0.94);
+        ctx.stroke();
+        ctx.fillStyle = P.a;
+        ctx.beginPath();
+        ctx.moveTo(-L * 0.34, -H * 0.86);
+        ctx.lineTo(L * 0.34, -H * 0.86);
+        ctx.lineTo(L * 0.34, -H * 0.18);
+        ctx.lineTo(-L * 0.34, -H * 0.18);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = P.c;
+        ctx.lineWidth = ow(L, 0.026);
+        ctx.stroke();
+        // the arrow, pointing at the bottom of the water: shaft, then head
+        ctx.fillStyle = P.b;
+        ctx.fillRect(-L * 0.22, -H * 0.58, L * 0.30, H * 0.12);
+        ctx.beginPath();
+        ctx.moveTo(L * 0.06, -H * 0.68);
+        ctx.lineTo(L * 0.26, -H * 0.52);
+        ctx.lineTo(L * 0.06, -H * 0.36);
+        ctx.closePath();
+        ctx.fill();
+
+        // and lettering that is not lettering at this size
+        ctx.fillStyle = P.b;
+        ctx.globalAlpha = 0.7;
+        for (let i = 0; i < 3; i++) ctx.fillRect(-L * 0.24 + i * L * 0.17, -H * 0.32, L * 0.13, H * 0.05);
+        ctx.globalAlpha = 1;
+        break;
+      }
+
+      case 'ladder': {
+        // a ladder. It goes down. It was already going down.
+        ctx.strokeStyle = P.b;
+        ctx.lineWidth = ow(L, 0.055);
+        ctx.beginPath();
+        ctx.moveTo(-L * 0.20, -H * 0.96); ctx.lineTo(-L * 0.28, H * 0.96);
+        ctx.moveTo(L * 0.20, -H * 0.96); ctx.lineTo(L * 0.28, H * 0.96);
+        ctx.stroke();
+        ctx.strokeStyle = P.a;
+        ctx.lineWidth = ow(L, 0.045);
+        for (let i = 0; i < 7; i++) {
+          const u = i / 6;
+          const y = -H * 0.86 + u * H * 1.72;
+          const x = L * (0.20 + u * 0.08);
+          ctx.beginPath();
+          ctx.moveTo(-x, y); ctx.lineTo(x, y);
+          ctx.stroke();
+        }
+        // the bottom rungs going into a dark that is inside the object
+        ctx.fillStyle = P.b;
+        ctx.globalAlpha = 0.55;
+        ctx.beginPath();
+        ctx.moveTo(-L * 0.30, H * 0.62);
+        ctx.lineTo(L * 0.30, H * 0.62);
+        ctx.lineTo(L * 0.30, H * 0.99);
+        ctx.lineTo(-L * 0.30, H * 0.99);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        break;
+      }
+
+      case 'bench': {
+        // the bench from the shore. It is not on the shore any more.
+        ctx.fillStyle = P.a;
+        for (let i = 0; i < 3; i++) {
+          ctx.fillRect(-L * 0.44, -H * (0.62 - i * 0.30), L * 0.88, H * 0.20);
+        }
+        ctx.strokeStyle = P.b;
+        ctx.lineWidth = ow(L, 0.020);
+        for (let i = 0; i < 3; i++) {
+          ctx.strokeRect(-L * 0.44, -H * (0.62 - i * 0.30), L * 0.88, H * 0.20);
+        }
+        ctx.strokeStyle = P.b;
+        ctx.lineWidth = ow(L, 0.050);
+        [-0.32, 0.32].forEach(function (x) {
+          ctx.beginPath();
+          ctx.moveTo(L * x, -H * 0.70); ctx.lineTo(L * x, H * 0.94);
+          ctx.stroke();
+        });
+        // the cast-iron scroll on the end, which is the whole personality
+        ctx.strokeStyle = P.c;
+        ctx.lineWidth = ow(L, 0.026);
+        [-0.32, 0.32].forEach(function (x) {
+          ctx.beginPath();
+          ctx.arc(L * x, H * 0.42, L * 0.09, 0, Math.PI, x < 0);
+          ctx.stroke();
+        });
+        break;
+      }
+
+      case 'screen': {
+        // a lit rectangle. It is still warm.
+        ctx.fillStyle = P.b;
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(-L * 0.46, -H * 0.80, L * 0.92, H * 1.44, L * 0.03);
+        else ctx.rect(-L * 0.46, -H * 0.80, L * 0.92, H * 1.44);
+        ctx.fill();
+        ctx.fillStyle = P.c;
+        ctx.globalAlpha = 0.55 + 0.25 * Math.sin(t * 3.1);
+        ctx.fillRect(-L * 0.42, -H * 0.72, L * 0.84, H * 1.28);
+        ctx.globalAlpha = 1;
+        // scanlines, because it is not a modern one
+        ctx.strokeStyle = P.b;
+        ctx.globalAlpha = 0.35;
+        ctx.lineWidth = ow(L, 0.010);
+        for (let y = -H * 0.70; y < H * 0.56; y += H * 0.10) {
+          ctx.beginPath();
+          ctx.moveTo(-L * 0.42, y); ctx.lineTo(L * 0.42, y);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+        // the stand
+        ctx.fillStyle = P.a;
+        ctx.fillRect(-L * 0.08, H * 0.64, L * 0.16, H * 0.20);
+        ctx.fillRect(-L * 0.26, H * 0.84, L * 0.52, H * 0.12);
+        break;
+      }
+
+      case 'window': {
+        // somebody else's window, with their room still on the other side
+        ctx.fillStyle = P.c;
+        ctx.globalAlpha = 0.35 + 0.15 * Math.sin(t * 0.8);
+        ctx.fillRect(-L * 0.36, -H * 0.86, L * 0.72, H * 1.72);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = P.a;
+        ctx.lineWidth = ow(L, 0.055);
+        ctx.strokeRect(-L * 0.36, -H * 0.86, L * 0.72, H * 1.72);
+        ctx.lineWidth = ow(L, 0.036);
+        ctx.beginPath();
+        ctx.moveTo(0, -H * 0.86); ctx.lineTo(0, H * 0.86);
+        ctx.moveTo(-L * 0.36, 0); ctx.lineTo(L * 0.36, 0);
+        ctx.stroke();
+        // the sill, and the shape standing at it in the far pane
+        ctx.fillStyle = P.a;
+        ctx.fillRect(-L * 0.44, H * 0.86, L * 0.88, H * 0.12);
+        ctx.fillStyle = P.b;
+        ctx.globalAlpha = 0.75;
+        ctx.beginPath();
+        ctx.ellipse(L * 0.18, -H * 0.46, L * 0.055, L * 0.070, 0, 0, TAU);
+        ctx.fill();
+        ctx.fillRect(L * 0.12, -H * 0.36, L * 0.12, H * 0.34);
+        ctx.globalAlpha = 1;
+        break;
+      }
+
+      case 'umbrella': {
+        // open, which is the part that is wrong
+        const half = L * 0.46, rim = -H * 0.12, top = -H * 0.86;
+        ctx.beginPath();
+        ctx.moveTo(-half, rim);
+        ctx.quadraticCurveTo(-half * 0.72, top, 0, top);
+        ctx.quadraticCurveTo(half * 0.72, top, half, rim);
+        // the scalloped trailing edge, panel by panel
+        for (let i = 4; i > 0; i--) {
+          const x0 = -half + (i / 4) * half * 2;
+          const x1 = -half + ((i - 1) / 4) * half * 2;
+          ctx.quadraticCurveTo((x0 + x1) / 2, rim + H * 0.20, x1, rim);
+        }
+        ctx.closePath();
+        ctx.fillStyle = P.a;
+        ctx.fill();
+        ctx.strokeStyle = P.b;
+        ctx.lineWidth = ow(L, 0.022);
+        ctx.stroke();
+        // ribs, from the ferrule out to each seam between the scallops
+        for (let i = 1; i < 4; i++) {
+          const x = -half + (i / 4) * half * 2;
+          ctx.beginPath();
+          ctx.moveTo(0, top);
+          ctx.quadraticCurveTo(x * 0.55, (top + rim) * 0.5, x, rim);
+          ctx.stroke();
+        }
+        // ferrule, shaft and the crook
+        ctx.strokeStyle = P.b;
+        ctx.lineWidth = ow(L, 0.040);
+        ctx.beginPath();
+        ctx.moveTo(0, top - H * 0.10);
+        ctx.lineTo(0, H * 0.70);
+        ctx.arc(-L * 0.09, H * 0.70, L * 0.09, 0, Math.PI, false);
+        ctx.stroke();
+        break;
+      }
+
+      case 'cage': {
+        // a birdcage, open, and empty in a way that is load-bearing
+        ctx.strokeStyle = P.b;
+        ctx.lineWidth = ow(L, 0.030);
+        ctx.beginPath();
+        ctx.moveTo(0, -H * 0.96); ctx.lineTo(0, -H * 0.80);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(0, -H * 0.86, L * 0.06, 0, TAU);
+        ctx.stroke();
+        for (let i = 0; i <= 8; i++) {
+          const u = (i / 8) * 2 - 1;
+          const x = L * 0.30 * u;
+          ctx.beginPath();
+          ctx.moveTo(x * 0.35, -H * 0.72);
+          ctx.quadraticCurveTo(x, -H * 0.30, x, H * 0.64);
+          ctx.stroke();
+        }
+        ctx.beginPath();
+        ctx.moveTo(-L * 0.32, H * 0.64); ctx.lineTo(L * 0.32, H * 0.64);
+        ctx.moveTo(-L * 0.24, H * 0.06); ctx.lineTo(L * 0.24, H * 0.06);
+        ctx.stroke();
+        // the base, and the door standing open
+        ctx.fillStyle = P.a;
+        ctx.fillRect(-L * 0.36, H * 0.64, L * 0.72, H * 0.22);
+        ctx.strokeStyle = P.c;
+        ctx.lineWidth = ow(L, 0.026);
+        ctx.beginPath();
+        ctx.moveTo(L * 0.24, H * 0.06);
+        ctx.lineTo(L * 0.44, H * 0.20);
+        ctx.lineTo(L * 0.44, H * 0.58);
+        ctx.lineTo(L * 0.26, H * 0.60);
+        ctx.stroke();
+        break;
+      }
+
+      case 'bucket': {
+        // your bucket. It was beside you. Check beside you.
+        ctx.fillStyle = P.a;
+        ctx.beginPath();
+        ctx.moveTo(-L * 0.34, -H * 0.36);
+        ctx.lineTo(L * 0.34, -H * 0.36);
+        ctx.lineTo(L * 0.24, H * 0.82);
+        ctx.lineTo(-L * 0.24, H * 0.82);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = P.b;
+        ctx.lineWidth = ow(L, 0.028);
+        ctx.stroke();
+        // rim
+        ctx.fillStyle = P.b;
+        ctx.beginPath();
+        ctx.ellipse(0, -H * 0.36, L * 0.34, L * 0.075, 0, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = P.c;
+        ctx.globalAlpha = 0.5;
+        ctx.beginPath();
+        ctx.ellipse(0, -H * 0.34, L * 0.28, L * 0.056, 0, 0, TAU);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        // handle
+        ctx.strokeStyle = P.b;
+        ctx.lineWidth = ow(L, 0.026);
+        ctx.beginPath();
+        ctx.arc(0, -H * 0.36, L * 0.34, Math.PI, 0, true);
+        ctx.stroke();
+        break;
+      }
+
+      case 'calendar': {
+        // one day, torn off. It is slightly damp.
+        ctx.fillStyle = P.a;
+        ctx.beginPath();
+        ctx.moveTo(-L * 0.34, -H * 0.72);
+        ctx.lineTo(L * 0.34, -H * 0.72);
+        ctx.lineTo(L * 0.34, H * 0.70);
+        // the torn lower edge
+        for (let i = 6; i >= 0; i--) {
+          ctx.lineTo(-L * 0.34 + (i / 6) * L * 0.68, H * (i % 2 ? 0.78 : 0.64));
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = P.b;
+        ctx.lineWidth = ow(L, 0.018);
+        ctx.stroke();
+        // the header band, the number, and the ruled lines
+        ctx.fillStyle = P.c;
+        ctx.fillRect(-L * 0.34, -H * 0.72, L * 0.68, H * 0.28);
+        ctx.fillStyle = P.b;
+        ctx.fillRect(-L * 0.12, -H * 0.34, L * 0.24, H * 0.40);
+        ctx.globalAlpha = 0.55;
+        for (let i = 0; i < 3; i++) {
+          ctx.fillRect(-L * 0.26, H * (0.18 + i * 0.14), L * 0.52, H * 0.05);
+        }
+        ctx.globalAlpha = 1;
+        break;
+      }
+
+      case 'hands': {
+        // applause. Two hands, mid-clap, and nothing they are attached to.
+        const clap = Math.abs(Math.sin(t * 3.4)) * L * 0.10;
+        [-1, 1].forEach(function (s) {
+          ctx.save();
+          ctx.translate(s * (L * 0.14 + clap), 0);
+          ctx.scale(s, 1);
+          ctx.fillStyle = P.a;
+          ctx.beginPath();
+          ctx.moveTo(0, -H * 0.50);
+          ctx.quadraticCurveTo(L * 0.20, -H * 0.62, L * 0.26, -H * 0.20);
+          ctx.quadraticCurveTo(L * 0.30, H * 0.30, L * 0.14, H * 0.70);
+          ctx.lineTo(-L * 0.02, H * 0.72);
+          ctx.quadraticCurveTo(-L * 0.04, H * 0.10, 0, -H * 0.50);
+          ctx.closePath();
+          ctx.fill();
+          ctx.strokeStyle = P.b;
+          ctx.lineWidth = ow(L, 0.020);
+          ctx.stroke();
+          // fingers
+          ctx.lineWidth = ow(L, 0.016);
+          for (let i = 0; i < 3; i++) {
+            ctx.beginPath();
+            ctx.moveTo(L * (0.06 + i * 0.06), -H * 0.44);
+            ctx.quadraticCurveTo(L * (0.16 + i * 0.05), -H * 0.10, L * (0.10 + i * 0.05), H * 0.30);
+            ctx.stroke();
+          }
+          ctx.restore();
+        });
+        break;
+      }
+
+      case 'pricetag': {
+        // a price and no name. Do not read it twice.
+        ctx.fillStyle = P.a;
+        ctx.beginPath();
+        ctx.moveTo(-L * 0.44, -H * 0.30);
+        ctx.lineTo(L * 0.24, -H * 0.62);
+        ctx.lineTo(L * 0.44, -H * 0.10);
+        ctx.lineTo(L * 0.44, H * 0.44);
+        ctx.lineTo(-L * 0.44, H * 0.62);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = P.b;
+        ctx.lineWidth = ow(L, 0.022);
+        ctx.stroke();
+        // the eyelet and the string
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.beginPath(); ctx.arc(L * 0.30, -H * 0.24, L * 0.045, 0, TAU); ctx.fill();
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.strokeStyle = P.b;
+        ctx.lineWidth = ow(L, 0.016);
+        ctx.beginPath();
+        ctx.moveTo(L * 0.30, -H * 0.24);
+        ctx.quadraticCurveTo(L * 0.48, -H * 0.60, L * 0.36, -H * 0.90);
+        ctx.stroke();
+        // the figure, which is legible and which you are not going to read
+        ctx.fillStyle = P.c;
+        ctx.globalAlpha = 0.55 + 0.35 * Math.sin(t * 7.3);
+        for (let i = 0; i < 5; i++) {
+          ctx.fillRect(-L * 0.30 + i * L * 0.12, -H * 0.06, L * 0.075, H * 0.30);
+        }
+        ctx.globalAlpha = 1;
+        break;
+      }
+
+      case 'cursor': {
+        // the pointer. Tip, two edges, the notch and the tail — anything less
+        // is a triangle, and a triangle is not what has been following you.
+        const cw = L * 0.62, ch = H * 0.92;
+        const pts = [[0, 0], [0, 1], [0.28, 0.73], [0.45, 1.06],
+                     [0.61, 0.99], [0.44, 0.67], [0.72, 0.63]];
+        ctx.beginPath();
+        for (let i = 0; i < pts.length; i++) {
+          const x = -L * 0.26 + pts[i][0] * cw;
+          const y = -H * 0.88 + pts[i][1] * ch;
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.fillStyle = P.c;
+        ctx.fill();
+        ctx.strokeStyle = P.b;
+        ctx.lineWidth = ow(L, 0.026);
+        ctx.stroke();
+        // and it is still blinking
+        ctx.fillStyle = P.c;
+        ctx.globalAlpha = (Math.floor(t * 1.6) % 2) ? 0.9 : 0.12;
+        ctx.fillRect(L * 0.34, -H * 0.30, L * 0.05, H * 0.62);
+        ctx.globalAlpha = 1;
+        break;
+      }
+
+      case 'counter': {
+        // a counter reading zero, including this time
+        ctx.fillStyle = P.b;
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(-L * 0.46, -H * 0.80, L * 0.92, H * 1.60, L * 0.05);
+        else ctx.rect(-L * 0.46, -H * 0.80, L * 0.92, H * 1.60);
+        ctx.fill();
+        for (let i = 0; i < 3; i++) {
+          const x = -L * 0.34 + i * L * 0.28;
+          ctx.fillStyle = P.a;
+          ctx.fillRect(x - L * 0.11, -H * 0.58, L * 0.22, H * 1.16);
+          // the digit: a zero, drawn as a ring so it reads at any size
+          ctx.strokeStyle = P.c;
+          ctx.lineWidth = ow(L, 0.030);
+          ctx.beginPath();
+          ctx.ellipse(x, 0, L * 0.065, H * 0.36, 0, 0, TAU);
+          ctx.stroke();
+        }
+        break;
+      }
+
+      case 'missing': {
+        // the catalogue has no entry for this, and says so in its own way
+        ctx.fillStyle = P.a;
+        ctx.fillRect(-L * 0.40, -H * 0.80, L * 0.80, H * 1.60);
+        ctx.strokeStyle = P.c;
+        ctx.lineWidth = ow(L, 0.030);
+        ctx.setLineDash([L * 0.05, L * 0.04]);
+        ctx.strokeRect(-L * 0.40, -H * 0.80, L * 0.80, H * 1.60);
+        ctx.setLineDash([]);
+        // the broken-image cross
+        ctx.strokeStyle = P.b;
+        ctx.lineWidth = ow(L, 0.045);
+        ctx.beginPath();
+        ctx.moveTo(-L * 0.22, -H * 0.44); ctx.lineTo(L * 0.22, H * 0.44);
+        ctx.moveTo(L * 0.22, -H * 0.44); ctx.lineTo(-L * 0.22, H * 0.44);
+        ctx.stroke();
+        break;
+      }
+
+      case 'angler':
+      case 'viewer': {
+        // a person, seated. One of them is holding a rod and one of them is
+        // holding a lit rectangle, and only one of those is you.
+        ctx.fillStyle = P.a;
+        ctx.beginPath();
+        ctx.arc(-L * 0.06, -H * 0.62, L * 0.13, 0, TAU);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(-L * 0.20, -H * 0.44);
+        ctx.quadraticCurveTo(-L * 0.02, -H * 0.52, L * 0.08, -H * 0.36);
+        ctx.lineTo(L * 0.14, H * 0.16);
+        ctx.lineTo(-L * 0.22, H * 0.20);
+        ctx.closePath();
+        ctx.fill();
+        // thighs forward, shins down: the sitting is the whole tell
+        ctx.strokeStyle = P.a;
+        ctx.lineWidth = ow(L, 0.075);
+        ctx.beginPath();
+        ctx.moveTo(-L * 0.06, H * 0.16); ctx.lineTo(L * 0.30, H * 0.28);
+        ctx.lineTo(L * 0.32, H * 0.82);
+        ctx.stroke();
+        ctx.strokeStyle = P.b;
+        ctx.lineWidth = ow(L, 0.026);
+        if (kind === 'angler') {
+          // the rod, and the line going down, which nobody follows
+          ctx.beginPath();
+          ctx.moveTo(-L * 0.02, -H * 0.20);
+          ctx.lineTo(L * 0.44, -H * 0.78);
+          ctx.stroke();
+          ctx.strokeStyle = P.c;
+          ctx.lineWidth = ow(L, 0.012);
+          ctx.beginPath();
+          ctx.moveTo(L * 0.44, -H * 0.78);
+          ctx.quadraticCurveTo(L * 0.52, -H * 0.10, L * 0.46, H * 0.92);
+          ctx.stroke();
+        } else {
+          // the rectangle, lit, held at exactly the distance you are holding one
+          ctx.fillStyle = P.c;
+          ctx.globalAlpha = 0.55 + 0.25 * Math.sin(t * 4.4);
+          ctx.save();
+          ctx.translate(L * 0.20, -H * 0.14);
+          ctx.rotate(-0.42);
+          ctx.fillRect(-L * 0.10, -L * 0.07, L * 0.20, L * 0.14);
+          ctx.restore();
+          ctx.globalAlpha = 1;
+          // and the light of it, on the face
+          ctx.fillStyle = P.c;
+          ctx.globalAlpha = 0.30;
+          ctx.beginPath();
+          ctx.arc(-L * 0.04, -H * 0.60, L * 0.11, 0, TAU);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+        break;
+      }
+
+      case 'lamp': {
+        // a standard lamp, still on, at the depth it was left
+        ctx.fillStyle = P.a;
+        ctx.beginPath();
+        ctx.moveTo(-L * 0.26, -H * 0.42);
+        ctx.lineTo(L * 0.26, -H * 0.42);
+        ctx.lineTo(L * 0.34, -H * 0.86);
+        ctx.lineTo(-L * 0.34, -H * 0.86);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = P.b;
+        ctx.lineWidth = ow(L, 0.024);
+        ctx.stroke();
+        ctx.fillStyle = P.c;
+        ctx.globalAlpha = 0.4 + 0.2 * Math.sin(t * 1.7);
+        ctx.beginPath();
+        ctx.ellipse(0, -H * 0.42, L * 0.26, L * 0.05, 0, 0, TAU);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = P.b;
+        ctx.lineWidth = ow(L, 0.035);
+        ctx.beginPath();
+        ctx.moveTo(0, -H * 0.42); ctx.lineTo(0, H * 0.82);
+        ctx.stroke();
+        ctx.fillStyle = P.a;
+        ctx.beginPath();
+        ctx.ellipse(0, H * 0.86, L * 0.24, L * 0.055, 0, 0, TAU);
+        ctx.fill();
+        break;
+      }
+
+      case 'cup': {
+        // a mug of tea, full, and at the temperature it was poured at
+        ctx.fillStyle = P.a;
+        ctx.beginPath();
+        ctx.moveTo(-L * 0.26, -H * 0.44);
+        ctx.lineTo(L * 0.22, -H * 0.44);
+        ctx.lineTo(L * 0.17, H * 0.66);
+        ctx.quadraticCurveTo(0, H * 0.84, -L * 0.21, H * 0.66);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = P.b;
+        ctx.lineWidth = ow(L, 0.026);
+        ctx.stroke();
+        // the handle
+        ctx.beginPath();
+        ctx.moveTo(L * 0.20, -H * 0.28);
+        ctx.quadraticCurveTo(L * 0.50, -H * 0.02, L * 0.16, H * 0.30);
+        ctx.lineWidth = ow(L, 0.055);
+        ctx.stroke();
+        // and what is in it
+        ctx.fillStyle = P.c;
+        ctx.beginPath();
+        ctx.ellipse(-L * 0.02, -H * 0.42, L * 0.24, L * 0.055, 0, 0, TAU);
+        ctx.fill();
+        // steam, which is the part that should not be possible down here
+        ctx.strokeStyle = P.c;
+        ctx.globalAlpha = 0.5;
+        ctx.lineWidth = ow(L, 0.018);
+        for (let i = 0; i < 2; i++) {
+          ctx.beginPath();
+          const x = -L * 0.10 + i * L * 0.16;
+          ctx.moveTo(x, -H * 0.52);
+          ctx.quadraticCurveTo(x + Math.sin(t * 1.6 + i) * L * 0.07, -H * 0.68,
+                               x, -H * 0.86);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+        break;
+      }
+
+      case 'stairs': {
+        // four steps. There is no building and they still go up.
+        ctx.fillStyle = P.a;
+        ctx.strokeStyle = P.b;
+        ctx.lineWidth = ow(L, 0.022);
+        for (let i = 0; i < 4; i++) {
+          const x = -L * 0.44 + i * L * 0.22;
+          const y = H * 0.86 - i * H * 0.44;
+          ctx.beginPath();
+          ctx.rect(x, y - H * 0.16, L * 0.30, H * 0.16);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = P.b;
+          ctx.fillRect(x, y - H * 0.16, L * 0.30, H * 0.04);
+          ctx.fillStyle = P.a;
+        }
+        // the riser faces, in shadow
+        ctx.fillStyle = P.b;
+        ctx.globalAlpha = 0.5;
+        for (let i = 0; i < 4; i++) {
+          const x = -L * 0.44 + i * L * 0.22;
+          const y = H * 0.86 - i * H * 0.44;
+          ctx.fillRect(x, y, L * 0.22, H * 0.44);
+        }
+        ctx.globalAlpha = 1;
+        break;
+      }
+
+      default: {
+        // an object with no drawing is still an object: a plain crate
+        ctx.fillStyle = P.a;
+        ctx.fillRect(-L * 0.36, -H * 0.70, L * 0.72, H * 1.40);
+        ctx.strokeStyle = P.b;
+        ctx.lineWidth = ow(L, 0.030);
+        ctx.strokeRect(-L * 0.36, -H * 0.70, L * 0.72, H * 1.40);
+        break;
+      }
+    }
+  }
+
+  /* The full object: the thing itself, then whatever is wrong with it. */
+  function drawObject(ctx, fish, size, opts) {
+    const art = fish.art;
+    const tm = opts.time === undefined ? 0 : opts.time;
+    const L = size * 2;
+    const H = L * bodyRatio('object', art.object);
+    const pal = palette(art, opts.traits || opts.mutation);
+    const P = { a: pal.c1, b: pal.c2, c: pal.c3 };
+    const glitch = art.glitch === undefined ? 1 : art.glitch;
+
+    ctx.save();
+    // the ground it is standing on, which there is none of
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, L * 0.9);
+    g.addColorStop(0, U.rgbToCss(pal.r3, 0.22 * (art.glow || 0.5)));
+    g.addColorStop(1, U.rgbToCss(pal.r3, 0));
+    ctx.fillStyle = g;
+    ctx.fillRect(-L, -L, L * 2, L * 2);
+
+    // the channel split, drawn as two offset copies before the object proper
+    if (glitch > 0.02) {
+      const off = Math.max(0.7, L * 0.013) * glitch *
+                  (0.55 + 0.45 * Math.sin(tm * 5.7 + Math.sin(tm * 2.3) * 3));
+      ctx.globalCompositeOperation = 'lighter';
+      [[-off, '#ff2d55'], [off, '#66ffe0']].forEach(function (pair) {
+        ctx.save();
+        ctx.translate(pair[0], 0);
+        ctx.globalAlpha = 0.42 * glitch;
+        objectShape(ctx, art.object, L, H, { a: pair[1], b: pair[1], c: pair[1] }, tm);
+        ctx.restore();
+      });
+      ctx.globalCompositeOperation = 'source-over';
+    }
+
+    objectShape(ctx, art.object, L, H, P, tm);
+
+    // torn scan bands: slices of the object displaced sideways, redrawn on a
+    // clock of their own so it never settles into a pattern
+    if (glitch > 0.02) {
+      const rnd = VF.rng.make((Math.floor(tm * 6) * 2654435761) ^ hash(fish.id));
+      const bands = 1 + Math.floor(rnd() * 3 * glitch);
+      for (let i = 0; i < bands; i++) {
+        const y = (rnd() - 0.5) * H * 1.8;
+        const h = H * (0.05 + rnd() * 0.16);
+        const dx = (rnd() - 0.5) * L * 0.22 * glitch;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(-L, y, L * 2, h);
+        ctx.clip();
+        ctx.translate(dx, 0);
+        objectShape(ctx, art.object, L, H, P, tm);
+        ctx.restore();
+      }
+    }
+    ctx.restore();
+  }
+
   VF.fishArt = { draw: draw, drawSilhouette: drawSilhouette, palette: palette,
-                 hash: hash, bodyRatio: bodyRatio, fitSize: fitSize };
+                 hash: hash, bodyRatio: bodyRatio, fitSize: fitSize,
+                 objectShape: objectShape, OBJ_H: OBJ_H };
 })(window.VF = window.VF || {});

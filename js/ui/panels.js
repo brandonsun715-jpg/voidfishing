@@ -181,11 +181,8 @@
       const list = U.el('div', 'list');
       VF.rods.list.forEach(function (rod) {
         const owned = d.ownedRods.indexOf(rod.id) >= 0;
-        const levelOk = d.level >= rod.level;
-        const voidOk = !rod.requiresVoidCatch || d.stats.voidCatches >= 1;
-        const glitchOk = !rod.requiresGlitchCatch || (d.stats.glitchCatches | 0) >= 1;
-        const secretOk = !rod.requiresSecret || VF.secrets.found(rod.requiresSecret);
-        const locked = !levelOk || !voidOk || !glitchOk || !secretOk;
+        const block = owned ? null : VF.rods.blocked(rod);
+        const locked = !!block || (!owned && rod.noShop);
         const can = VF.economy.canAfford(rod.cost);
 
         const row = U.el('div', 'row row-rod' + (owned ? ' owned' : '') + (locked && !owned ? ' locked' : '') +
@@ -207,12 +204,11 @@
           const t = U.el('span', 'tag', 'owned'); t.style.color = 'var(--good)'; name.appendChild(t);
         }
         main.appendChild(name);
-        main.appendChild(U.el('div', 'row-desc', locked && !owned
-          ? (!levelOk ? 'Requires level ' + rod.level
-             : !voidOk ? 'Requires a Void-tier catch'
-             : !glitchOk ? 'Requires a !@#$%^&$# catch'
-             : 'Requires what is under the last water')
-          : rod.desc));
+        // a rod that is never sold has no purchase requirement worth stating —
+        // the level it sits at is not what is standing between you and it
+        main.appendChild(U.el('div', 'row-desc', !locked || owned ? rod.desc
+          : rod.noShop ? (rod.notForSale || 'Not for sale. Somebody has to give you this one.')
+          : block.note));
 
         // comparison arrows only matter when deciding whether to buy
         const c = owned ? function () { return 0; } : cmp;
@@ -237,6 +233,11 @@
           } else {
             side.appendChild(U.el('div', 'row-price', 'in hand'));
           }
+        } else if (rod.noShop) {
+          /* the keeper does not stock these and will not be talked into it */
+          const n = U.el('div', 'row-price', 'not for sale');
+          n.style.color = 'var(--ink-3)';
+          side.appendChild(n);
         } else {
           side.appendChild(priceEl(rod.cost, can && !locked));
           const btn = U.el('button', 'btn btn-sm' + (can && !locked ? ' btn-primary' : ''), 'Buy');
@@ -892,7 +893,9 @@
     cv.style.width = '100%'; cv.style.height = '168px';
     const g = cv.getContext('2d');
     g.save(); g.translate(200, 84);
-    VF.fishArt.draw(g, f, 62, { time: 1.2, mutation: entry.record ? entry.record.mutation : null });
+    // objects are boxier than any fish, so the hero has to be fitted, not fixed
+    VF.fishArt.draw(g, f, Math.min(62, VF.fishArt.fitSize(f, cv.height)),
+                    { time: 1.2, mutation: entry.record ? entry.record.mutation : null });
     g.restore();
     hero.appendChild(cv);
     card.appendChild(hero);

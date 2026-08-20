@@ -35,9 +35,14 @@ something back.
 
 ## What is in it
 
-- **94 species** across eight rarity tiers, from Smallmouth up through Void and
+- **200 species** across eight rarity tiers, from Smallmouth up through Void and
   whatever `!@#$%^&$#` is. Every creature is drawn procedurally from a spec of
   body type, fins, extras and palette — none of them are recoloured duplicates.
+- **The `!@#$%^&$#` tier is not fish.** Almost nothing in it has a fin. A hook is
+  a hook, a chair is a chair, a boot is a boot — each entry is drawn as the
+  object itself, with the wrongness laid over the top rather than built into the
+  anatomy, and it comes up out of the dark as that shape too. The handful of
+  exceptions are the ones where being a fish is the joke.
 - **Ten traits** that stack. A catch can be Ancient *and* Golden *and* Massive
   *and* Aggressive at once, each multiplying its value, with a further bonus for
   the combination. Tiny and Massive are read off the size roll rather than
@@ -64,8 +69,15 @@ something back.
   it was and nothing is said about it.
 - **Eight fishing spots**, unlocked by level, each with its own palette, horizon
   feature, distant land, fish pool, weather set and musical scale.
-- **Twelve rods and ten baits**, each a real change to cast distance, reel force,
-  line strength, rarity odds and luck.
+- **Twenty-eight rods and ten baits**, each a real change to cast distance, reel
+  force, line strength, rarity odds and luck. Ten of the rods are not a straight
+  continuation of the ladder — they interleave with the tiers around them, and
+  **six of those are never for sale**: the old fisherman hands you the one he
+  bound himself, the archivist and the collector give up theirs once you have
+  earned it, the keeper has had one under the counter the whole time, and two
+  come up on the line wrapped in cloth. The four that *are* sold still want
+  something first: water that is not on the map, an object out of the trench, or
+  a particular species in the record.
 - **Nine weather types** and a continuous day/night cycle, both purely additive —
   nothing here makes the game worse to sit in.
 - **Ambient events and legendary encounters.** Occasionally the water goes
@@ -151,6 +163,10 @@ node tools/rods.js         renders every rod preview to one sheet
 node tools/audio.js        measures output level, spectral balance and clipping
 node tools/systems.js      traits, builds, conditions, salvage, secrets, cases
 node tools/newui.js        screenshots the charm, case, wardrobe and journal panels
+node tools/newcontent.js   are the newer species actually reachable, or only present
+node tools/rodgates.js     every gated rod states the right reason it is out of reach
+node tools/hooked.js       the shape coming up out of the dark, at several distances
+node tools/distcheck.js    the single file behaves exactly like the folder
 ```
 
 ## Building a single file

@@ -13,7 +13,7 @@ const path = require('path');
     const wrap = document.createElement('div');
     wrap.style.cssText = 'display:grid;grid-template-columns:repeat(5,1fr);gap:5px';
     document.body.appendChild(wrap);
-    ['golden_bass', 'leviathan', 'prismatic_manta'].forEach((id) => {
+    ['golden_bass', 'leviathan', 'g_chair', 'g_yourhook'].forEach((id) => {
       const f = VF.fish.byId(id); if (!f) return;
       [0, 0.25, 0.5, 0.75, 1].forEach((near) => {
         const cell = document.createElement('div');
