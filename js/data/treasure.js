@@ -68,6 +68,14 @@
       icon: 'coin', color: '#ffd07a', relic: 'coin',
       desc: 'Currency of somewhere that no longer takes payment.' },
 
+    { id: 'rod_pyrewing', name: 'A Bundle Wrapped In Cloth', rarity: 'mythic', weight: 0.30, value: [0, 0],
+      icon: 'strange', color: '#ff3a2a', minLoc: 5, rod: 'pyrewing',
+      desc: 'Heavy, and warm through the cloth. The cloth is not burnt and has never been burnt.' },
+
+    { id: 'rod_longfeather', name: 'Something Long, Wrapped', rarity: 'mythic', weight: 0.22, value: [0, 0],
+      icon: 'strange', color: '#d88aff', minLoc: 6, rod: 'longfeather',
+      desc: 'Longer than the boat. Whatever moulted it was going somewhere and did not come back for it.' },
+
     { id: 'relic_eye', name: 'The Unknown Eye', rarity: 'mythic', weight: 0.16, value: [0, 0],
       icon: 'eye', color: '#e8d0ff', minLoc: 6, relic: 'eye', journal: 'eye',
       desc: 'It is open. It was open when you found it.' },
@@ -106,6 +114,7 @@
     const pool = LIST.filter(function (t) {
       if (t.minLoc && li < t.minLoc) return false;
       if (t.relic && VF.charms.owned(t.relic)) return false;
+      if (t.rod && VF.rods.owned(t.rod)) return false;
       if (t.rodGift && VF.rods.owned(t.rodGift)) return false;
       return true;
     });

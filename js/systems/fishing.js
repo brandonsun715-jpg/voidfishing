@@ -470,6 +470,7 @@
     if (t.journal) VF.journal.add(t.journal);
     if (t.token) d.caseTokens++;
     if (t.relic) VF.charms.grant(t.relic);
+    if (t.rod) VF.rods.grant(t.rod);
     S.fight = null;
     S.lastResult = c;
     S.encounterActive = false;

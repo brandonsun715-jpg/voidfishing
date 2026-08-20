@@ -31,7 +31,12 @@
           lines: ['you brought that up on purpose, did you.',
                   'the archivist will want to hear about it. i would rather you did not tell me.'] },
         { at: function (d) { return VF.secrets.found('the_last_water'); },
-          lines: ['so you found it.', 'close the door behind you on the way out. it will not matter, but close it anyway.'] }
+          lines: ['so you found it.', 'close the door behind you on the way out. it will not matter, but close it anyway.'] },
+        { at: function (d) { return VF.secrets.found('the_last_water') && d.level >= 84; },
+          lines: ['under the counter. it has been under the counter since before you walked in the first time.',
+                  'one light at the tip, one at your hand, and the dark in between is the rod. i have never put it on a shelf and i never will.',
+                  'i was waiting to see if you would come back. you kept coming back. take it.'],
+          gives: 'rod:twinsun' }
       ],
       quest: [
         { at: function (d) { return VF.quests.reached('heavens', 6) && d.ownedRods.length >= 6; },
@@ -91,7 +96,12 @@
         { at: function (d) { return VF.charms.owned('eye') && VF.journal.hintCount() >= 2; },
           lines: ['one more, then. under everything, where the map is not a map of anything but a lid.',
                   'you will not find it by going deeper. you find it by already knowing it is there. i have told you. now you know.'],
-          journal: 'thelast' }
+          journal: 'thelast' },
+        { at: function (d) { return VF.charms.owned('eye') && VF.journal.hintCount() >= 2 && d.level >= 45; },
+          lines: ['take it. no, take it — my hands have stopped being any use for it.',
+                  'sixty years of binding, one turn of cord at a time. the cord is not cord. i knew that by the second year and i kept binding.',
+                  'it will hold anything you are foolish enough to hook. that is not encouragement.'],
+          gives: 'rod:redthread' }
       ],
       alt: function () { return VF.quests.started('heavens') ? 'Elias' : null; },
       quest: [
@@ -195,7 +205,15 @@
           lines: ['you did not find the heavens rod.',
                   'you proved you were worthy of it. those are not the same sentence and i would like you to remember which one this was.',
                   'there is water above the cloud now. the rod knows the way and it will not explain it to you. i have stopped asking things to explain themselves.',
-                  'go on. i need to sit down.'] }
+                  'go on. i need to sit down.'] },
+
+        { at: function (d) { return VF.quests.complete('heavens') && d.level >= 71; },
+          lines: ['sit down. there is one more and i was never going to mention it until the sky was settled.',
+                  'astra made two. everybody remembers the one that fell. this is the other one, and it did not fall, ' +
+                  'it was left — with me, by somebody who did not say why, forty years ago.',
+                  'rings of standing fire and a pair of wings at the hand. i have not been able to look straight at it since.',
+                  'you are the one it is for. i am reasonably sure that was the arrangement.'],
+          gives: 'rod:seraph' }
       ] },
 
     { id: 'collector', name: 'The Collector', role: 'cosmetic', color: '#e8a0c8',
@@ -214,7 +232,13 @@
         { at: function (d) { return d.cosmetics.length >= 26; },
           lines: ['at this point you have better taste than i do, which is professionally humiliating.',
                   'take this one. it was never for sale.'],
-          gives: 'cosmetic' }
+          gives: 'cosmetic' },
+        { at: function (d) { return d.cosmetics.length >= 26 && d.level >= 65; },
+          lines: ['there is a lead box behind the stall. there has always been a lead box behind the stall.',
+                  'what is in it is not useless, which is why i have never once tried to sell it, and why it has been ' +
+                  'behind the stall and not on it.',
+                  'it lights the inside of your hand from the wrong side. i would like it out of my premises.'],
+          gives: 'rod:halflife' }
       ],
       quest: [
         { at: function (d) { return VF.quests.reached('heavens', 6) && d.cosmetics.length >= 16; },

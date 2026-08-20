@@ -392,6 +392,21 @@
       VF.achievements.check();
     });
 
+    /* A rod that was handed over rather than bought. grant() is the only way
+       one arrives, from a person or from the water, so this is the only place
+       that has to make anything of it. */
+    VF.bus.on('rod:granted', function (rod) {
+      VF.audio.stinger('grand', 5);
+      VF.fx.pulse(0.6);
+      VF.fx.flash(U.rgbToCss(U.hexToRgb(rod.art.tip), 0.20), 0.34, 1.5);
+      showPrompt(rod.name, rod.art.tip, 2.2);
+      VF.toast.show('<strong>' + U.esc(rod.name) + '</strong><br>' +
+        '<span style="color:var(--ink-3)">nobody sold you this one. it is already in your hands.</span>',
+        'good', 7000);
+      flashMenu('shop');
+      refreshGear();
+      VF.achievements.check();
+    });
     VF.bus.on('charm:found', function (c) {
       VF.toast.show('<strong>' + U.esc(c.name) + '</strong><br><span style="color:var(--ink-3)">' +
         U.esc(c.note) + '</span>', 'good', 6000);
@@ -407,7 +422,9 @@
     });
     VF.bus.on('npc:advanced', function () { flashMenu('journal'); });
     VF.bus.on('npc:gives', function (o) {
-      if (o.gives === 'case') {
+      if (o.gives.indexOf('rod:') === 0) {
+        VF.rods.grant(o.gives.slice(4));
+      } else if (o.gives === 'case') {
         VF.state.data.caseTokens++;
         VF.toast.show('the keeper hands you <strong>a key</strong>', 'good', 4200);
       } else if (o.gives === 'rod') {

@@ -210,6 +210,15 @@
         body.appendChild(note);
       }
     }
+    if (t.rod) {
+      const r = VF.rods.get(t.rod);
+      if (r) {
+        const note = U.el('div', 'relic-note');
+        note.appendChild(U.el('span', 'k', 'a rod'));
+        note.appendChild(U.el('div', null, r.name + ' — ' + r.desc));
+        body.appendChild(note);
+      }
+    }
     if (t.token) {
       const note = U.el('div', 'relic-note');
       note.appendChild(U.el('span', 'k', 'the keeper will want this'));

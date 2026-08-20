@@ -71,6 +71,92 @@
       desc: 'Fishes a small radius of collapsed space. Reel speed is technically negative and it works anyway.',
       art: { c1: '#0a0812', c2: '#000000', grip: '#0f0c18', tip: '#ff5fa2', len: 1.40, curve: 0.03, glow: 1.0, style: 'singularity' } },
 
+    /* ------------------------------------------------- the strange shelf
+       Ten rods that are not a straight continuation of the ladder. They
+       interleave with the tiers above and below them, so taking the long way
+       round is a real alternative to saving up — and six of them are never
+       for sale at any price: somebody hands them over, or the water does. */
+
+    { id: 'frostpoint', name: 'The Frozen Instant', cost: 520000, level: 31,
+      requiresSecret: 'glass_shallows',
+      cast: 0.90, reel: 1.46, line: 4.35, rare: 2.75, luck: 0.84,
+      desc: 'A single moment of water, taken while it was freezing and never allowed to finish. ' +
+            'The blade at the top is still growing, very slowly, in the direction of your hand.',
+      art: { c1: '#7fd8f0', c2: '#2a6a8c', grip: '#1a3f56', tip: '#eaffff',
+             len: 1.19, curve: 0.065, glow: 0.75, style: 'glacier' } },
+
+    { id: 'shatterhour', name: 'The Shattered Hour', cost: 1900000, level: 39,
+      requiresTreasure: 'crystal',
+      cast: 0.98, reel: 1.71, line: 5.45, rare: 3.35, luck: 1.10,
+      desc: 'It broke a long time ago and the pieces have not agreed to fall yet. ' +
+            'They orbit the break at the speed of an hour going past.',
+      art: { c1: '#9a8cf0', c2: '#2e2450', grip: '#1a1430', tip: '#e8d8ff',
+             len: 1.25, curve: 0.055, glow: 0.85, style: 'shatter' } },
+
+    { id: 'redthread', name: 'Red Thread', cost: 0, level: 45, noShop: true,
+      notForSale: 'Not for sale. The old fisherman is still using it.',
+      cast: 1.04, reel: 1.94, line: 6.50, rare: 3.90, luck: 1.35,
+      desc: 'The old fisherman bound this himself, one turn of cord at a time, for sixty years. ' +
+            'The cord is not cord. He knows that. He kept binding.',
+      art: { c1: '#2a2f44', c2: '#12141f', grip: '#3a1418', tip: '#ff5a5a',
+             len: 1.29, curve: 0.05, glow: 0.50, style: 'corded' } },
+
+    { id: 'ninearms', name: 'Nine Arms', cost: 22000000, level: 50,
+      requiresSpecies: 'nine_tide',
+      cast: 1.09, reel: 2.10, line: 7.20, rare: 4.35, luck: 1.55,
+      desc: 'Eight of them hold the blank. The ninth holds the line, and it is better at it than you are.',
+      art: { c1: '#8e2f34', c2: '#3c1216', grip: '#2a0e12', tip: '#ff8a7a',
+             len: 1.32, curve: 0.045, glow: 0.45, style: 'kraken' } },
+
+    { id: 'pyrewing', name: 'Pyrewing', cost: 0, level: 55, noShop: true,
+      notForSale: 'Not for sale. It came up on the line wrapped in cloth, and the cloth was not burnt.',
+      cast: 1.15, reel: 2.30, line: 8.10, rare: 4.90, luck: 1.78,
+      desc: 'The fire on it is not flame. It is feathered, it lies along the blank the way plumage does, ' +
+            'and it does not consume the black underneath.',
+      art: { c1: '#8a1420', c2: '#14060a', grip: '#2a0a0e', tip: '#ff3a2a',
+             len: 1.36, curve: 0.04, glow: 0.88, style: 'pyre' } },
+
+    { id: 'thunderstruck', name: 'Thunderstruck', cost: 180000000, level: 60,
+      requiresSpecies: 'stormcaller',
+      cast: 1.21, reel: 2.52, line: 8.95, rare: 5.50, luck: 2.02,
+      desc: 'Struck once, all the way through, and the strike is still in there looking for the ground. ' +
+            'It will not find it. You are holding the only way out.',
+      art: { c1: '#4a3418', c2: '#0f0a06', grip: '#241708', tip: '#ffc23a',
+             len: 1.39, curve: 0.035, glow: 1.0, style: 'thunder' } },
+
+    { id: 'halflife', name: 'Halflife', cost: 0, level: 65, noShop: true,
+      notForSale: 'Not for sale. The collector deals only in the useless, and this is not that.',
+      cast: 1.28, reel: 2.72, line: 9.90, rare: 6.15, luck: 2.32,
+      desc: 'The collector kept it behind the stall in a lead box and never once tried to sell it. ' +
+            'It lights the inside of your hand from the wrong side.',
+      art: { c1: '#12201a', c2: '#040806', grip: '#0a1410', tip: '#5cff8a',
+             len: 1.42, curve: 0.03, glow: 1.0, style: 'neon' } },
+
+    { id: 'seraph', name: 'Seraph', cost: 0, level: 71, noShop: true,
+      requiresQuest: 'heavens',
+      notForSale: 'Not for sale. The astronomer will not discuss it until the sky has been settled.',
+      cast: 1.36, reel: 2.95, line: 11.2, rare: 6.95, luck: 2.65,
+      desc: 'Rings of standing fire down the blank and a pair of wings opened at your hand. ' +
+            'The astronomer had it the whole time and would not say so until you had proved the point.',
+      art: { c1: '#f4ead0', c2: '#a88a48', grip: '#6a5424', tip: '#ffb14a',
+             len: 1.45, curve: 0.025, glow: 1.0, style: 'seraph' } },
+
+    { id: 'longfeather', name: 'The Long Feather', cost: 0, level: 77, noShop: true,
+      notForSale: 'Not for sale. It is still in the water, and it is not the only one down there.',
+      cast: 1.45, reel: 3.25, line: 13.2, rare: 8.20, luck: 3.15,
+      desc: 'Moulted, not cut. Whatever dropped it was going somewhere and did not come back for it, ' +
+            'and every colour is in the shaft rather than on it.',
+      art: { c1: '#e8e2f4', c2: '#8a7aa8', grip: '#4a3f66', tip: '#d88aff',
+             len: 1.49, curve: 0.02, glow: 0.95, style: 'plume' } },
+
+    { id: 'twinsun', name: 'Two Small Suns', cost: 0, level: 84, noShop: true,
+      notForSale: 'Not for sale. The keeper has never once put it on a shelf.',
+      cast: 1.58, reel: 3.70, line: 16.2, rare: 10.2, luck: 3.90,
+      desc: 'One at the tip and one at your hand, and the dark between them is the rod. ' +
+            'The keeper had it under the counter the entire time. He was waiting to see if you would come back.',
+      art: { c1: '#1a1a20', c2: '#050506', grip: '#101014', tip: '#ffffff',
+             len: 1.55, curve: 0.015, glow: 1.0, style: 'twinsun' } },
+
     { id: 'unknown', name: '??? Rod', cost: 2500000000, level: 74, requiresVoidCatch: true,
       cast: 1.40, reel: 3.10, line: 12.0, rare: 7.40, luck: 2.90,
       desc: 'It was already in your hands. Check the photographs. It was always in your hands.',
