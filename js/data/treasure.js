@@ -84,16 +84,6 @@
       icon: 'strange', color: '#ff8fd0', minLoc: 5, journal: 'strange',
       desc: 'The archivist will want to see this. You are not sure you want her to.' },
 
-    /* Two rods that nobody made and nobody sells. They come up on the line
-       like anything else does, and then they are yours. `rodGift` is handled
-       in js/systems/fishing.js, next to the relics. */
-    { id: 'rod_exsanguine', name: 'Something Wrapped', rarity: 'legendary', weight: 0.55,
-      value: [0, 0], icon: 'rod', color: '#ff2a2a', minLoc: 5, rodGift: 'exsanguine',
-      desc: 'Long, bound in cloth, and wet with something that is not water. The cloth is dry.' },
-
-    { id: 'rod_longfeather', name: 'A Shaft Of Every Colour', rarity: 'legendary', weight: 0.35,
-      value: [0, 0], icon: 'rod', color: '#d88aff', minLoc: 6, rodGift: 'longfeather',
-      desc: 'It was moulted. Whatever dropped it was going somewhere and has not come back for it.' }
   ];
 
   const BY_ID = VF.util.byId(LIST);
