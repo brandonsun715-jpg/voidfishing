@@ -488,23 +488,11 @@
     art: { body: 'object', object: 'angler', glitch: 0.9, glow: 0.5,
            c1: '#3a3a46', c2: '#0c0c12', c3: '#ffe0b0' } },
 
-  { id: 'g_sunday', name: 'Last Sunday', rarity: 'glitch', value: 26000000, kg: [0.5, 4], m: [0.1, 0.9], diff: 0.85,
-    desc: 'The entire day. Slightly damp. You can still smell the rain on it.',
-    locs: [], baits: [], time: [], weather: ['rain', 'overcast'],
-    art: { body: 'object', object: 'calendar', glitch: 0.7, glow: 0.75,
-           c1: '#e4e8ee', c2: '#5f6f83', c3: '#ffb03a' } },
-
   { id: 'g_bigger', name: 'A Much Larger Hook', rarity: 'glitch', value: 58000000, kg: [1200, 44000], m: [12, 90], diff: 0.99,
     desc: 'Barbed, rusted, and attached to a line going up. Do not look up. You looked up.',
     locs: [], baits: ['null'], time: ['night'], weather: ['voidsurge'],
     art: { body: 'object', object: 'hook', glitch: 0.8, glow: 0.4,
            c1: '#6a5a48', c2: '#241d16', c3: '#ffd8a0' } },
-
-  { id: 'g_applause', name: 'Distant Applause', rarity: 'glitch', value: 33000000, kg: [0, 0.05], m: [0, 0.05], diff: 0.90,
-    desc: 'Not a thing. Not an object. It is on the hook regardless, and it is getting louder.',
-    locs: [], baits: [], time: [], weather: [],
-    art: { body: 'object', object: 'hands', glitch: 1.1, glow: 1,
-           c1: '#e8b490', c2: '#4a2a20', c3: '#ffd166' } },
 
   /* ===================== second catalogue =====================
      Everything below was added after the first survey. The shallow end fills
@@ -661,15 +649,45 @@
     art: { body: 'object', object: 'counter', glitch: 1.3, glow: 1,
            c1: '#d8d4c8', c2: '#0a0a10', c3: '#ff2d55' } },
 
-  { id: 'g_tuesday', name: 'The Idea Of A Fish', rarity: 'glitch', value: 64000000, kg: [0, 0.4], m: [0, 2], diff: 0.95,
-    desc: 'Not a fish. The concept, unattached to any particular one. It is heavier than you would expect.',
-    locs: [], baits: [], time: [], weather: ['fog', 'eclipse'],
-    art: { body: 'unfinished', fin: 'veil', eyes: 1, glow: 0.85, c1: '#dfe8f4', c2: '#2a3444', c3: '#ffd166', ex: ['runes', 'duplicate', 'halo'] } },
-
   { id: 'g_gardener', name: 'THE ONE THAT PLANTED IT', rarity: 'glitch', value: 120000000, kg: [400, 88000], m: [8, 180], diff: 0.99,
     desc: 'The water was put here. The fish were put here. You were put here. It has come to check on the arrangement.',
     locs: [], baits: ['null', 'void'], time: ['night'], weather: ['voidsurge', 'eclipse'],
     art: { body: 'column', fin: 'none', eyes: 12, glow: 1, c1: '#1a2418', c2: '#000000', c3: '#a8ff8a', ex: ['roots', 'eyes_many', 'crown', 'chains'] } },
+
+  { id: 'g_trench', name: 'THE TRENCH ITSELF', rarity: 'glitch', value: 168000000, kg: [900000, 40000000], m: [400, 9000], diff: 0.99,
+    desc: 'You have not been fishing above it. The charts call it a trench because the word for a mouth ' +
+          'that size would have to be invented, and nobody who could invent it came back up.',
+    locs: [], baits: ['null', 'void'], time: [], weather: ['voidsurge', 'eclipse'],
+    art: { body: 'column', fin: 'none', eyes: 8, glow: 0.9, c1: '#0e1a22', c2: '#000000', c3: '#5fe0ff',
+           ex: ['teeth', 'eyes_many', 'roots', 'chains', 'fracture'] } },
+
+  { id: 'g_secondmoon', name: 'A SECOND MOON, LOWERING', rarity: 'glitch', value: 210000000, kg: [4000000, 90000000], m: [1200, 26000], diff: 0.99,
+    desc: 'It is not rising and it is not falling. It is being let down, slowly, on something, ' +
+          'and the something has just gone tight in your hands.',
+    locs: [], baits: ['null'], time: ['night'], weather: ['eclipse', 'clear'],
+    art: { body: 'orb', fin: 'none', eyes: 0, glow: 1, c1: '#e8e4d4', c2: '#6a6858', c3: '#ffffff',
+           ex: ['halo', 'rings', 'chains', 'crown'] } },
+
+  { id: 'g_prayed', name: 'WHAT THE LEVIATHANS PRAY TO', rarity: 'glitch', value: 260000000, kg: [200000, 12000000], m: [300, 4000], diff: 0.99,
+    desc: 'Everything with a name in this catalogue is smaller than it and knows the direction it is in. ' +
+          'They face it when they die. You have it on a hook.',
+    locs: [], baits: ['null', 'void'], time: ['night'], weather: ['voidsurge'],
+    art: { body: 'anomaly', fin: 'wing', eyes: 12, glow: 1, c1: '#2a1038', c2: '#000000', c3: '#ffb8f0',
+           ex: ['crown', 'eyes_many', 'halo', 'runes', 'tentacles', 'wings'] } },
+
+  { id: 'g_unshoal', name: 'THE UNMAKER OF SHOALS', rarity: 'glitch', value: 152000000, kg: [60000, 3000000], m: [180, 2200], diff: 0.99,
+    desc: 'It does not eat them. It goes through a shoal and afterwards the shoal has not been eaten, ' +
+          'it has simply never existed, and nobody is missing anybody.',
+    locs: [], baits: ['null'], time: [], weather: ['voidsurge', 'fog'],
+    art: { body: 'fractal', fin: 'none', eyes: 3, glow: 1, c1: '#100818', c2: '#000000', c3: '#c8a0ff',
+           ex: ['static', 'duplicate', 'fracture', 'threads'] } },
+
+  { id: 'g_firstwater', name: 'THE FIRST WATER, AND WHAT WAS IN IT', rarity: 'glitch', value: 320000000, kg: [1000000, 60000000], m: [500, 14000], diff: 0.99,
+    desc: 'Before there was a shore there was water, and it was not empty when it arrived. ' +
+          'This is the passenger. It has been waiting for somebody to build a rod that could hold it.',
+    locs: [], baits: ['null'], time: [], weather: ['voidsurge', 'eclipse'],
+    art: { body: 'folded', fin: 'veil', eyes: 6, glow: 1, c1: '#0a1418', c2: '#000000', c3: '#8ffce0',
+           ex: ['runes', 'halo', 'eyes_many', 'wrongscale', 'stars'] } },
 
   { id: 'g_reader', name: 'you, reading this', rarity: 'glitch', value: 96000000, kg: [50, 110], m: [1.5, 2.1], diff: 0.99,
     desc: 'Not the one fishing. The other one. Sitting somewhere dry, looking at a lit rectangle, holding nothing.',
