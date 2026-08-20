@@ -25,7 +25,13 @@
           lines: ['you brought that up on purpose, did you.',
                   'the archivist will want to hear about it. i would rather you did not tell me.'] },
         { at: function (d) { return VF.secrets.found('the_last_water'); },
-          lines: ['so you found it.', 'close the door behind you on the way out. it will not matter, but close it anyway.'] }
+          lines: ['so you found it.', 'close the door behind you on the way out. it will not matter, but close it anyway.'] },
+        { at: function (d) { return VF.secrets.found('the_last_water') && (d.stats.glitchCatches | 0) >= 1; },
+          lines: ['right. under the counter. it has been under the counter the whole time you have been coming in here.',
+                  'i was not keeping it from you. i was waiting to see whether you would come back after the last water. ' +
+                  'most do not.',
+                  'two of them. one at the tip and one at your hand. do not look directly at either.'],
+          gives: 'rod', givesRod: 'twinsun' }
       ] },
 
     { id: 'archivist', name: 'The Archivist', role: 'lore', color: '#8fb8e8',
@@ -47,7 +53,13 @@
                   'and yet the scale gave you a number, and you wrote it down, and now it does. be careful what you measure.'],
           journal: 'firstvoid' },
         { at: function (d) { return VF.charms.owned('eye'); },
-          lines: ['take it out of here.', 'i am not being dramatic. i am being specific. take it out of this room.'] }
+          lines: ['take it out of here.', 'i am not being dramatic. i am being specific. take it out of this room.'] },
+        { at: function (d) { return VF.charms.owned('eye') && Object.keys(d.fishdex).length >= 60; },
+          lines: ['sixty entries. the record has never been this complete and i have stopped enjoying reading it.',
+                  'there is a rod on the shelf behind me. it is filed, not stocked — it came in as an object and it ' +
+                  'answered a question, so it stayed.',
+                  'take it. i would rather it was being used than being catalogued. that is the first time i have said that.'],
+          gives: 'rod', givesRod: 'reliquary' }
       ] },
 
     { id: 'fisherman', name: 'The Old Fisherman', role: 'clue', color: '#a8c890',
@@ -71,7 +83,15 @@
         { at: function (d) { return VF.charms.owned('eye') && VF.journal.hintCount() >= 2; },
           lines: ['one more, then. under everything, where the map is not a map of anything but a lid.',
                   'you will not find it by going deeper. you find it by already knowing it is there. i have told you. now you know.'],
-          journal: 'thelast' }
+          journal: 'thelast' },
+        { at: function (d) { return VF.charms.owned('eye') && VF.journal.hintCount() >= 2 &&
+                                    d.stats.catches >= 220 && d.level >= 45; },
+          lines: ['sit down. no — take this first.',
+                  'sixty years of cord on that blank, one turn at a time. i knew what the cord was after the first ten. ' +
+                  'i kept winding.',
+                  'i am not giving it to you because you are good. you are adequate. i am giving it to you because ' +
+                  'i have stopped going out and it should not be in a cupboard.'],
+          gives: 'rod', givesRod: 'redthread' }
       ] },
 
     { id: 'drifter', name: 'The Drifter', role: 'wander', color: '#b8a8e8',
@@ -112,7 +132,13 @@
         { at: function (d) { return d.cosmetics.length >= 26; },
           lines: ['at this point you have better taste than i do, which is professionally humiliating.',
                   'take this one. it was never for sale.'],
-          gives: 'cosmetic' }
+          gives: 'cosmetic' },
+        { at: function (d) { return d.cosmetics.length >= 40 && d.level >= 60; },
+          lines: ['there is a lead box behind the stall. there has always been a lead box behind the stall.',
+                  'i deal in the useless. that is the whole trade. this one is not useless, which is why it has ' +
+                  'never been on the table.',
+                  'it lights the inside of your hand from the wrong side. do not thank me — take it away from my stock.'],
+          gives: 'rod', givesRod: 'halflife' }
       ] }
   ];
 
@@ -176,7 +202,7 @@
       if (done || !first) return;
       done = true;
       if (def.journal) VF.journal.add(def.journal);
-      if (def.gives) VF.bus.emit('npc:gives', { npc: npc, gives: def.gives });
+      if (def.gives) VF.bus.emit('npc:gives', { npc: npc, gives: def.gives, rod: def.givesRod });
       VF.bus.emit('npc:advanced', { npc: npc, stage: stage });
       VF.save.save();
     }

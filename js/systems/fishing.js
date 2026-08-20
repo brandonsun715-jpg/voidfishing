@@ -348,6 +348,8 @@
     if (t.journal) VF.journal.add(t.journal);
     if (t.token) d.caseTokens++;
     if (t.relic) VF.charms.grant(t.relic);
+    // a rod the water gave back: it goes into the hand, same as a gifted one
+    if (t.rodGift) VF.rods.grant(t.rodGift);
     S.fight = null;
     S.lastResult = c;
     S.encounterActive = false;

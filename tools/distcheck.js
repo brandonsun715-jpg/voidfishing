@@ -21,11 +21,13 @@ const path = require('path');
     const sleep = ms => new Promise(r => setTimeout(r, ms));
     VF.fishing.beginCharge(); await sleep(600); VF.fishing.releaseCharge();
     await sleep(900);
-    VF.fishing.S.timer = 0.05; await sleep(300);
+    VF.fishing.S.biteWait = 0.05; await sleep(300);
     if (VF.fishing.S.state === 'bite') VF.fishing.hook();
     await sleep(200);
-    VF.fishing.setReeling(true);
-    for (let i = 0; i < 200 && VF.fishing.S.state === 'reeling'; i++) await sleep(30);
+    for (let i = 0; i < 400 && VF.fishing.S.state === 'reeling'; i++) {
+      VF.fishing.setReeling(VF.fishing.S.fight.tension < 0.6);
+      await sleep(16);
+    }
     return VF.fishing.S.state;
   });
   console.log('cycle ended in:', cycle);

@@ -268,6 +268,15 @@
       if (o.gives === 'case') {
         VF.state.data.caseTokens++;
         VF.toast.show('the keeper hands you <strong>a key</strong>', 'good', 4200);
+      } else if (o.gives === 'rod') {
+        // a rod that is not for sale, handed over. It goes straight into the hand.
+        const rod = VF.rods.get(o.rod);
+        if (o.rod && VF.rods.grant(o.rod)) {
+          VF.toast.show('<strong>' + U.esc(rod.name) + '</strong><br>' +
+            '<span style="color:var(--ink-3)">' + U.esc(o.npc.name.toLowerCase()) +
+            ' hands it over — it is in your hands</span>', 'good', 7000);
+          flashMenu('shop');   // grant() already emitted gear:changed
+        }
       } else if (o.gives === 'cosmetic') {
         const pool = VF.cosmetics.list.filter(function (c) { return c.secret && !VF.cosmetics.owned(c.id); });
         if (pool.length) {
@@ -555,7 +564,7 @@
       D.fightUI.classList.remove('hidden');
       D.fightName.textContent = f.c.kind === 'treasure' ? 'something heavy'
         : f.c.isNew ? 'unknown — something new'
-        : VF.traits.prefix(f.c.traits) + f.c.fish.name;
+        : VF.traits.title(f.c.traits, f.c.fish.name);
       D.fightName.style.color = VF.rarities.color(f.c.rarity);
     }
 

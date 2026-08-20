@@ -231,6 +231,44 @@
         ctx.beginPath(); ctx.arc(-S * 0.2, -S * 0.2, S * 0.1, 0, TAU); ctx.fill();
         break;
       }
+      case 'rod': {
+        // a rod, wrapped, as it comes up: you cannot tell which one yet
+        const a = -0.72;
+        const dx = Math.cos(a), dy = Math.sin(a);
+        ctx.strokeStyle = line;
+        ctx.lineWidth = Math.max(1.4, S * 0.13);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(-dx * S * 1.15, -dy * S * 1.15);
+        ctx.lineTo(dx * S * 1.25, dy * S * 1.25);
+        ctx.stroke();
+        ctx.strokeStyle = face;
+        ctx.lineWidth = Math.max(1, S * 0.07);
+        ctx.beginPath();
+        ctx.moveTo(-dx * S * 1.10, -dy * S * 1.10);
+        ctx.lineTo(dx * S * 1.20, dy * S * 1.20);
+        ctx.stroke();
+        // the wrapping that has kept it together down there
+        ctx.strokeStyle = lit;
+        ctx.lineWidth = Math.max(0.8, S * 0.05);
+        for (let i = 0; i < 5; i++) {
+          const u = -0.5 + i * 0.34;
+          const x = dx * S * u, y = dy * S * u;
+          ctx.beginPath();
+          ctx.moveTo(x + dy * S * 0.16, y - dx * S * 0.16);
+          ctx.lineTo(x - dy * S * 0.16, y + dx * S * 0.16);
+          ctx.stroke();
+        }
+        // the reel, and a short length of line still on it
+        ctx.fillStyle = face;
+        ctx.beginPath();
+        ctx.arc(-dx * S * 0.72 + dy * S * 0.30, -dy * S * 0.72 - dx * S * 0.30, S * 0.28, 0, TAU);
+        ctx.fill();
+        ctx.strokeStyle = line;
+        ctx.lineWidth = Math.max(0.8, S * 0.045);
+        ctx.stroke();
+        break;
+      }
       default: { /* strange */
         ctx.strokeStyle = face;
         ctx.lineWidth = Math.max(1.2, S * 0.05);

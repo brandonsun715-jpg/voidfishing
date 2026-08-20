@@ -107,6 +107,19 @@
     return ids.map(function (id) { return BY_ID[id] ? BY_ID[id].name : id; }).join(' ') + ' ';
   }
 
+  /* Most species are a bare noun phrase and take the traits in front:
+     Massive Golden Silver Pike. Some are not — the last tier is full of names
+     that already start with a determiner or are not words at all, and
+     "Massive Your Fishing Hook" is not a sentence. Those keep their own name;
+     the trait chips under it are already saying which traits landed. */
+  const DETERMINED = /^(a|an|the|your|my|somebody|last|four|zero|all|itself|you)\b/i;
+
+  function title(ids, name) {
+    if (!ids || !ids.length) return name;
+    if (DETERMINED.test(name) || !/^[A-Za-z]/.test(name)) return name;
+    return prefix(ids) + name;
+  }
+
   /* The colour a combination reads as: the rarest trait, warmed by the rest. */
   function color(ids) {
     if (!ids || !ids.length) return null;
@@ -164,7 +177,7 @@
 
   VF.traits = {
     list: LIST, rollable: ROLLABLE, get: get, roll: roll, sort: sort,
-    multiplier: multiplier, prefix: prefix, color: color, fight: fight,
+    multiplier: multiplier, prefix: prefix, title: title, color: color, fight: fight,
     sizeScale: sizeScale, rarestTier: rarestTier, comboScore: comboScore,
     MAX_TRAITS: MAX_TRAITS
   };

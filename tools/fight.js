@@ -52,8 +52,8 @@ function simulate(rodId, fishId, skill) {
   return { t, out: out || 'timeout', perfect: f.perfect };
 }
 
-const rods = ['wood','carbon','deepwater','lunar','void','unknown',
-              'eclipse','origin','everything'];
+const rods = ['wood','carbon','deepwater','lunar','frostpoint','void','ninearms',
+              'unknown','longfeather','eclipse','twinsun','origin','everything'];
 const targets = [['smallmouth','common'],['silver_pike','uncommon'],['golden_bass','rare'],
   ['moonfish','epic'],['leviathan','legendary'],['star_serpent','mythic'],['void_leviathan','void']];
 for (const skill of ['good','ok','poor']) {

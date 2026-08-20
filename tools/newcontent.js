@@ -11,7 +11,23 @@ const NEW = ['reed_dace','button_crab','chalk_sole','kettle_perch','sew_eel','ti
   'cold_marlin','bell_jelly','grave_carp','lamp_ray','stitch_bream','ash_ray','root_pike',
   'coin_king','tally_fish','salt_widow','folded_letter','mirror_twin','sunken_column',
   'spiral_saint','the_absence','the_census','the_understudy','the_long_now',
-  'g_swarm','g_price','g_cursor','g_recursion','g_zero','g_tuesday','g_gardener','g_reader'];
+  'g_swarm','g_price','g_cursor','g_recursion','g_zero','g_tuesday','g_gardener','g_reader',
+  // third catalogue
+  'pin_bream','mud_gudgeon','paper_ray','kelp_perch','coin_minnow','ribbon_smelt',
+  'knot_loach','chip_crab','lamp_fry',
+  'wire_pike','moth_ray','salt_jelly','char_eel','twinned_perch','thorn_bream','ink_sole',
+  'glass_shrimp','nine_gill','dust_carp',
+  'lattice_eel','anvil_ray','ember_pike','chorus_smelt','hollow_carp','crown_jelly','nail_eel',
+  'archive_sole','tide_crab','still_marlin',
+  'brass_whale','prism_serpent','quiet_ray','thousand_smelt','gilt_crustacean',
+  'kept_promise','iron_pike','nested_bream',
+  'deep_hold','longest_night','lamp_keeper','bell_of_hours','long_hand',
+  'unlit_lantern','weight_of_it',
+  'the_argument','the_inheritance','the_low_note','the_shed_skin','the_open_hand',
+  'the_first_dark','the_kindness',
+  'the_remainder','the_witness','the_second_water','the_returned','the_quiet_part','the_hour_after',
+  'g_yourhook','g_door','g_boot','g_bulb','g_clock','g_key','g_sign','g_ladder','g_bench',
+  'g_tv','g_window','g_umbrella','g_cage','g_bucket','g_lamp','g_tea','g_stairs'];
 
 const d = VF.state.data;
 d.level = 99;

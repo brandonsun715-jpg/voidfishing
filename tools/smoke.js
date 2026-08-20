@@ -25,6 +25,20 @@ const path = require('path');
   console.log('modules:', boot.modules.join(', '));
   console.log('fish count:', boot.fish);
 
+  /* byId() takes the last entry with a given id and says nothing about it, so a
+     duplicate silently deletes a species. Same for rods. Catch it here. */
+  const dupes = await page.evaluate(() => {
+    function scan(list, what) {
+      const seen = Object.create(null), bad = [];
+      list.forEach(e => { if (seen[e.id]) bad.push(what + ' ' + e.id); seen[e.id] = 1; });
+      return bad;
+    }
+    return scan(VF.fish.list, 'fish').concat(scan(VF.rods.list, 'rod'))
+           .concat(scan(VF.treasureData.list, 'treasure'));
+  });
+  console.log('duplicate ids:', dupes.length ? dupes.join(', ') : 'none');
+  if (dupes.length) process.exitCode = 1;
+
   await page.screenshot({ path: 'tools/shot-title.png' });
 
   await page.click('#bootStart');
