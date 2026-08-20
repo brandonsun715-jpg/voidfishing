@@ -384,6 +384,237 @@
         ctx.restore();
         break;
       }
+
+      /* ------------------------------------------------- the far end ----
+         These are the rods that are supposed to be absurd. Each one gets a
+         mechanism of its own rather than another set of dots on the blank. */
+
+      case 'storm': {
+        // charge that has not finished leaving the blank: forks jumping
+        // between the guides, redrawn on their own irregular clock
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const seed = Math.floor(t * 9);
+        const rnd = VF.rng.make(seed * 2654435761 ^ 0x5701);
+        const forks = 3;
+        for (let f = 0; f < forks; f++) {
+          const k0 = 0.18 + rnd() * 0.55;
+          const k1 = Math.min(0.99, k0 + 0.14 + rnd() * 0.30);
+          const a0 = at(k0), a1 = at(k1);
+          ctx.strokeStyle = U.rgbToCss(tipRgb, 0.30 + rnd() * 0.5);
+          ctx.lineWidth = Math.max(0.6, (0.8 + rnd() * 1.4) * scale);
+          ctx.beginPath();
+          ctx.moveTo(a0.x, a0.y);
+          const steps = 4;
+          for (let i = 1; i <= steps; i++) {
+            const u = i / steps;
+            const px = U.lerp(a0.x, a1.x, u) + (rnd() - 0.5) * 9 * scale;
+            const py = U.lerp(a0.y, a1.y, u) + (rnd() - 0.5) * 9 * scale;
+            ctx.lineTo(px, py);
+          }
+          ctx.stroke();
+        }
+        // a standing charge along the whole blank
+        ctx.strokeStyle = U.rgbToCss(tipRgb, 0.16 + 0.10 * Math.sin(t * 5.5));
+        ctx.lineWidth = Math.max(1.4, 2.4 * scale);
+        ctx.beginPath();
+        ctx.moveTo(g.bx, g.by);
+        ctx.quadraticCurveTo(g.cx, g.cy, g.tx, g.ty);
+        ctx.stroke();
+        ctx.restore();
+        break;
+      }
+
+      case 'bone': {
+        // vertebrae down the blank, thinning toward a fang
+        ctx.fillStyle = U.rgbToCss(U.mixRgb(tipRgb, [255, 255, 255], 0.25), 0.85);
+        ctx.strokeStyle = U.rgbToCss(U.shade(tipRgb, -0.55), 0.7);
+        ctx.lineWidth = Math.max(0.4, 0.6 * scale);
+        for (let i = 0; i < 9; i++) {
+          const k = 0.14 + i * 0.093;
+          const p = at(k);
+          const w = Math.max(1, (3.6 - i * 0.30) * scale);
+          const ang = Math.atan2(p.y - at(Math.max(0, k - 0.02)).y, p.x - at(Math.max(0, k - 0.02)).x);
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate(ang);
+          ctx.beginPath();
+          ctx.ellipse(0, 0, w * 0.62, w, 0, 0, TAU);
+          ctx.fill();
+          ctx.stroke();
+          // the transverse spurs, swept back the way a spine's are
+          ctx.lineWidth = Math.max(0.5, 0.9 * scale);
+          ctx.beginPath();
+          ctx.moveTo(-w * 0.2, -w * 0.7); ctx.lineTo(-w * 1.1, -w * 2.0);
+          ctx.moveTo(-w * 0.2, w * 0.7); ctx.lineTo(-w * 1.1, w * 2.0);
+          ctx.stroke();
+          ctx.lineWidth = Math.max(0.4, 0.6 * scale);
+          ctx.restore();
+        }
+        // and it ends in the point it was taken from
+        {
+          const p = at(1), q = at(0.94);
+          const ang = Math.atan2(p.y - q.y, p.x - q.x);
+          const fw = Math.max(1.2, 2.2 * scale);
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate(ang);
+          ctx.beginPath();
+          ctx.moveTo(-fw * 3.2, -fw);
+          ctx.quadraticCurveTo(fw * 1.2, -fw * 0.5, fw * 3.4, 0);
+          ctx.quadraticCurveTo(fw * 1.2, fw * 0.5, -fw * 3.2, fw);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+          ctx.restore();
+        }
+        // marrow-light bleeding up the inside
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = U.rgbToCss(tipRgb, 0.10 + 0.06 * Math.sin(t * 1.3));
+        ctx.lineWidth = Math.max(0.8, 1.6 * scale);
+        ctx.beginPath();
+        ctx.moveTo(g.bx, g.by);
+        ctx.quadraticCurveTo(g.cx, g.cy, g.tx, g.ty);
+        ctx.stroke();
+        ctx.restore();
+        break;
+      }
+
+      case 'chorus': {
+        // a voice at every guide: rings that swell out of phase, and motes
+        // that rise off the blank and go out
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        for (let i = 0; i < 6; i++) {
+          const p = at(0.22 + i * 0.14);
+          const ph = (t * 0.55 + i * 0.17) % 1;
+          const r = Math.max(1, (2 + ph * 11) * scale);
+          ctx.strokeStyle = U.rgbToCss(tipRgb, (1 - ph) * 0.45);
+          ctx.lineWidth = Math.max(0.5, (1.4 - ph) * scale);
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, r, 0, TAU);
+          ctx.stroke();
+          // the mote itself
+          ctx.fillStyle = U.rgbToCss(tipRgb, 0.55 + 0.35 * Math.sin(t * 2.1 + i));
+          ctx.beginPath();
+          ctx.arc(p.x, p.y - ph * 9 * scale, Math.max(0.7, 1.5 * scale), 0, TAU);
+          ctx.fill();
+        }
+        ctx.restore();
+        break;
+      }
+
+      case 'eclipse': {
+        // a covered sun at the tip, with a corona and a shadow pointing wrong
+        ctx.save();
+        const r = Math.max(3.2, 6.6 * scale);
+        const pulse = 0.82 + 0.18 * Math.sin(t * 0.9);
+        ctx.globalCompositeOperation = 'lighter';
+        const cor = ctx.createRadialGradient(g.tx, g.ty, r * 0.9, g.tx, g.ty, r * 3.4 * pulse);
+        cor.addColorStop(0, U.rgbToCss(tipRgb, 0.75));
+        cor.addColorStop(0.30, U.rgbToCss(tipRgb, 0.22));
+        cor.addColorStop(1, U.rgbToCss(tipRgb, 0));
+        ctx.fillStyle = cor;
+        ctx.beginPath(); ctx.arc(g.tx, g.ty, r * 3.4 * pulse, 0, TAU); ctx.fill();
+        // flares licking off the rim
+        ctx.strokeStyle = U.rgbToCss(tipRgb, 0.5);
+        ctx.lineWidth = Math.max(0.5, 0.9 * scale);
+        for (let i = 0; i < 7; i++) {
+          const a = t * 0.5 + i * (TAU / 7);
+          const len = r * (1.25 + 0.55 * Math.sin(t * 2.3 + i * 1.9));
+          ctx.beginPath();
+          ctx.moveTo(g.tx + Math.cos(a) * r, g.ty + Math.sin(a) * r);
+          ctx.lineTo(g.tx + Math.cos(a) * len, g.ty + Math.sin(a) * len);
+          ctx.stroke();
+        }
+        ctx.restore();
+        // the disc itself, which is simply absent
+        ctx.fillStyle = '#000';
+        ctx.beginPath(); ctx.arc(g.tx, g.ty, r, 0, TAU); ctx.fill();
+        // the second shadow, cast up the blank the wrong way
+        ctx.save();
+        ctx.globalAlpha = 0.5;
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = Math.max(1.2, 2.6 * scale);
+        ctx.beginPath();
+        ctx.moveTo(U.lerp(g.bx, g.tx, 0.25) + 5 * scale, U.lerp(g.by, g.ty, 0.25) + 5 * scale);
+        ctx.quadraticCurveTo(g.cx + 5 * scale, g.cy + 5 * scale, g.tx + 5 * scale, g.ty + 5 * scale);
+        ctx.stroke();
+        ctx.restore();
+        break;
+      }
+
+      case 'origin': {
+        // the rod the others were drawn from: construction lines, ticks and
+        // a core of raw light where the blank should be
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = U.rgbToCss(tipRgb, 0.85);
+        ctx.lineWidth = Math.max(0.8, 1.5 * scale);
+        ctx.beginPath();
+        ctx.moveTo(g.bx, g.by);
+        ctx.quadraticCurveTo(g.cx, g.cy, g.tx, g.ty);
+        ctx.stroke();
+        ctx.restore();
+
+        ctx.save();
+        ctx.setLineDash([3 * scale, 4 * scale]);
+        ctx.strokeStyle = U.rgbToCss(tipRgb, 0.30);
+        ctx.lineWidth = Math.max(0.4, 0.6 * scale);
+        // the chord the curve was struck against
+        ctx.beginPath();
+        ctx.moveTo(g.bx, g.by); ctx.lineTo(g.tx, g.ty);
+        ctx.stroke();
+        // and the control handle
+        ctx.beginPath();
+        ctx.moveTo(g.bx, g.by); ctx.lineTo(g.cx, g.cy); ctx.lineTo(g.tx, g.ty);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // measurement ticks along the blank
+        ctx.strokeStyle = U.rgbToCss(tipRgb, 0.45);
+        for (let i = 1; i < 10; i++) {
+          const k = i / 10;
+          const p = at(k), q = at(Math.max(0, k - 0.015));
+          const m = Math.hypot(p.x - q.x, p.y - q.y) || 1;
+          const nx = -(p.y - q.y) / m, ny = (p.x - q.x) / m;
+          const h = (i % 5 === 0 ? 5 : 3) * scale;
+          ctx.beginPath();
+          ctx.moveTo(p.x - nx * h, p.y - ny * h);
+          ctx.lineTo(p.x + nx * h, p.y + ny * h);
+          ctx.stroke();
+        }
+        ctx.restore();
+        break;
+      }
+
+      case 'everything': {
+        // it is every rod, so it runs every mechanism — three at a time,
+        // rotating, so the blank never looks the same twice
+        const all = ['storm', 'bone', 'chorus', 'eclipse', 'origin',
+                     'celestial', 'void', 'runic', 'lunar', 'glitch'];
+        const base = Math.floor(t * 0.5) % all.length;
+        for (let i = 0; i < 3; i++) {
+          const which = all[(base + i * 3) % all.length];
+          ctx.save();
+          ctx.globalAlpha = 0.55 + 0.45 * Math.sin(t * 1.3 + i * 2.1);
+          drawStyle(ctx, { style: which, tip: art.tip, glow: art.glow }, g, t + i * 3.7, scale, tipRgb);
+          ctx.restore();
+        }
+        // and a halo that belongs to nothing else
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        for (let i = 0; i < 3; i++) {
+          const ph = (t * 0.4 + i / 3) % 1;
+          ctx.strokeStyle = U.rgbToCss(tipRgb, (1 - ph) * 0.4);
+          ctx.lineWidth = Math.max(0.6, 1.6 * scale * (1 - ph));
+          ctx.beginPath();
+          ctx.arc(g.tx, g.ty, Math.max(1, ph * 26 * scale), 0, TAU);
+          ctx.stroke();
+        }
+        ctx.restore();
+        break;
+      }
     }
   }
 

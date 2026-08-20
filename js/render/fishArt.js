@@ -19,7 +19,10 @@
   const BODY_H = {
     torpedo: 0.30, round: 0.38, eel: 0.13, serpent: 0.15, blob: 0.36,
     jelly: 0.34, ray: 0.22, shard: 0.34, orb: 0.46, crustacean: 0.32,
-    whale: 0.27, ribbon: 0.20, anomaly: 0.36, fractal: 0.38
+    whale: 0.27, ribbon: 0.20, anomaly: 0.36, fractal: 0.38,
+    /* the ones that are not really fish */
+    hole: 0.34, swarm: 0.33, mirror: 0.32, spiral: 0.40,
+    tally: 0.30, unfinished: 0.31, folded: 0.35, column: 0.44
   };
   function bodyRatio(kind) { return BODY_H[kind] === undefined ? 0.30 : BODY_H[kind]; }
 
@@ -164,6 +167,125 @@
           if (i === 0) ctx.moveTo(Math.cos(a) * L * 0.5 * r, Math.sin(a) * H * r);
           else ctx.lineTo(Math.cos(a) * L * 0.5 * r, Math.sin(a) * H * r);
         }
+        break;
+      }
+
+      /* ------------------------------------------------ the wrong shapes
+         Everything below is deliberately not a fish. They still have to close
+         a path, because the whole pipeline fills, clips and strokes it. */
+
+      case 'hole': {
+        // fish-shaped absence — tail included, or it reads as a lens rather
+        // than as the outline of something that is not there
+        ctx.moveTo(L * 0.50, 0);
+        ctx.bezierCurveTo(L * 0.30, -H * 1.12, -L * 0.06, -H * 1.00, -L * 0.26, -H * 0.34);
+        ctx.lineTo(-L * 0.50, -H * 1.05);
+        ctx.quadraticCurveTo(-L * 0.40, 0, -L * 0.50, H * 1.05);
+        ctx.lineTo(-L * 0.26, H * 0.34);
+        ctx.bezierCurveTo(-L * 0.06, H * 1.00, L * 0.30, H * 1.12, L * 0.50, 0);
+        break;
+      }
+
+      case 'swarm': {
+        // one fish made of many, so the outline is lumpy with backs and tails
+        const n = 13;
+        for (let i = 0; i <= n; i++) {
+          const a = (i / n) * TAU;
+          const lump = 0.80 + 0.34 * Math.abs(Math.sin(a * 4.5 + rnd() * 0.7));
+          const x = Math.cos(a) * L * 0.48 * lump;
+          const y = Math.sin(a) * H * lump;
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        break;
+      }
+
+      case 'mirror': {
+        // two front halves, joined where the tails should be
+        ctx.moveTo(L * 0.50, 0);
+        ctx.bezierCurveTo(L * 0.34, -H * 1.05, L * 0.06, -H * 0.92, 0, -H * 0.30);
+        ctx.bezierCurveTo(-L * 0.06, -H * 0.92, -L * 0.34, -H * 1.05, -L * 0.50, 0);
+        ctx.bezierCurveTo(-L * 0.34, H * 1.05, -L * 0.06, H * 0.92, 0, H * 0.30);
+        ctx.bezierCurveTo(L * 0.06, H * 0.92, L * 0.34, H * 1.05, L * 0.50, 0);
+        break;
+      }
+
+      case 'spiral': {
+        // a body that goes round and does not come back
+        const turns = 2.6, steps = 46;
+        for (let i = 0; i <= steps; i++) {
+          const u = i / steps;
+          const a = u * TAU * turns;
+          const r = (1 - u * 0.86);
+          ctx.lineTo(Math.cos(a) * L * 0.46 * r, Math.sin(a) * H * 1.05 * r);
+        }
+        for (let i = steps; i >= 0; i--) {
+          const u = i / steps;
+          const a = u * TAU * turns;
+          const r = (1 - u * 0.86) * 0.72;
+          ctx.lineTo(Math.cos(a) * L * 0.46 * r, Math.sin(a) * H * 1.05 * r);
+        }
+        break;
+      }
+
+      case 'tally': {
+        // counting marks, bundled in fives. It is a number, on a hook.
+        const groups = 4, mw = L * 0.020, gap = L * 0.042;
+        for (let gI = 0; gI < groups; gI++) {
+          const gx = -L * 0.42 + gI * L * 0.238;
+          for (let m = 0; m < 4; m++) {
+            const x = gx + m * gap;
+            ctx.moveTo(x, -H);
+            ctx.lineTo(x + mw, -H);
+            ctx.lineTo(x + mw, H);
+            ctx.lineTo(x, H);
+            ctx.closePath();
+          }
+          // the fifth, struck clean across the other four
+          const x0 = gx - mw * 0.8, x1 = gx + gap * 3 + mw * 1.8;
+          ctx.moveTo(x0, H * 0.80);
+          ctx.lineTo(x1, -H * 0.80);
+          ctx.lineTo(x1, -H * 0.80 + mw * 1.5);
+          ctx.lineTo(x0, H * 0.80 + mw * 1.5);
+          ctx.closePath();
+        }
+        break;
+      }
+
+      case 'unfinished': {
+        // the render stopped part way and nobody came back to it
+        ctx.moveTo(L * 0.48, 0);
+        ctx.bezierCurveTo(L * 0.30, -H * 1.05, -L * 0.10, -H * 0.98, -L * 0.30, -H * 0.30);
+        ctx.lineTo(-L * 0.30, -H * 0.06);
+        ctx.lineTo(-L * 0.02, -H * 0.06);
+        ctx.lineTo(-L * 0.02, H * 0.34);
+        ctx.lineTo(L * 0.18, H * 0.34);
+        ctx.lineTo(L * 0.18, H * 0.72);
+        ctx.bezierCurveTo(L * 0.30, H * 0.86, L * 0.40, H * 0.44, L * 0.48, 0);
+        break;
+      }
+
+      case 'folded': {
+        // creased flat and folded twice, like a letter that swims
+        ctx.moveTo(-L * 0.46, -H * 0.62);
+        ctx.lineTo(L * 0.10, -H * 0.98);
+        ctx.lineTo(L * 0.48, -H * 0.18);
+        ctx.lineTo(L * 0.16, H * 0.36);
+        ctx.lineTo(L * 0.44, H * 0.86);
+        ctx.lineTo(-L * 0.20, H * 0.98);
+        ctx.lineTo(-L * 0.48, H * 0.20);
+        ctx.closePath();
+        break;
+      }
+
+      case 'column': {
+        // taller than it is long, and it does not appear to end downward
+        ctx.moveTo(-L * 0.18, -H * 1.02);
+        ctx.quadraticCurveTo(0, -H * 1.20, L * 0.18, -H * 1.02);
+        ctx.lineTo(L * 0.22, H * 0.86);
+        ctx.quadraticCurveTo(L * 0.24, H * 1.10, L * 0.10, H * 1.06);
+        ctx.lineTo(-L * 0.10, H * 1.06);
+        ctx.quadraticCurveTo(-L * 0.24, H * 1.10, -L * 0.22, H * 0.86);
+        ctx.closePath();
         break;
       }
 
@@ -669,6 +791,169 @@
           }
           break;
         }
+
+        /* -------------------------------------------- the wrong details
+           These are for the far end of the catalogue, where a thing on the
+           hook is not really an animal any more. */
+
+        case 'static': {
+          // a band of interference across the middle of it
+          const rows = 9;
+          for (let j = 0; j < rows; j++) {
+            const y = -H * 0.7 + (j / rows) * H * 1.4;
+            const w = L * (0.20 + rnd() * 0.70);
+            const x = -L * 0.42 + rnd() * (L * 0.84 - w);
+            ctx.globalAlpha = 0.20 + rnd() * 0.55;
+            ctx.fillStyle = j % 2 ? '#66ffe0' : '#ff2d55';
+            ctx.fillRect(x, y, w, Math.max(1, H * 0.055));
+          }
+          break;
+        }
+
+        case 'duplicate': {
+          // it is also slightly to the left, and slightly earlier
+          ctx.globalAlpha = 0.30;
+          for (let j = 1; j <= 2; j++) {
+            const off = j * L * 0.045;
+            ctx.fillStyle = j === 1 ? '#ff2d55' : '#66ffe0';
+            ctx.save();
+            ctx.translate(-off, off * 0.35);
+            bodyPath(ctx, 'torpedo', L * 0.92, 0, VF.rng.make(0x51 + j));
+            ctx.fill();
+            ctx.restore();
+          }
+          break;
+        }
+
+        case 'eyes_many': {
+          // not five. a field of them, and they are not arranged.
+          ctx.globalAlpha = 0.9;
+          for (let j = 0; j < 22; j++) {
+            const x = (rnd() - 0.5) * L * 0.82;
+            const y = (rnd() - 0.5) * H * 1.5;
+            const sz = L * (0.008 + rnd() * 0.020);
+            ctx.fillStyle = '#f6f2e6';
+            ctx.beginPath(); ctx.arc(x, y, sz, 0, TAU); ctx.fill();
+            ctx.fillStyle = '#0a0810';
+            ctx.beginPath();
+            ctx.arc(x + sz * 0.2 * Math.sin(tm * 0.7 + j), y, sz * 0.52, 0, TAU);
+            ctx.fill();
+          }
+          break;
+        }
+
+        case 'barcode': {
+          ctx.globalAlpha = 0.75;
+          ctx.fillStyle = '#0a0810';
+          let x = -L * 0.34;
+          while (x < L * 0.34) {
+            const w = L * (0.006 + rnd() * 0.016);
+            ctx.fillRect(x, -H * 0.55, w, H * 1.1);
+            x += w + L * (0.008 + rnd() * 0.014);
+          }
+          break;
+        }
+
+        case 'wrongscale': {
+          // there is a smaller one inside it, at the wrong scale entirely
+          ctx.globalAlpha = 0.55;
+          ctx.fillStyle = acc;
+          ctx.save();
+          ctx.scale(0.30, 0.30);
+          bodyPath(ctx, 'torpedo', L, 0, VF.rng.make(0x9c));
+          ctx.fill();
+          ctx.restore();
+          break;
+        }
+
+        case 'cursor': {
+          // caught in it, and still blinking
+          const cx = L * 0.10, cy = -H * 0.18;
+          ctx.globalAlpha = 0.85 + 0.15 * Math.sin(tm * 6);
+          ctx.fillStyle = '#f6f2e6';
+          ctx.strokeStyle = '#0a0810';
+          ctx.lineWidth = Math.max(0.6, L * 0.005);
+          const u = L * 0.055;
+          ctx.beginPath();
+          ctx.moveTo(cx, cy);
+          ctx.lineTo(cx, cy + u * 1.5);
+          ctx.lineTo(cx + u * 0.38, cy + u * 1.1);
+          ctx.lineTo(cx + u * 0.62, cy + u * 1.7);
+          ctx.lineTo(cx + u * 0.86, cy + u * 1.56);
+          ctx.lineTo(cx + u * 0.62, cy + u * 0.97);
+          ctx.lineTo(cx + u * 1.05, cy + u * 0.90);
+          ctx.closePath();
+          ctx.fill(); ctx.stroke();
+          break;
+        }
+
+        case 'stitches': {
+          // it was assembled, and whoever did it was in a hurry
+          ctx.strokeStyle = acc;
+          ctx.globalAlpha = 0.7;
+          ctx.lineWidth = Math.max(0.7, L * 0.006);
+          ctx.lineCap = 'round';
+          for (let j = 0; j < 14; j++) {
+            const u = j / 13;
+            const x = U.lerp(-L * 0.30, L * 0.30, u);
+            const y = Math.sin(u * 3.1) * H * 0.30;
+            ctx.beginPath();
+            ctx.moveTo(x - L * 0.012, y - H * 0.10);
+            ctx.lineTo(x + L * 0.012, y + H * 0.10);
+            ctx.stroke();
+          }
+          break;
+        }
+
+        case 'roots': {
+          // it has taken hold of something and is unwilling to discuss it
+          ctx.strokeStyle = acc;
+          ctx.globalAlpha = 0.55;
+          ctx.lineCap = 'round';
+          for (let j = 0; j < 7; j++) {
+            const x0 = U.lerp(-L * 0.30, L * 0.26, j / 6);
+            ctx.lineWidth = Math.max(0.6, L * 0.009 * (1 - j / 9));
+            ctx.beginPath();
+            ctx.moveTo(x0, H * 0.55);
+            let x = x0, y = H * 0.55;
+            for (let k2 = 0; k2 < 4; k2++) {
+              x += (rnd() - 0.5) * L * 0.10;
+              y += H * (0.22 + rnd() * 0.20);
+              ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+          }
+          break;
+        }
+
+        case 'crown': {
+          ctx.fillStyle = acc;
+          ctx.globalAlpha = 0.9;
+          const cw = L * 0.22, ch = H * 0.55, cx2 = L * 0.16, cy2 = -H * 0.95;
+          ctx.beginPath();
+          ctx.moveTo(cx2 - cw * 0.5, cy2);
+          for (let j = 0; j < 4; j++) {
+            const x = cx2 - cw * 0.5 + (j / 3) * cw;
+            ctx.lineTo(x, cy2 - ch * (j % 2 ? 0.55 : 1));
+            ctx.lineTo(x + cw / 6, cy2 - ch * 0.2);
+          }
+          ctx.lineTo(cx2 + cw * 0.5, cy2);
+          ctx.closePath();
+          ctx.fill();
+          break;
+        }
+
+        case 'countdown': {
+          // a number over it, and the number is going down
+          const n = Math.max(0, 9 - Math.floor(tm * 0.9) % 10);
+          ctx.globalAlpha = 0.8;
+          ctx.fillStyle = '#66ffe0';
+          ctx.font = Math.round(H * 1.1) + 'px monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(String(n), 0, 0);
+          break;
+        }
       }
       ctx.restore();
     }
@@ -757,7 +1042,8 @@
   }
 
   /* Bodies built from panels rather than scales — the strange ones. */
-  const SCALED = { torpedo: 1, round: 1, eel: 1, serpent: 1, shard: 1, crustacean: 1, whale: 1 };
+  const SCALED = { torpedo: 1, round: 1, eel: 1, serpent: 1, shard: 1, crustacean: 1,
+                   whale: 1, mirror: 1, swarm: 1 };
 
   /* --------------------------------------------------------------- main */
 
@@ -853,6 +1139,17 @@
     bg.addColorStop(1.00, U.rgbToCss(belly));
     ctx.fillStyle = bg;
     ctx.fill();
+
+    /* A hole is not a body. It is the shape of one, with nothing in it — so it
+       takes none of the modelling, just a flat absence and a lit rim. */
+    if (art.body === 'hole') {
+      ctx.fillStyle = '#000';
+      ctx.fill();
+      ctx.strokeStyle = U.rgbToCss(U.mixRgb(c3, [255, 255, 255], 0.35),
+                                   0.55 + 0.25 * Math.sin(tm * 1.4));
+      ctx.lineWidth = Math.max(1, L * 0.010);
+      ctx.stroke();
+    }
 
     /* The silhouette gets an edge: a lit rim along the back, shadow through
        the middle, and a little bounce off the belly. Without it the body has

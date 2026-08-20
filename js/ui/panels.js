@@ -183,7 +183,9 @@
         const owned = d.ownedRods.indexOf(rod.id) >= 0;
         const levelOk = d.level >= rod.level;
         const voidOk = !rod.requiresVoidCatch || d.stats.voidCatches >= 1;
-        const locked = !levelOk || !voidOk;
+        const glitchOk = !rod.requiresGlitchCatch || (d.stats.glitchCatches | 0) >= 1;
+        const secretOk = !rod.requiresSecret || VF.secrets.found(rod.requiresSecret);
+        const locked = !levelOk || !voidOk || !glitchOk || !secretOk;
         const can = VF.economy.canAfford(rod.cost);
 
         const row = U.el('div', 'row row-rod' + (owned ? ' owned' : '') + (locked && !owned ? ' locked' : '') +
@@ -206,7 +208,10 @@
         }
         main.appendChild(name);
         main.appendChild(U.el('div', 'row-desc', locked && !owned
-          ? (!levelOk ? 'Requires level ' + rod.level : 'Requires a Void-tier catch')
+          ? (!levelOk ? 'Requires level ' + rod.level
+             : !voidOk ? 'Requires a Void-tier catch'
+             : !glitchOk ? 'Requires a !@#$%^&$# catch'
+             : 'Requires what is under the last water')
           : rod.desc));
 
         // comparison arrows only matter when deciding whether to buy

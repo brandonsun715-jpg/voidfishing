@@ -283,6 +283,7 @@
     const rank = VF.rarities.rank(c.rarity);
     if (rank >= 4) d.stats.legendaryCatches++;
     if (rank >= 6) d.stats.voidCatches++;
+    if (rank >= 7) d.stats.glitchCatches = (d.stats.glitchCatches | 0) + 1;
     d.flags['rare_' + c.rarity] = true;
 
     const traits = c.traits || [];

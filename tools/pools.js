@@ -1,6 +1,6 @@
 const { load } = require('./headless');
 const VF = load(['js/core/util.js','js/core/rng.js','js/core/bus.js','js/core/state.js','js/core/save.js',
- 'js/data/rarities.js','js/data/mutations.js','js/data/fish.js','js/data/rods.js','js/data/bait.js',
+ 'js/data/rarities.js','js/data/traits.js','js/data/fish.js','js/data/rods.js','js/data/bait.js',
  'js/data/locations.js','js/data/weather.js']);
 const tiers = VF.rarities.list.map(r=>r.id);
 console.log('species per tier per location');

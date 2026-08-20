@@ -67,8 +67,47 @@
     { id: 'unknown', name: '??? Rod', cost: 2500000000, level: 74, requiresVoidCatch: true,
       cast: 1.40, reel: 3.10, line: 12.0, rare: 7.40, luck: 2.90,
       desc: 'It was already in your hands. Check the photographs. It was always in your hands.',
-      art: { c1: '#ffffff', c2: '#1a1a1a', grip: '#2a2a2a', tip: '#66ffe0', len: 1.46, curve: 0.02, glow: 1.0, style: 'glitch' } }
+      art: { c1: '#ffffff', c2: '#1a1a1a', grip: '#2a2a2a', tip: '#66ffe0', len: 1.46, curve: 0.02, glow: 1.0, style: 'glitch' } },
+
+    /* ---------------------------------------------------------- the far end
+       Past here a rod stops being equipment. Each one is a bigger claim about
+       what the water is, and the art has to carry the claim. */
+
+    { id: 'tidebreaker', name: 'Tidebreaker', cost: 12000000, level: 47,
+      cast: 1.07, reel: 2.02, line: 6.90, rare: 4.10, luck: 1.44,
+      desc: 'Forged in a storm that has not finished yet. The charge never fully leaves the blank.',
+      art: { c1: '#2f4f66', c2: '#0d1a26', grip: '#0a1420', tip: '#7fe0ff', len: 1.31, curve: 0.05, glow: 0.70, style: 'storm' } },
+
+    { id: 'leviathan', name: "Leviathan's Tooth", cost: 120000000, level: 57,
+      cast: 1.18, reel: 2.40, line: 8.50, rare: 5.15, luck: 1.88,
+      desc: 'One tooth. Not a jaw, not a skeleton — one tooth, and it is longer than you are.',
+      art: { c1: '#ded4c0', c2: '#8c8474', grip: '#4a4438', tip: '#fff4d8', len: 1.37, curve: 0.05, glow: 0.55, style: 'bone' } },
+
+    { id: 'chorus', name: 'The Drowned Choir', cost: 900000000, level: 68,
+      cast: 1.32, reel: 2.85, line: 10.6, rare: 6.55, luck: 2.50,
+      desc: 'Every guide holds a voice. They only sing when something is on the line, and they are never wrong.',
+      art: { c1: '#c8b8ff', c2: '#241d44', grip: '#14102a', tip: '#fff0c0', len: 1.43, curve: 0.03, glow: 0.95, style: 'chorus' } },
+
+    { id: 'eclipse', name: 'Eclipse Rod', cost: 6000000000, level: 80, requiresVoidCatch: true,
+      cast: 1.52, reel: 3.45, line: 14.5, rare: 9.10, luck: 3.55,
+      desc: 'The tip holds a small covered sun. Everything it touches gets a second shadow, pointing the wrong way.',
+      art: { c1: '#1c1420', c2: '#000000', grip: '#100a14', tip: '#ffb14a', len: 1.52, curve: 0.02, glow: 1.0, style: 'eclipse' } },
+
+    { id: 'origin', name: 'The First Rod', cost: 26000000000, level: 88, requiresGlitchCatch: true,
+      cast: 1.68, reel: 3.95, line: 18.5, rare: 11.6, luck: 4.50,
+      desc: 'Not the oldest one. The one the others were drawn from. You can still see the construction lines.',
+      art: { c1: '#e8f4ff', c2: '#3a5f8f', grip: '#22344d', tip: '#ffffff', len: 1.58, curve: 0.01, glow: 1.0, style: 'origin' } },
+
+    { id: 'everything', name: 'Everything, At Once', cost: 95000000000, level: 99,
+      requiresGlitchCatch: true, requiresSecret: 'the_last_water',
+      cast: 1.90, reel: 4.60, line: 25.0, rare: 15.5, luck: 6.00,
+      desc: 'It is every rod. It is the tooth and the storm and the covered sun and the line of light. ' +
+            'Holding it is a full-time occupation and you will not be doing anything else.',
+      art: { c1: '#ffffff', c2: '#0a0a12', grip: '#1a1a26', tip: '#ffd6f0', len: 1.66, curve: 0.0, glow: 1.0, style: 'everything' } }
   ];
+
+  /* Shop order is progression order, not the order they were written. */
+  LIST.sort(function (a, b) { return a.level - b.level || a.cost - b.cost; });
 
   const BY_ID = VF.util.byId(LIST);
 

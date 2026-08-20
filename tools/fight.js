@@ -2,9 +2,21 @@
    check fight durations and win rates per tier and rod. */
 const { load } = require('./headless');
 const VF = load(['js/core/util.js','js/core/rng.js','js/core/bus.js','js/core/state.js','js/core/save.js',
- 'js/data/rarities.js','js/data/mutations.js','js/data/fish.js','js/data/rods.js','js/data/bait.js',
- 'js/data/locations.js','js/data/weather.js','js/systems/time.js','js/systems/weather.js',
- 'js/systems/progression.js','js/systems/economy.js','js/systems/loot.js','js/systems/fishing.js']);
+ 'js/data/rarities.js','js/data/traits.js','js/data/fish.js','js/data/rods.js','js/data/bait.js',
+ 'js/data/locations.js','js/data/weather.js','js/data/charms.js','js/data/conditions.js',
+ 'js/data/treasure.js','js/data/journal.js','js/data/secrets.js','js/data/npcs.js',
+ 'js/data/cosmetics.js','js/data/cases.js','js/data/achievements.js',
+ 'js/systems/time.js','js/systems/weather.js','js/systems/progression.js','js/systems/build.js',
+ 'js/systems/conditions.js','js/systems/economy.js','js/systems/loot.js','js/systems/fishing.js',
+ 'js/systems/catches.js','js/systems/achievements.js']);
+// the fight sim does not run the interface, so give it the hooks land() calls
+VF.toast = VF.toast || { show(){}, plain(){} };
+VF.fx = VF.fx || { shake(){}, flash(){}, pulse(){}, ripple(){} };
+VF.audio = VF.audio || new Proxy({}, { get: () => function(){} });
+VF.scene = VF.scene || { addShadow(){}, newCastLateral(){}, L: {} };
+VF.encounters = VF.encounters || { calm: () => 0, tick(){} };
+VF.wrong = VF.wrong || { intensity: () => 0, tick(){} };
+VF.particles = VF.particles || { burst(){}, clearAll(){} };
 
 const DT = 1/60;
 function simulate(rodId, fishId, skill) {
@@ -40,7 +52,8 @@ function simulate(rodId, fishId, skill) {
   return { t, out: out || 'timeout', perfect: f.perfect };
 }
 
-const rods = ['wood','carbon','deepwater','lunar','void','unknown'];
+const rods = ['wood','carbon','deepwater','lunar','void','unknown',
+              'eclipse','origin','everything'];
 const targets = [['smallmouth','common'],['silver_pike','uncommon'],['golden_bass','rare'],
   ['moonfish','epic'],['leviathan','legendary'],['star_serpent','mythic'],['void_leviathan','void']];
 for (const skill of ['good','ok','poor']) {

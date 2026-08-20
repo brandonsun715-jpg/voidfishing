@@ -1,7 +1,7 @@
 const { load } = require('./headless');
 const FILES = [
   'js/core/util.js','js/core/rng.js','js/core/bus.js','js/core/state.js','js/core/save.js',
-  'js/data/rarities.js','js/data/mutations.js','js/data/fish.js','js/data/rods.js',
+  'js/data/rarities.js','js/data/traits.js','js/data/fish.js','js/data/rods.js',
   'js/data/bait.js','js/data/locations.js','js/data/weather.js','js/data/achievements.js',
   'js/systems/time.js','js/systems/weather.js','js/systems/progression.js',
   'js/systems/economy.js','js/systems/loot.js'
@@ -39,7 +39,10 @@ const setups = [
   ['cradle','lunar','star','meteor','L33'],
   ['nowhere','celestial','void','eclipse','L45'],
   ['beneath','void','void','voidsurge','L58'],
-  ['beneath','unknown','null','voidsurge','MAX']
+  ['beneath','unknown','null','voidsurge','MAX'],
+  ['beneath','eclipse','null','voidsurge','ECLIPSE'],
+  ['beneath','origin','null','voidsurge','ORIGIN'],
+  ['beneath','everything','null','voidsurge','EVERYTHING']
 ];
 const N = 60000;
 console.log('label      loc        rarity distribution                                             avgValue     avgXP   mut%');
