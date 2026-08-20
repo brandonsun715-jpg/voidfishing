@@ -868,12 +868,12 @@
 
         case 'cursor': {
           // caught in it, and still blinking
-          const cx = L * 0.10, cy = -H * 0.18;
+          const cx = L * 0.02, cy = -H * 0.42;
           ctx.globalAlpha = 0.85 + 0.15 * Math.sin(tm * 6);
           ctx.fillStyle = '#f6f2e6';
           ctx.strokeStyle = '#0a0810';
           ctx.lineWidth = Math.max(0.6, L * 0.005);
-          const u = L * 0.055;
+          const u = L * 0.095;
           ctx.beginPath();
           ctx.moveTo(cx, cy);
           ctx.lineTo(cx, cy + u * 1.5);
