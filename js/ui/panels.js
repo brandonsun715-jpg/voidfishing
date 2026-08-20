@@ -730,7 +730,7 @@
       function nameOf(id, traits) {
         const f = VF.fish.byId(id);
         if (!f) return '—';
-        return (traits && traits.length ? VF.traits.prefix(traits) : '') + f.name;
+        return VF.traits.title(traits, f.name);
       }
       const tiles = [
         ['biggest fish', R.biggestKg ? U.weight(R.biggestKg) : '—', nameOf(R.biggestId, R.biggestTraits)],
@@ -1079,7 +1079,7 @@
           row.appendChild(mark);
           const main = U.el('div', 'row-main');
           const name = U.el('div', 'row-name');
-          name.appendChild(U.el('span', null, VF.traits.prefix(kTraits) + f.name));
+          name.appendChild(U.el('span', null, VF.traits.title(kTraits, f.name)));
           const tg = U.el('span', 'tag', r.name); tg.style.color = r.color; name.appendChild(tg);
           kTraits.forEach(function (tid) {
             const tr = VF.traits.get(tid);

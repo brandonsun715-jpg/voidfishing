@@ -564,7 +564,7 @@
       D.fightUI.classList.remove('hidden');
       D.fightName.textContent = f.c.kind === 'treasure' ? 'something heavy'
         : f.c.isNew ? 'unknown — something new'
-        : VF.traits.prefix(f.c.traits) + f.c.fish.name;
+        : VF.traits.title(f.c.traits, f.c.fish.name);
       D.fightName.style.color = VF.rarities.color(f.c.rarity);
     }
 

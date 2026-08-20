@@ -85,7 +85,7 @@
     rr.style.color = b.color;
     body.appendChild(rr);
 
-    body.appendChild(U.el('h2', 'catch-name', VF.traits.prefix(traits) + c.fish.name));
+    body.appendChild(U.el('h2', 'catch-name', VF.traits.title(traits, c.fish.name)));
 
     if (traits.length) {
       const row = U.el('div', 'trait-row');
