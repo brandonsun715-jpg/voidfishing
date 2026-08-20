@@ -379,6 +379,234 @@
         ctx.restore();
         break;
       }
+      /* --- the wanderer's four families --- */
+
+      /* a wave running the length of it */
+      case 'tide': {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = U.rgbToCss(tipRgb, 0.34);
+        ctx.lineWidth = Math.max(0.7, 1.3 * scale);
+        ctx.beginPath();
+        for (let i = 0; i <= 22; i++) {
+          const k = 0.16 + (i / 22) * 0.82;
+          const p = at(k);
+          const q2 = at(Math.min(0.999, k + 0.01));
+          const m = Math.hypot(q2.x - p.x, q2.y - p.y) || 1;
+          const w = Math.sin(k * 11 - t * 2.4) * Math.max(1.6, 3.4 * scale);
+          const x = p.x - (q2.y - p.y) / m * w, y = p.y + (q2.x - p.x) / m * w;
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        ctx.restore();
+        break;
+      }
+
+      /* sparks coming off it and going out */
+      case 'ember': {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        for (let i = 0; i < 7; i++) {
+          const seed = (t * 0.5 + i * 0.61) % 1;
+          const p = at(0.22 + ((i * 0.13) % 0.74));
+          const rise = seed * Math.max(6, 13 * scale);
+          const a = (1 - seed) * 0.6;
+          const r = Math.max(0.6, 1.5 * scale) * (1 - seed * 0.5);
+          const g2 = ctx.createRadialGradient(p.x, p.y - rise, 0, p.x, p.y - rise, r * 3);
+          g2.addColorStop(0, U.rgbToCss(tipRgb, a));
+          g2.addColorStop(1, U.rgbToCss(tipRgb, 0));
+          ctx.fillStyle = g2;
+          ctx.beginPath(); ctx.arc(p.x, p.y - rise, r * 3, 0, TAU); ctx.fill();
+        }
+        ctx.restore();
+        break;
+      }
+
+      /* spurs of ice growing out of the blank */
+      case 'frost': {
+        ctx.strokeStyle = U.rgbToCss(tipRgb, 0.55);
+        ctx.lineWidth = Math.max(0.5, 0.95 * scale);
+        ctx.lineCap = 'round';
+        for (let i = 0; i < 6; i++) {
+          const k = 0.24 + i * 0.125;
+          const p = at(k), q2 = at(Math.min(0.999, k + 0.01));
+          const m = Math.hypot(q2.x - p.x, q2.y - p.y) || 1;
+          const nx = -(q2.y - p.y) / m, ny = (q2.x - p.x) / m;
+          const side = i % 2 ? 1 : -1;
+          const L2 = Math.max(2.4, (5.4 - i * 0.4) * scale) * (0.8 + 0.2 * Math.sin(t * 1.1 + i));
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(p.x + nx * L2 * side, p.y + ny * L2 * side);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(p.x + nx * L2 * 0.55 * side, p.y + ny * L2 * 0.55 * side);
+          ctx.lineTo(p.x + nx * L2 * 0.8 * side + (q2.x - p.x) / m * L2 * 0.4,
+                     p.y + ny * L2 * 0.8 * side + (q2.y - p.y) / m * L2 * 0.4);
+          ctx.stroke();
+        }
+        break;
+      }
+
+      /* Rings of light standing off the blank, sparks running up it, and a
+         burst of feathered gold where the hand goes. It is not subtle. It is
+         not supposed to be. */
+      case 'heavens': {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+
+        for (let i = 0; i < 5; i++) {
+          const k = 0.30 + i * 0.155;
+          const p = at(k);
+          const q = at(Math.min(0.999, k + 0.02));
+          const ang = Math.atan2(q.y - p.y, q.x - p.x);
+          const puls = 0.62 + 0.38 * Math.sin(t * 2.1 - i * 0.9);
+          const r = Math.max(2.2, (5.6 - i * 0.5) * scale) * puls;
+          ctx.strokeStyle = U.rgbToCss(tipRgb, 0.55 * puls);
+          ctx.lineWidth = Math.max(0.7, 1.5 * scale);
+          ctx.beginPath();
+          ctx.ellipse(p.x, p.y, r, r * 0.34, ang, 0, TAU);
+          ctx.stroke();
+        }
+
+        // sparks travelling toward the tip
+        for (let i = 0; i < 6; i++) {
+          const k = ((t * 0.30 + i / 6) % 1) * 0.74 + 0.24;
+          const p = at(k);
+          const a = 0.6 * Math.sin(k * Math.PI);
+          const r = Math.max(0.9, 2.0 * scale);
+          const grd = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 3.2);
+          grd.addColorStop(0, U.rgbToCss(tipRgb, a));
+          grd.addColorStop(1, U.rgbToCss(tipRgb, 0));
+          ctx.fillStyle = grd;
+          ctx.beginPath(); ctx.arc(p.x, p.y, r * 3.2, 0, TAU); ctx.fill();
+        }
+
+        // the burst at the butt
+        const b = at(0.16);
+        const br = Math.max(5, 11 * scale);
+        const bg = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, br);
+        bg.addColorStop(0, U.rgbToCss(tipRgb, 0.55));
+        bg.addColorStop(0.45, U.rgbToCss(tipRgb, 0.16));
+        bg.addColorStop(1, U.rgbToCss(tipRgb, 0));
+        ctx.fillStyle = bg;
+        ctx.beginPath(); ctx.arc(b.x, b.y, br, 0, TAU); ctx.fill();
+        ctx.strokeStyle = U.rgbToCss(tipRgb, 0.42);
+        ctx.lineWidth = Math.max(0.6, 1.1 * scale);
+        for (let i = 0; i < 7; i++) {
+          const a2 = (i / 7) * TAU + t * 0.25;
+          const l = br * (0.62 + 0.38 * Math.sin(t * 1.7 + i * 2.1));
+          ctx.beginPath();
+          ctx.moveTo(b.x + Math.cos(a2) * br * 0.28, b.y + Math.sin(a2) * br * 0.28);
+          ctx.lineTo(b.x + Math.cos(a2) * l, b.y + Math.sin(a2) * l);
+          ctx.stroke();
+        }
+        ctx.restore();
+        break;
+      }
+
+      /* A black core with the fire coming off it in feathers rather than in
+         flames — jagged barbs that leave the shaft and thin to nothing, and a
+         fine spatter thrown clear of them. */
+      case 'pyre': {
+        ctx.save();
+        const hot = U.mixRgb(tipRgb, [255, 255, 255], 0.35);
+        for (let i = 0; i < 11; i++) {
+          const k = 0.14 + i * 0.076;
+          if (k > 0.98) break;
+          const p = nAt(g, k);
+          const side = i % 2 ? 1 : -1;
+          const beat = 0.72 + 0.28 * Math.sin(t * 2.6 + i * 1.3);
+          // barbs are longest at the middle of the blank and short at the ends
+          const taperK = Math.sin(Math.min(1, Math.max(0, (k - 0.10) / 0.88)) * Math.PI);
+          const len = (7 + 20 * taperK) * scale * beat;
+          const lean = 0.55;               // they all sweep toward the tip
+          const bx2 = p.x + p.nx * len * side + p.tx * len * lean;
+          const by2 = p.y + p.ny * len * side + p.ty * len * lean;
+          const grd = ctx.createLinearGradient(p.x, p.y, bx2, by2);
+          grd.addColorStop(0, U.rgbToCss(hot, 0.92));
+          grd.addColorStop(0.45, U.rgbToCss(tipRgb, 0.70));
+          grd.addColorStop(1, U.rgbToCss(tipRgb, 0));
+          ctx.fillStyle = grd;
+          // a barb is a thin leaf, not a line: two curves meeting at the point
+          const w = (2.6 + 2.2 * taperK) * scale;
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          ctx.quadraticCurveTo(p.x + p.nx * len * 0.45 * side - p.tx * w,
+                               p.y + p.ny * len * 0.45 * side - p.ty * w, bx2, by2);
+          ctx.quadraticCurveTo(p.x + p.nx * len * 0.40 * side + p.tx * w * 1.9,
+                               p.y + p.ny * len * 0.40 * side + p.ty * w * 1.9, p.x, p.y);
+          ctx.fill();
+        }
+        // the spatter, thrown clear and going out
+        ctx.globalCompositeOperation = 'lighter';
+        for (let i = 0; i < 9; i++) {
+          const seed = ((Math.sin(i * 91.7) * 43758.5453) % 1 + 1) % 1;
+          const ph = (t * 0.55 + seed) % 1;
+          const p = nAt(g, 0.20 + seed * 0.72);
+          const side = seed > 0.5 ? 1 : -1;
+          const d = (10 + 34 * ph) * scale;
+          const r = Math.max(0.5, (1.7 - ph * 1.2) * scale);
+          ctx.fillStyle = U.rgbToCss(tipRgb, (1 - ph) * 0.75);
+          ctx.beginPath();
+          ctx.arc(p.x + p.nx * d * side + p.tx * d * 0.35,
+                  p.y + p.ny * d * side + p.ty * d * 0.35, r, 0, TAU);
+          ctx.fill();
+        }
+        ctx.restore();
+        break;
+      }
+
+      /* Standing rings of fire down the blank and a pair of wings opened at
+         the hand. Sized off the length of the rod rather than off the stroke
+         weight, because these have to read as the largest thing on it — at
+         stroke scale they came out as beads. Drawn additively: the point of
+         this rod is that it is the brightest object on the screen. */
+      case 'seraph': {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const R0 = g.len * 0.062;        // the ring at the bottom of the blank
+
+        for (let i = 0; i < 6; i++) {
+          const k = 0.24 + i * 0.138;
+          const p = nAt(g, k);
+          const ang = Math.atan2(p.ty, p.tx);
+          const puls = 0.62 + 0.38 * Math.sin(t * 1.9 - i * 0.8);
+          // they close toward the tip, the way the reference does
+          const r = R0 * (1 - i * 0.11) * puls;
+          ctx.strokeStyle = U.rgbToCss(tipRgb, 0.78 * puls);
+          ctx.lineWidth = Math.max(1.1, 2.4 * scale);
+          ctx.beginPath();
+          ctx.ellipse(p.x, p.y, r, r * 0.30, ang, 0, TAU);
+          ctx.stroke();
+          // a wider, fainter ring standing just outside it
+          ctx.strokeStyle = U.rgbToCss(tipRgb, 0.26 * puls);
+          ctx.lineWidth = Math.max(0.6, 1.1 * scale);
+          ctx.beginPath();
+          ctx.ellipse(p.x, p.y, r * 1.5, r * 0.46, ang, 0, TAU);
+          ctx.stroke();
+          // and the coal each ring stands on
+          const gd = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 0.85);
+          gd.addColorStop(0, U.rgbToCss(U.mixRgb(tipRgb, [255, 255, 255], 0.55), 0.55 * puls));
+          gd.addColorStop(1, U.rgbToCss(tipRgb, 0));
+          ctx.fillStyle = gd;
+          ctx.beginPath(); ctx.arc(p.x, p.y, r * 0.85, 0, TAU); ctx.fill();
+        }
+
+        // a bright seam running the length of the blank
+        const seam = ctx.createLinearGradient(g.bx, g.by, g.tx, g.ty);
+        seam.addColorStop(0, U.rgbToCss(tipRgb, 0.12));
+        seam.addColorStop(0.5, U.rgbToCss(U.mixRgb(tipRgb, [255, 255, 255], 0.6), 0.6));
+        seam.addColorStop(1, U.rgbToCss(tipRgb, 0.20));
+        ctx.strokeStyle = seam;
+        ctx.lineWidth = Math.max(0.6, 1.3 * scale);
+        ctx.beginPath();
+        ctx.moveTo(g.bx, g.by);
+        ctx.quadraticCurveTo(g.cx, g.cy, g.tx, g.ty);
+        ctx.stroke();
+        ctx.restore();
+        break;
+      }
+
       case 'glitch': {
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
@@ -1231,7 +1459,7 @@
      where a reel would be. This runs over the top of the drawn one, so the
      housing underneath still reads as a housing. */
   const REEL_STYLES = { kraken: 1, thunder: 1, corded: 1, neon: 1, hemo: 1,
-                        twinsun: 1, glacier: 1, halo: 1 };
+                        twinsun: 1, glacier: 1, halo: 1, pyre: 1, seraph: 1 };
 
   function drawReelStyle(ctx, art, g, t, scale, under, tipRgb, c1, c2) {
     if (!REEL_STYLES[art.style]) return;
@@ -1369,6 +1597,73 @@
         }
         break;
       }
+      /* the fire gathers where the hand is, and burns off the housing */
+      case 'pyre': {
+        ctx.globalCompositeOperation = 'lighter';
+        const g2 = ctx.createRadialGradient(cx, cy, 0, cx, cy, rr * 3.4);
+        g2.addColorStop(0, U.rgbToCss(tipRgb, 0.55));
+        g2.addColorStop(0.4, U.rgbToCss(tipRgb, 0.18));
+        g2.addColorStop(1, U.rgbToCss(tipRgb, 0));
+        ctx.fillStyle = g2;
+        ctx.beginPath(); ctx.arc(cx, cy, rr * 3.4, 0, TAU); ctx.fill();
+        // tongues coming off the rim, licking toward the tip
+        ctx.strokeStyle = U.rgbToCss(U.mixRgb(tipRgb, [255, 255, 255], 0.3), 0.7);
+        ctx.lineWidth = Math.max(0.5, 1.0 * scale);
+        ctx.lineCap = 'round';
+        for (let i = 0; i < 6; i++) {
+          const a2 = a + (i / 6) * TAU + t * 0.5;
+          const l = rr * (1.5 + 0.9 * Math.sin(t * 3.1 + i * 1.7));
+          ctx.beginPath();
+          ctx.moveTo(cx + Math.cos(a2) * rr * 0.85, cy + Math.sin(a2) * rr * 0.85);
+          ctx.quadraticCurveTo(cx + Math.cos(a2) * l * 0.9 + Math.cos(a) * rr * 0.5,
+                               cy + Math.sin(a2) * l * 0.9 + Math.sin(a) * rr * 0.5,
+                               cx + Math.cos(a2) * l + Math.cos(a) * rr,
+                               cy + Math.sin(a2) * l + Math.sin(a) * rr);
+          ctx.stroke();
+        }
+        break;
+      }
+
+      /* A pair of wings opened at the hand, beating slowly. Also sized off the
+         rod: at reel-radius they were a smudge behind the housing. */
+      case 'seraph': {
+        ctx.globalCompositeOperation = 'lighter';
+        const beat = 0.80 + 0.20 * Math.sin(t * 1.6);
+        const span = g.len * 0.30 * beat;
+        for (let side = -1; side <= 1; side += 2) {
+          // three long pinions per side, swept back toward the butt
+          for (let i = 0; i < 3; i++) {
+            const spread = (i - 1) * 0.40 + 0.34;          // all rake backwards
+            const len = span * (1 - Math.abs(i - 1) * 0.24);
+            const dx = nx * side * Math.cos(spread) - Math.cos(a) * Math.sin(spread);
+            const dy = ny * side * Math.cos(spread) - Math.sin(a) * Math.sin(spread);
+            const ex = cx + dx * len, ey = cy + dy * len;
+            const grd = ctx.createLinearGradient(cx, cy, ex, ey);
+            grd.addColorStop(0, U.rgbToCss(U.mixRgb(tipRgb, [255, 255, 255], 0.55), 0.62));
+            grd.addColorStop(0.5, U.rgbToCss(tipRgb, 0.26));
+            grd.addColorStop(1, U.rgbToCss(tipRgb, 0));
+            ctx.fillStyle = grd;
+            const w = len * 0.17;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.quadraticCurveTo(cx + dx * len * 0.5 - Math.cos(a) * w,
+                                 cy + dy * len * 0.5 - Math.sin(a) * w, ex, ey);
+            ctx.quadraticCurveTo(cx + dx * len * 0.42 + Math.cos(a) * w * 1.6,
+                                 cy + dy * len * 0.42 + Math.sin(a) * w * 1.6, cx, cy);
+            ctx.fill();
+          }
+        }
+        // the coal they open from
+        const cr = g.len * 0.045;
+        const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, cr);
+        core.addColorStop(0, 'rgba(255,255,255,0.92)');
+        core.addColorStop(0.32, U.rgbToCss(tipRgb, 0.58));
+        core.addColorStop(1, U.rgbToCss(tipRgb, 0));
+        ctx.fillStyle = core;
+        ctx.beginPath(); ctx.arc(cx, cy, cr, 0, TAU); ctx.fill();
+        break;
+      }
+
       case 'halo': {
         ctx.globalCompositeOperation = 'lighter';
         ctx.strokeStyle = U.rgbToCss(tipRgb, 0.5);

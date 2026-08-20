@@ -65,6 +65,83 @@
       note: 'traits appear far more often, and fish run smaller',
       stats: { trait: 2.6, size: 0.84 } },
 
+    /* ------------------------------------------------- the white bar
+       These do one thing each and they do it to the catch minigame: the bar
+       you hold the fish inside. Size makes the bar wider; speed changes how
+       hard it is to stop. Faster is not automatically better — a steadier bar
+       is easier to place, a quicker one covers ground. */
+    { id: 'luckyscale', name: '\ud83c\udf40 Lucky Scale', kind: 'charm', rarity: 'common', cost: 1800, level: 6,
+      icon: '\ud83c\udf40',
+      desc: 'A polished fish scale that makes the fishing zone easier to control.',
+      note: '+10% white bar size',
+      stats: { barSize: 1.10 } },
+
+    { id: 'frostcharm', name: '\ud83e\uddca Frost Charm', kind: 'charm', rarity: 'uncommon', cost: 4800, level: 7,
+      icon: '\ud83e\uddca',
+      desc: 'A frozen charm that slows the movement of the fishing zone.',
+      note: '-10% white bar movement speed',
+      stats: { barSpeed: 0.90 } },
+
+    { id: 'moonpearl', name: '\ud83c\udf19 Moon Pearl', kind: 'charm', rarity: 'uncommon', cost: 5200, level: 8,
+      icon: '\ud83c\udf19',
+      desc: 'A glowing pearl that makes the fishing zone slightly easier to manage.',
+      note: '+10% white bar size + 5% slower movement',
+      stats: { barSize: 1.10, barSpeed: 0.95 } },
+
+    { id: 'stormcharm', name: '\u26a1 Storm Charm', kind: 'charm', rarity: 'uncommon', cost: 5600, level: 9,
+      icon: '\u26a1',
+      desc: 'A lightning-powered charm that makes the fishing zone move faster.',
+      note: '+15% white bar movement speed',
+      stats: { barSpeed: 1.15 } },
+
+    { id: 'tidalpearl', name: '\ud83c\udf0a Tidal Pearl', kind: 'charm', rarity: 'uncommon', cost: 7500, level: 10,
+      icon: '\ud83c\udf0a',
+      desc: 'A pearl that helps the fishing zone stay steady against strong fish.',
+      note: '+15% white bar size',
+      stats: { barSize: 1.15 } },
+
+    { id: 'embercharm', name: '\ud83d\udd25 Ember Charm', kind: 'charm', rarity: 'rare', cost: 12000, level: 11,
+      icon: '\ud83d\udd25',
+      desc: 'A hot ember that makes the fishing zone react much quicker.',
+      note: '+20% white bar movement speed',
+      stats: { barSpeed: 1.20 } },
+
+    { id: 'currentcharm', name: '\ud83c\udf00 Current Charm', kind: 'charm', rarity: 'rare', cost: 15000, level: 12,
+      icon: '\ud83c\udf00',
+      desc: 'A swirling ocean charm that keeps the fishing zone moving smoothly.',
+      note: '+15% white bar size + 5% slower movement',
+      stats: { barSize: 1.15, barSpeed: 0.95 } },
+
+    { id: 'shellguard', name: '\ud83d\udc1a Shell Guard', kind: 'charm', rarity: 'rare', cost: 24000, level: 13,
+      icon: '\ud83d\udc1a',
+      desc: 'A reinforced shell that gives you a larger area to catch fish.',
+      note: '+20% white bar size',
+      stats: { barSize: 1.20 } },
+
+    { id: 'crystalscale', name: '\ud83d\udc8e Crystal Scale', kind: 'charm', rarity: 'epic', cost: 62000, level: 18,
+      icon: '\ud83d\udc8e',
+      desc: 'A rare crystal scale that improves control over the fishing zone.',
+      note: '+25% white bar size',
+      stats: { barSize: 1.25 } },
+
+    { id: 'starfallcharm', name: '\ud83c\udf20 Starfall Charm', kind: 'charm', rarity: 'epic', cost: 110000, level: 22,
+      icon: '\ud83c\udf20',
+      desc: 'A piece of fallen starlight that makes the fishing zone incredibly stable.',
+      note: '+25% white bar size + 10% slower movement',
+      stats: { barSize: 1.25, barSpeed: 0.90 } },
+
+    { id: 'abysscharm', name: '\ud83c\udf0c Abyss Charm', kind: 'charm', rarity: 'epic', cost: 210000, level: 26,
+      icon: '\ud83c\udf0c',
+      desc: 'A mysterious charm from the deepest ocean trenches.',
+      note: '+30% white bar size',
+      stats: { barSize: 1.30 } },
+
+    { id: 'fisherking', name: '\ud83d\udc51 Fisher King Charm', kind: 'charm', rarity: 'legendary', cost: 640000, level: 32,
+      icon: '\ud83d\udc51',
+      desc: 'A legendary charm made for master anglers.',
+      note: '+35% white bar size',
+      stats: { barSize: 1.35 } },
+
     /* ------------------------------------------------------------ relics
        Found, never sold. Slot cost 1 like a charm but the effects are larger
        and the drawbacks are real. */

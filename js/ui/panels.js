@@ -155,9 +155,11 @@
       case 'stats': return buildStats(tab || 'stats');
       case 'settings': return buildSettings();
       case 'map': return buildMap();
+      case 'merchant': return buildMerchant();
       case 'cases': return buildCases();
       case 'wardrobe': return buildWardrobe(tab || 'all');
-      case 'journal': return buildJournal(tab || 'entries');
+      // a running quest is what the journal is for while there is one
+      case 'journal': return buildJournal(tab || (VF.quests.activeCount() ? 'quests' : 'entries'));
       default: return shell('—');
     }
   }
@@ -181,6 +183,9 @@
       const list = U.el('div', 'list');
       VF.rods.list.forEach(function (rod) {
         const owned = d.ownedRods.indexOf(rod.id) >= 0;
+        // earned rods and the wanderer's stock are never on the shelf; they
+        // turn up here once they are yours
+        if ((rod.quest || rod.merchant) && !owned) return;
         const block = owned ? null : VF.rods.blocked(rod);
         const locked = !!block || (!owned && rod.noShop);
         const can = VF.economy.canAfford(rod.cost);
@@ -219,6 +224,9 @@
         grid.appendChild(statCell('Rare', '×' + rod.rare.toFixed(2), c(rod.rare, eq.rare)));
         grid.appendChild(statCell('Luck', '+' + rod.luck.toFixed(2), c(rod.luck, eq.luck)));
         main.appendChild(grid);
+        const bn = U.el('div', 'row-desc', rodBarNote(rod));
+        bn.style.color = 'var(--ink-2)';
+        main.appendChild(bn);
         row.appendChild(main);
 
         const side = U.el('div', 'row-side');
@@ -316,6 +324,134 @@
 
   function cmp(a, b) { return a > b + 1e-9 ? 1 : a < b - 1e-9 ? -1 : 0; }
 
+  /* What a rod is worth once the fish is on: line strength is what widens the
+     white bar, reel force is what steadies it and sharpens how fast it answers
+     the key. Same arithmetic as loot.fightParams — stated here so the shop is
+     not describing a bonus the fight does not actually give. */
+  function rodBarNote(rod) {
+    const q = U.clamp((rod.reel - 0.40) / 2.70, 0, 1.25);
+    const sharper = Math.round(60 * q);
+    const fill = Math.round(((rod.barFill || 1) - 1) * 100);
+    const bits = [];
+    if (rod.barSize !== undefined) {
+      // it states its own; print exactly what the fight will use
+      bits.push('white bar +' + Math.round((rod.barSize - 1) * 100) + '%');
+      const spd = Math.round((rod.barSpeed - 1) * 100);
+      if (spd) bits.push('bar movement ' + (spd > 0 ? '+' : '−') + Math.abs(spd) + '%');
+    } else {
+      const wider = Math.round(15.5 * (Math.log(Math.max(0.25, rod.line)) / Math.LN2));
+      const steadier = Math.round(20 * q);
+      if (wider <= 0 && steadier <= 0) {
+        return 'white bar: the baseline every other rod is measured against';
+      }
+      if (wider > 0) bits.push('white bar +' + wider + '%');
+      if (steadier > 0) bits.push(steadier + '% steadier');
+    }
+    if (sharper > 0) bits.push(sharper + '% sharper on the key');
+    if (fill) bits.push('progress ' + (fill > 0 ? '+' : '−') + Math.abs(fill) + '%');
+    return bits.join(' · ');
+  }
+
+  /* What the wanderer is carrying, for as long as he is carrying it. Rows are
+     the same shape as the shop's rods, because they are rods — the only real
+     difference is that the stock is twenty of a hundred and it goes with him. */
+  function buildMerchant() {
+    const d = VF.state.data;
+    const ms = VF.merchant.leavesIn();
+    const mm = Math.floor(ms / 60000), ss = Math.floor((ms % 60000) / 1000);
+    const p = shell('The Wanderer', VF.merchant.here()
+      ? 'twenty of the hundred, and then he walks on · leaves in ' + mm + ':' + (ss < 10 ? '0' : '') + ss
+      : 'he has gone');
+    const b = body();
+
+    const stock = VF.merchant.stock();
+    if (!stock.length) {
+      b.appendChild(U.el('div', 'empty', VF.merchant.here()
+        ? 'his case is empty. you have bought everything he was carrying.'
+        : 'there is nobody there. he turns up when he turns up.'));
+      p.appendChild(b);
+      return p;
+    }
+
+    b.appendChild(U.el('div', 'merch-intro',
+      'he does not haggle and he does not come back for anything he did not sell. ' +
+      'the numbers on the right are what the catch bar will actually do.'));
+
+    const list = U.el('div', 'list');
+    stock.forEach(function (rod) {
+      const owned = d.ownedRods.indexOf(rod.id) >= 0;
+      const gone = VF.merchant.sold(rod.id) || owned;
+      const can = VF.economy.canAfford(rod.cost);
+      const row = U.el('div', 'row row-rod' + (gone ? ' owned' : '') + (!can && !gone ? ' locked' : ''));
+      const mark = U.el('div', 'row-mark');
+      mark.style.background = VF.rarities.color(rod.rarity);
+      row.appendChild(mark);
+
+      const art = U.el('div', 'rod-art-box');
+      art.appendChild(rodPreview(rod, VF.rods.index(rod.id), false));
+      row.appendChild(art);
+
+      const main = U.el('div', 'row-main');
+      const name = U.el('div', 'row-name');
+      name.appendChild(U.el('span', null, rod.name));
+      const rt = U.el('span', 'tag', VF.rarities.get(rod.rarity).name);
+      rt.style.color = VF.rarities.color(rod.rarity);
+      name.appendChild(rt);
+      if (gone) {
+        const t2 = U.el('span', 'tag', owned ? 'yours' : 'sold');
+        t2.style.color = 'var(--good)';
+        name.appendChild(t2);
+      }
+      main.appendChild(name);
+      main.appendChild(U.el('div', 'row-desc', rod.good + '.'));
+      if (rod.bad) {
+        const bad = U.el('div', 'row-desc', rod.bad);
+        bad.style.color = 'var(--warn)';
+        main.appendChild(bad);
+      }
+
+      const grid = U.el('div', 'stat-grid');
+      grid.appendChild(statCell('Bar', '+' + Math.round((rod.barSize - 1) * 100) + '%', 1));
+      const sp = Math.round((rod.barSpeed - 1) * 100);
+      grid.appendChild(statCell('Movement', (sp > 0 ? '+' : '') + sp + '%', 0));
+      if (rod.barFill && rod.barFill !== 1) {
+        grid.appendChild(statCell('Progress', Math.round((rod.barFill - 1) * 100) + '%', -1));
+      }
+      grid.appendChild(statCell('Line', rod.line.toFixed(2), 0));
+      grid.appendChild(statCell('Rare', '×' + rod.rare.toFixed(2), 0));
+      main.appendChild(grid);
+      row.appendChild(main);
+
+      const side = U.el('div', 'row-side');
+      if (gone) {
+        const btn = U.el('button', 'btn btn-sm', owned && d.rod !== rod.id ? 'Equip' : 'Equipped');
+        btn.disabled = d.rod === rod.id || !owned;
+        btn.addEventListener('click', function () {
+          d.rod = rod.id; VF.audio.click(); VF.bus.emit('gear:changed');
+          VF.save.save(); refresh();
+        });
+        side.appendChild(btn);
+      } else {
+        side.appendChild(priceEl(rod.cost, can));
+        const btn = U.el('button', 'btn btn-sm' + (can ? ' btn-primary' : ''), 'buy');
+        btn.disabled = !can;
+        btn.addEventListener('click', function () {
+          if (!VF.merchant.buy(rod.id)) { VF.audio.error(); return; }
+          VF.audio.buy();
+          VF.toast.show('<strong>' + U.esc(rod.name) + '</strong><br><span style="color:var(--ink-3)">' +
+            U.esc(rod.good) + '</span>', 'good', 5000);
+          refresh();
+        });
+        side.appendChild(btn);
+      }
+      row.appendChild(side);
+      list.appendChild(row);
+    });
+    b.appendChild(list);
+    p.appendChild(b);
+    return p;
+  }
+
   /* --------------------------------------------------------- charms */
 
   function charmIcon(c, size) {
@@ -349,6 +485,14 @@
       g.arc(Math.cos(a) * R * 0.62, Math.sin(a) * R * 0.62, size * 0.07, 0, VF.util.TAU);
       g.fill();
     }
+    // charms that carry an emblem wear it in the middle of the ring
+    if (c.icon) {
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.font = Math.round(size * 0.62) + 'px ' +
+               '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+      g.fillText(c.icon, 0, size * 0.03);
+    }
     return cv;
   }
 
@@ -357,19 +501,21 @@
     const st = c.stats || {};
     const NAMES = { luck: 'luck', rare: 'rarity', value: 'value', xp: 'xp', bite: 'bite time',
                     reel: 'reel', line: 'line', size: 'size', trait: 'traits',
-                    treasure: 'salvage', encounter: 'encounters', secret: 'discovery', 'void': 'the deep' };
+                    treasure: 'salvage', encounter: 'encounters', secret: 'discovery', 'void': 'the deep',
+                    barSize: 'white bar size', barSpeed: 'bar movement' };
     for (const k in st) {
       const v = st[k];
       if (k === 'luck') { parts.push({ t: 'luck +' + v.toFixed(2), good: v > 0 }); continue; }
       // a lower bite figure is faster, so it reads as an improvement
-      const better = k === 'bite' ? v < 1 : v > 1;
+      // bar movement is a preference, not an upgrade — it is left uncoloured
+      const better = k === 'barSpeed' ? null : (k === 'bite' ? v < 1 : v > 1);
       const pctv = Math.round(Math.abs(v - 1) * 100);
       parts.push({ t: NAMES[k] + ' ' + (v > 1 ? '+' : '−') + pctv + '%', good: better });
     }
     const row = U.el('div', 'stat-grid');
     parts.forEach(function (p) {
       const cell = U.el('div', 'stat-cell');
-      const val = U.el('span', 'v' + (p.good ? ' up' : ' down'), p.t);
+      const val = U.el('span', 'v' + (p.good === null ? '' : p.good ? ' up' : ' down'), p.t);
       cell.appendChild(val);
       row.appendChild(cell);
     });
@@ -488,12 +634,13 @@
     line.appendChild(tag);
     const show = [['rarity', bs.rare, false], ['size', bs.size, false], ['traits', bs.trait, false],
                   ['value', bs.value, false], ['bite time', bs.bite, true], ['line', bs.line, false],
-                  ['salvage', bs.treasure, false], ['discovery', bs.secret, false]];
+                  ['salvage', bs.treasure, false], ['discovery', bs.secret, false],
+                  ['white bar', bs.barSize, false], ['bar movement', bs.barSpeed, null]];
     show.forEach(function (row2) {
       const v = row2[1];
       if (Math.abs(v - 1) < 0.02) return;
-      const better = row2[2] ? v < 1 : v > 1;
-      const el = U.el('span', 'v ' + (better ? 'good' : 'bad'),
+      const better = row2[2] === null ? null : row2[2] ? v < 1 : v > 1;
+      const el = U.el('span', 'v' + (better === null ? '' : better ? ' good' : ' bad'),
         row2[0] + ' ' + (v > 1 ? '+' : '−') + Math.round(Math.abs(v - 1) * 100) + '%');
       line.appendChild(el);
     });
@@ -679,14 +826,24 @@
     const d = VF.state.data;
     const p = shell('Journal', d.journal.length + ' entries · ' +
                     Object.keys(d.secrets).length + ' hidden places found');
+    const qn = VF.quests.activeCount();
     p.appendChild(tabs([
+      { id: 'quests', label: 'quests' + (qn ? ' ' + qn : '') },
       { id: 'entries', label: 'entries' },
       { id: 'people', label: 'people' + (VF.npcs.anyNew() ? ' •' : '') },
       { id: 'records', label: 'records' }
     ], tab, function (t) { refresh(t); }));
     const b = body();
 
-    if (tab === 'entries') {
+    if (tab === 'quests') {
+      const open = VF.quests.visible();
+      if (!open.length) {
+        b.appendChild(U.el('div', 'empty',
+          'nothing is asking anything of you yet. keep fishing, and talk to people.'));
+      } else {
+        open.forEach(function (v) { b.appendChild(questCard(v)); });
+      }
+    } else if (tab === 'entries') {
       if (!d.journal.length) {
         b.appendChild(U.el('div', 'empty', 'nothing written down yet. keep fishing.'));
       } else {
@@ -776,6 +933,70 @@
     return p;
   }
 
+  /* One quest, and where in it the player currently is. Everything drawn here
+     comes off the quest definition, so a second quest needs no new UI. */
+  function questCard(v) {
+    const def = v.def, q = v.q;
+    const card = U.el('div', 'quest' + (v.done ? ' done' : '') + (def.id === 'heavens' ? ' gold' : ''));
+
+    const head = U.el('div', 'quest-head');
+    head.appendChild(U.el('span', 'quest-name', def.name));
+    if (def.difficulty) {
+      const t = U.el('span', 'quest-tag', def.difficulty);
+      t.style.color = v.done ? 'var(--good)' : '#ffd88a';
+      head.appendChild(t);
+    }
+    head.appendChild(U.el('span', 'quest-of', v.done ? 'complete'
+      : 'chapter ' + (q.step + 1) + ' / ' + def.chapters.length));
+    card.appendChild(head);
+    card.appendChild(U.el('div', 'quest-blurb', def.blurb));
+
+    if (v.done) {
+      card.appendChild(U.el('div', 'quest-done-line', 'finished. it is in the journal.'));
+      return card;
+    }
+
+    const o = VF.quests.objective(def.id);
+    if (!o) return card;
+
+    const ch = U.el('div', 'quest-ch');
+    ch.appendChild(U.el('div', 'quest-ch-name', o.chapter.name));
+    if (o.text) ch.appendChild(U.el('div', 'quest-text', o.text));
+    ch.appendChild(U.el('div', 'quest-task', o.task));
+    if (o.talk) {
+      const who = VF.npcs.name(o.talk);
+      const ready = VF.npcs.hasNew(o.talk);
+      ch.appendChild(U.el('div', 'quest-where',
+        ready ? who.toLowerCase() + ' is waiting to say it' : 'you need ' + who.toLowerCase() + ' first'));
+    } else if (o.where) {
+      ch.appendChild(U.el('div', 'quest-where', o.where));
+    }
+
+    if (o.goal) {
+      const tr = U.el('div', 'quest-track');
+      const fl = U.el('div', 'quest-fill');
+      fl.style.width = Math.round(U.clamp(o.goal.have / Math.max(1, o.goal.need), 0, 1) * 100) + '%';
+      tr.appendChild(fl);
+      ch.appendChild(tr);
+      ch.appendChild(U.el('div', 'quest-count', o.goal.have + ' / ' + o.goal.need + ' ' + o.goal.unit));
+    }
+
+    if (o.checklist && o.checklist.length) {
+      const list = U.el('div', 'quest-list');
+      o.checklist.forEach(function (it) {
+        const row = U.el('div', 'quest-item' + (it.done ? ' on' : ''));
+        row.appendChild(U.el('span', 'tick', it.done ? '\u2713' : '\u25cb'));
+        row.appendChild(U.el('span', 'who', it.label));
+        row.appendChild(U.el('span', 'want', it.done ? 'given' : it.task));
+        list.appendChild(row);
+      });
+      ch.appendChild(list);
+    }
+
+    card.appendChild(ch);
+    return card;
+  }
+
   /* Talking is not a card any more — the panel closes and the two of you go
      and have the conversation out on the shore where it can be seen. */
   function speak(id) {
@@ -792,13 +1013,17 @@
 
   function buildDex() {
     const d = VF.state.data;
-    const found = Object.keys(d.fishdex).length;
-    const p = shell('Fishdex', found + ' of ' + VF.fish.count + ' species recorded');
+    /* Species in a hidden tier are not in the total, not in the filter row and
+       not in the grid until one has been caught — so the record never shows a
+       gap the player has no way to explain. */
+    const shown = VF.fish.knownList();
+    const found = shown.filter(function (f) { return !!d.fishdex[f.id]; }).length;
+    const p = shell('Fishdex', found + ' of ' + shown.length + ' species recorded');
     const b = body();
 
     const bar = U.el('div', 'dex-toolbar');
     const segR = U.el('div', 'seg');
-    [{ id: 'all', label: 'All' }].concat(VF.rarities.list.map(function (r) {
+    [{ id: 'all', label: 'All' }].concat(VF.rarities.visible().map(function (r) {
       return { id: r.id, label: r.name };
     })).forEach(function (o) {
       const btn = U.el('button', dexFilter === o.id ? 'active' : '', o.label);
@@ -825,7 +1050,7 @@
     bar.appendChild(segM);
     b.appendChild(bar);
 
-    const list = VF.fish.list.filter(function (f) {
+    const list = shown.filter(function (f) {
       if (dexFilter !== 'all' && f.rarity !== dexFilter) return false;
       const has = !!d.fishdex[f.id];
       if (dexMode === 'found' && !has) return false;

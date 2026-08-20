@@ -20,14 +20,21 @@
 
   function available() {
     const li = VF.locations.index(VF.state.data.location);
+    const d = VF.state.data;
     return VF.conditionData.list.filter(function (c) {
-      return !c.minLoc || li >= c.minLoc;
+      if (c.minLoc && li < c.minLoc) return false;
+      // some water does not do a thing until it has been given a reason to
+      if (c.test) { try { return !!c.test(d); } catch (e) { return false; } }
+      return true;
     });
   }
 
   function start(id) {
     const pool = available();
-    const c = id ? VF.conditionData.get(id) : VF.rng.weighted(pool, function (x) { return x.weight; }, VF.rng.g);
+    const c = id ? VF.conditionData.get(id)
+      : VF.rng.weighted(pool, function (x) {
+          return typeof x.weight === 'function' ? x.weight() : x.weight;
+        }, VF.rng.g);
     if (!c) return false;
     active = c;
     remain = VF.rng.g.range(c.dur[0], c.dur[1]);
@@ -75,8 +82,16 @@
 
   function reset() { active = null; remain = 0; blend = 0; idle = 90; }
 
+  /* Bring the next roll forward without forcing a particular condition — the
+     sky still decides, it just decides sooner. */
+  function hasten(sec) {
+    if (active) return false;
+    idle = Math.min(idle, Math.max(8, sec || 30));
+    return true;
+  }
+
   VF.conditions = {
-    tick: tick, mods: mods, start: start, end: end, reset: reset,
+    tick: tick, mods: mods, start: start, end: end, reset: reset, hasten: hasten,
     current: function () { return active; },
     name: function () { return active ? active.name : null; },
     strength: function () { return active ? U.smoothstep(blend) : 0; },
@@ -85,4 +100,10 @@
   };
 
   VF.bus.on('location:changed', reset);
+
+  /* A skyfall that came and went without giving up what somebody was waiting
+     for should not mean another hour of ordinary water. */
+  VF.bus.on('condition:end', function (c) {
+    if (c && c.id === 'skyfall' && VF.quests && VF.quests.at('heavens', 8)) hasten(75);
+  });
 })(window.VF = window.VF || {});

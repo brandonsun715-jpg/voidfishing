@@ -11,7 +11,8 @@ const NEW = ['reed_dace','button_crab','chalk_sole','kettle_perch','sew_eel','ti
   'cold_marlin','bell_jelly','grave_carp','lamp_ray','stitch_bream','ash_ray','root_pike',
   'coin_king','tally_fish','salt_widow','folded_letter','mirror_twin','sunken_column',
   'spiral_saint','the_absence','the_census','the_understudy','the_long_now',
-  'g_swarm','g_price','g_cursor','g_recursion','g_zero','g_tuesday','g_gardener','g_reader',
+  'g_swarm','g_price','g_cursor','g_recursion','g_zero','g_gardener','g_reader',
+  'g_trench','g_secondmoon','g_prayed','g_unshoal','g_firstwater',
   // third catalogue
   'pin_bream','mud_gudgeon','paper_ray','kelp_perch','coin_minnow','ribbon_smelt',
   'knot_loach','chip_crab','lamp_fry',
@@ -37,7 +38,7 @@ const N = 400000;
 const spots = VF.locations.list.map(l => l.id);
 for (let i = 0; i < N; i++) {
   d.location = spots[i % spots.length];
-  d.rod = i % 3 === 0 ? 'wood' : (i % 3 === 1 ? 'deepwater' : 'everything');
+  d.rod = i % 3 === 0 ? 'wood' : (i % 3 === 1 ? 'deepwater' : 'unknown');
   d.bait = i % 4 === 0 ? 'worm' : (i % 4 === 1 ? 'deep' : (i % 4 === 2 ? 'void' : 'null'));
   const c = VF.loot.roll();
   if (c && c.id) seen[c.id] = (seen[c.id] | 0) + 1;
@@ -52,3 +53,13 @@ NEW.map(id => [id, seen[id] | 0]).sort((a, b) => a[1] - b[1]).slice(0, 8)
     '   1 in ' + (n ? Math.round(N / n).toLocaleString() : '—')));
 const total = VF.fish.list.filter(f => seen[f.id]).length;
 console.log('\nspecies reachable overall: ' + total + ' / ' + VF.fish.count);
+/* Event and strict species are gated on something this sample never does — a
+   running skyfall, an armed trial, water above the cloud. They are listed with
+   the reason so an unreachable count is a fact rather than a mystery. */
+const gated = VF.fish.list.filter(f => !seen[f.id]).map(function (f) {
+  const why = f.event ? 'only during ' + f.event
+            : f.strict ? 'only at ' + f.locs.join('/')
+            : 'no reason found — CHECK';
+  return '  ' + f.id.padEnd(22) + why;
+});
+if (gated.length) console.log('gated, not missing:\n' + gated.join('\n'));

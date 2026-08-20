@@ -12,12 +12,24 @@
 
   function init() {
     host = document.getElementById('modal');
-    VF.bus.on('fishing:landed', function (c) { setTimeout(function () { show(c); }, 340); });
+    VF.bus.on('fishing:landed', function (c) {
+      /* Two species stop the game to show you something first. The catch is
+         already recorded by the time this runs, so the card is the same card
+         whether the sequence is watched or skipped. */
+      if (c.fish && c.fish.cutscene && VF.cutscene) {
+        VF.cutscene.play(c.fish.cutscene, c, function () {
+          setTimeout(function () { show(c); }, 260);
+        });
+        return;
+      }
+      setTimeout(function () { show(c); }, 340);
+    });
     VF.bus.on('fishing:treasure', function (c) { setTimeout(function () { showTreasure(c); }, 320); });
   }
 
   function banner(c) {
     const traits = c.traits || [];
+    if (c.rarity === 'unknown') return { text: 'the record has no tier for this', color: '#ffffff' };
     if (c.rarity === 'glitch') return { text: 'this should not be here', color: '#ff2d55' };
     if (traits.length >= 3) return { text: traits.length + ' traits', color: VF.traits.color(traits) };
     if (c.isNew) return { text: 'new discovery', color: VF.rarities.color(c.rarity) };
@@ -207,6 +219,15 @@
         const note = U.el('div', 'relic-note');
         note.appendChild(U.el('span', 'k', 'relic'));
         note.appendChild(U.el('div', null, ch.note));
+        body.appendChild(note);
+      }
+    }
+    if (t.rod) {
+      const r = VF.rods.get(t.rod);
+      if (r) {
+        const note = U.el('div', 'relic-note');
+        note.appendChild(U.el('span', 'k', 'a rod'));
+        note.appendChild(U.el('div', null, r.name + ' — ' + r.desc));
         body.appendChild(note);
       }
     }

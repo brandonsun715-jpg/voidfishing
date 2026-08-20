@@ -31,7 +31,8 @@
         // free-form maps (fishdex, baitCounts, achievements, flags) copy wholesale
         if (k === 'fishdex' || k === 'baitCounts' || k === 'achievements' || k === 'flags' ||
             k === 'mutations' || k === 'traits' || k === 'traitsSeen' || k === 'treasures' ||
-            k === 'secrets' || k === 'npcs' || k === 'equipped' || k === 'cases') {
+            k === 'secrets' || k === 'npcs' || k === 'equipped' || k === 'cases' ||
+            k === 'quests') {
           target[k] = sv;
         } else {
           merge(tv, sv);
@@ -67,6 +68,23 @@
     for (let i = 0; i < 5; i++) {
       if (d.charmSlots[i] && d.charms.indexOf(d.charmSlots[i]) < 0) d.charmSlots[i] = null;
       if (d.charmSlots[i] === undefined) d.charmSlots[i] = null;
+    }
+    if (!d.merchant || typeof d.merchant !== 'object' || Array.isArray(d.merchant)) {
+      d.merchant = { until: 0, next: 0, stock: [], sold: [], visits: 0 };
+    }
+    if (!Array.isArray(d.merchant.stock)) d.merchant.stock = [];
+    if (!Array.isArray(d.merchant.sold)) d.merchant.sold = [];
+    d.merchant.stock = d.merchant.stock.filter(function (id) {
+      const r = VF.rods.get(id);
+      return r && r.id === id;
+    });
+    if (!d.quests || typeof d.quests !== 'object' || Array.isArray(d.quests)) d.quests = {};
+    for (const qid in d.quests) {
+      const q = d.quests[qid];
+      if (!q || typeof q !== 'object') { delete d.quests[qid]; continue; }
+      q.step = Math.max(0, Math.floor(q.step) || 0);
+      if (!q.flags || typeof q.flags !== 'object') q.flags = {};
+      if (!q.counts || typeof q.counts !== 'object') q.counts = {};
     }
     if (!Array.isArray(d.cosmetics)) d.cosmetics = [];
     if (!Array.isArray(d.journal)) d.journal = [];

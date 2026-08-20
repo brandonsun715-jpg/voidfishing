@@ -18,10 +18,11 @@ const path = require('path');
     ['+ the last water',            { lv: 99, voids: 1, glitch: 1, secret: true }],
     ['+ the glass shallows',        { lv: 99, voids: 1, glitch: 1, secret: true, shallows: true }],
     ['+ a growing crystal',         { lv: 99, voids: 1, glitch: 1, secret: true, shallows: true, crystal: true }],
-    ['+ the two gate species',      { lv: 99, voids: 1, glitch: 1, secret: true, shallows: true, crystal: true, dex: true }]
+    ['+ the two gate species',      { lv: 99, voids: 1, glitch: 1, secret: true, shallows: true, crystal: true, dex: true }],
+    ['+ the fallen star finished',  { lv: 99, voids: 1, glitch: 1, secret: true, shallows: true, crystal: true, dex: true, quest: true }]
   ];
-  const IDS = ['eclipse', 'origin', 'everything', 'frostpoint', 'shatterhour',
-               'ninearms', 'thunderstruck', 'redthread'];
+  const IDS = ['frostpoint', 'shatterhour', 'ninearms', 'thunderstruck',
+               'seraph', 'redthread', 'unknown'];
   for (const [label, c] of cases) {
     const out = await page.evaluate(({ c, IDS }) => {
       const d = VF.state.data;
@@ -31,7 +32,8 @@ const path = require('path');
       if (c.secret) d.secrets.the_last_water = Date.now();
       if (c.shallows) d.secrets.glass_shallows = Date.now();
       d.treasures = c.crystal ? { crystal: 1 } : {};
-      d.fishdex = c.dex ? { deep_hold: { caught: 1 }, stormcaller: { caught: 1 } } : {};
+      d.fishdex = c.dex ? { nine_tide: { caught: 1 }, stormcaller: { caught: 1 } } : {};
+      d.quests = c.quest ? { heavens: { started: 1, step: 11, done: Date.now(), flags: {}, counts: {} } } : {};
       d.ownedRods = ['wood'];
       return IDS.map(function (id) {
         const r = VF.economy.buyRod(id);
@@ -49,7 +51,8 @@ const path = require('path');
     d.level = 99; d.money = 5e11;
     d.stats.voidCatches = 1; d.stats.glitchCatches = 1;
     d.secrets = { the_last_water: Date.now(), glass_shallows: Date.now() };
-    const ids = ['redthread', 'exsanguine', 'halflife', 'reliquary', 'longfeather', 'twinsun'];
+    d.quests = { heavens: { started: 1, step: 11, done: Date.now(), flags: {}, counts: {} } };
+    const ids = ['redthread', 'pyrewing', 'halflife', 'seraph', 'longfeather', 'twinsun'];
     const buy = ids.map(function (id) {
       d.ownedRods = ['wood'];
       const r = VF.economy.buyRod(id);
@@ -63,6 +66,24 @@ const path = require('path');
   });
   console.log('\nnever for sale:  ' + gifted.buy);
   console.log('when handed over:' + gifted.grant);
+
+  /* And the two that the water gives back have to actually be in the salvage
+     table, or they are unreachable however many casts you make. */
+  const water = await page.evaluate(function () {
+    const d = VF.state.data;
+    d.ownedRods = ['wood'];
+    d.location = 'beneath';
+    const want = ['pyrewing', 'longfeather'];
+    const inTable = want.filter(function (id) {
+      return VF.treasureData.list.some(function (t) { return t.rod === id; });
+    });
+    // and once owned they stop being in the water
+    d.ownedRods = ['wood', 'pyrewing'];
+    let seen = 0;
+    for (let i = 0; i < 4000; i++) { const t = VF.treasureData.roll(); if (t && t.rod === 'pyrewing') seen++; }
+    return { inTable: inTable.join(','), ownedStillRolls: seen };
+  });
+  console.log('rods in the water:' + water.inTable + '  (owned still rolls: ' + water.ownedStillRolls + ')');
   console.log('\nerrors: ' + errs.length);
   if (errs.length) console.log(errs.join('\n'));
   await browser.close();

@@ -15,6 +15,7 @@
 
   const L = {
     w: 0, h: 0, horizonY: 0, waterH: 0,
+    merchant: null,        // the wanderer's screen rectangle while he is here
     rodTip: { x: 0, y: 0 }, rodHand: { x: 0, y: 0 },
     bobber: { x: 0, y: 0, scale: 1, visible: false, bob: 0 },
     castTarget: { x: 0, y: 0 },
@@ -363,6 +364,8 @@
       }
     }
     if (flashT > 0) flashT = Math.max(0, flashT - dt);
+
+    updateSkyfall(dt);
   }
 
   let lightning = 12, flashT = 0, flashX = 0.5;
@@ -381,6 +384,78 @@
     ctx.globalCompositeOperation = 'lighter';
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, L.horizonY);
+    ctx.restore();
+  }
+
+  /* SKYFALL. Conditions have visual flags but nothing has ever read one except
+     `calm`, so this is the only place the event exists on screen: lights that
+     come down slowly, hit the water, and leave a ring. They are tracked here
+     rather than handed to the particle system because the whole point is what
+     happens when one lands. */
+  const falling = [];
+  const FALL_MAX = 26;
+
+  function updateSkyfall(dt) {
+    const k = VF.conditions ? VF.conditions.flag('skyfall') : 0;
+    if (k <= 0.01 && !falling.length) return;
+    const q = VF.state.data.settings.quality;
+    const scale = q === 'low' ? 0.35 : q === 'medium' ? 0.7 : 1;
+
+    if (k > 0.05 && falling.length < FALL_MAX * scale &&
+        Math.random() < dt * 5.2 * k * scale) {
+      const x = Math.random() * W;
+      falling.push({
+        x: x, y: -30 - Math.random() * H * 0.2,
+        vx: (Math.random() - 0.5) * 26,
+        vy: 105 + Math.random() * 130,
+        // where the water is under this one, so it lands on the surface
+        hit: L.horizonY + L.waterH * (0.06 + Math.random() * 0.72),
+        r: 1.1 + Math.random() * 1.9,
+        sway: Math.random() * 6.28
+      });
+    }
+
+    for (let i = falling.length - 1; i >= 0; i--) {
+      const f = falling[i];
+      f.vy += 34 * dt;
+      f.y += f.vy * dt;
+      f.x += (f.vx + Math.sin(f.y * 0.012 + f.sway) * 9) * dt;
+      if (f.y < f.hit) continue;
+      falling.splice(i, 1);
+      // it goes in, and the water says so
+      VF.fx.ripple(f.x, f.hit, W * (0.020 + f.r * 0.010), 1.5, [255, 226, 160], 1.2);
+      VF.particles.burst(f.x, f.hit, 5, {
+        color: [255, 232, 176], angle: -Math.PI / 2, spread: 1.5,
+        speedMin: 20, speedMax: 74, sizeMax: 1.7, grav: 190, lifeMax: 0.55
+      });
+      if (Math.random() < 0.22) VF.audio.splash(0.3);
+    }
+  }
+
+  function drawSkyfall() {
+    if (!falling.length) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < falling.length; i++) {
+      const f = falling[i];
+      const tail = Math.min(46, f.vy * 0.17);
+      const g = ctx.createLinearGradient(f.x, f.y - tail, f.x, f.y + f.r);
+      g.addColorStop(0, 'rgba(255,214,130,0)');
+      g.addColorStop(1, 'rgba(255,238,190,0.75)');
+      ctx.strokeStyle = g;
+      ctx.lineWidth = f.r * 0.9;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(f.x - Math.sin(f.y * 0.012 + f.sway) * 3, f.y - tail);
+      ctx.lineTo(f.x, f.y);
+      ctx.stroke();
+      const rg = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.r * 5);
+      rg.addColorStop(0, 'rgba(255,244,206,0.85)');
+      rg.addColorStop(0.4, 'rgba(255,214,130,0.22)');
+      rg.addColorStop(1, 'rgba(255,200,110,0)');
+      ctx.fillStyle = rg;
+      ctx.beginPath(); ctx.arc(f.x, f.y, f.r * 5, 0, TAU); ctx.fill();
+    }
     ctx.restore();
   }
 
@@ -427,10 +502,12 @@
     mark('fog', function () { drawFog(P, q); });
     mark('water', function () { drawWater(P, q); });
     mark('under', function () { drawUnderwater(P); });
+    mark('skyfall', function () { drawSkyfall(); });
     mark('ripples', function () { VF.fx.drawRipples(ctx, 0.26); });
     mark('line', function () { drawLineAndBobber(P); });
     mark('particles', function () { VF.particles.draw(ctx); });
     mark('fore', function () { drawForeground(P); });
+    mark('cutscene', function () { drawCutscene(); });
     mark('overlay', function () { VF.fx.drawOverlay(ctx, W, H); });
     syncVignette();
 
@@ -1197,7 +1274,7 @@
     ctx.quadraticCurveTo(seatX + fh * 0.62, lipY + fh * 0.10, seatX + fh * 0.98, lipY + fh * 0.52);
     ctx.stroke();
 
-    if (VF.visit && VF.visit.active()) { drawVisit(P, rim); return; }
+    if (VF.visit && VF.visit.active()) { L.merchant = null; drawVisit(P, rim); return; }
 
     ctx.save();
     ctx.translate(seatX, seatY);
@@ -1215,6 +1292,65 @@
     // the hand closes over the grip, so it goes on after the rod
     VF.anglerArt.drawHand(ctx, VF.cosmetics.cfg('outfit'), fh, L.rodHand,
                           rodState.angle + rodState.sway);
+
+    drawMerchant(P, rim);
+  }
+
+  /* The wanderer stands a little up the shore with a case at his side and the
+     time he has left over his head. He is drawn after the angler so he reads
+     as further along the ledge, and the rectangle he occupies is kept on L so
+     the input layer can tell when he has been clicked. */
+  const MERCH_NPC = { id: 'merchant', name: 'The Wanderer', color: '#e8c88a' };
+
+  function drawMerchant(P, rim) {
+    L.merchant = null;
+    if (!VF.merchant || !VF.merchant.here()) return;
+    const fh = L.figureH;
+    // up the shore rather than down it: to the right the ledge falls away and
+    // he ends up standing off the bottom of the frame
+    const x = L.seatX - fh * 0.58;
+    const y = groundY(x);
+    // a slow arrival, so he does not simply blink into existence
+    const inK = U.clamp((VF.merchant.STAY - VF.merchant.leavesIn()) / 1400, 0, 1);
+    const outK = U.clamp(VF.merchant.leavesIn() / 4000, 0, 1);
+    const a = U.smoothstep(Math.min(inK, outK));
+    if (a <= 0.01) return;
+
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.translate(x, y);
+    VF.npcArt.draw(ctx, MERCH_NPC, fh, t, {
+      facing: 1, rim: rim, walk: 0, phase: 0, talking: false
+    });
+    ctx.restore();
+
+    /* the countdown, on a small plate above him */
+    const ms = VF.merchant.leavesIn();
+    const mm = Math.floor(ms / 60000), ss = Math.floor((ms % 60000) / 1000);
+    const label = mm + ':' + (ss < 10 ? '0' : '') + ss;
+    const py = y - fh * 1.08;
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.font = '600 ' + Math.round(fh * 0.085) + 'px ui-monospace, monospace';
+    const tw = ctx.measureText(label).width;
+    const pw = tw + fh * 0.15, ph = fh * 0.145;
+    ctx.fillStyle = 'rgba(8,11,17,0.82)';
+    if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(x - pw / 2, py - ph, pw, ph, ph * 0.32); ctx.fill(); }
+    else ctx.fillRect(x - pw / 2, py - ph, pw, ph);
+    ctx.strokeStyle = 'rgba(232,200,138,' + (0.45 + 0.25 * Math.sin(t * 2.2)).toFixed(2) + ')';
+    ctx.lineWidth = 1.1;
+    if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(x - pw / 2, py - ph, pw, ph, ph * 0.32); ctx.stroke(); }
+    ctx.fillStyle = ms < 60000 ? '#ff9a8a' : '#e8c88a';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, x, py - ph * 0.52);
+    // and a nudge that he can be clicked
+    ctx.font = '500 ' + Math.round(fh * 0.062) + 'px ui-sans-serif, system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(232,200,138,' + (0.34 + 0.24 * Math.sin(t * 2.2)).toFixed(2) + ')';
+    ctx.fillText('click to trade', x, py + fh * 0.075);
+    ctx.restore();
+
+    L.merchant = { x: x - fh * 0.34, y: y - fh * 1.30, w: fh * 0.68, h: fh * 1.34 };
   }
 
   /* Both figures on the near shore. The rod stays behind, propped on the ledge
@@ -1304,6 +1440,117 @@
     }, t, { spin: reeling ? t * 12 : t * 0.4 });
   }
 
+  /* The two sequences, drawn over the shore rather than instead of it: the
+     water and the sky keep running underneath, which is most of why it reads
+     as something happening here rather than as a cut to somewhere else.
+
+     Nessie is drawn at very nearly the height of the frame. That is not a
+     flourish — the whole claim the tier makes about her is scale, and a
+     tastefully sized Nessie would be a different animal. */
+  function drawCutscene() {
+    const C = VF.cutscene && VF.cutscene.state();
+    if (!C) return;
+    const fish = C.fish && C.fish.fish;
+
+    // the frame goes down, but never all the way — the water stays visible
+    if (C.dark > 0.01) {
+      const g = ctx.createRadialGradient(W * 0.5, L.horizonY + L.waterH * 0.30, 0,
+                                         W * 0.5, L.horizonY + L.waterH * 0.30,
+                                         Math.max(W, H) * 0.78);
+      g.addColorStop(0, 'rgba(0,0,0,' + (C.dark * 0.42).toFixed(3) + ')');
+      g.addColorStop(1, 'rgba(0,0,0,' + Math.min(0.96, C.dark * 1.05).toFixed(3) + ')');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    // something the width of the bay, passing underneath
+    if (C.shadow > 0.01) {
+      const y = L.horizonY + L.waterH * 0.46;
+      const sg = ctx.createLinearGradient(0, y - L.waterH * 0.30, 0, y + L.waterH * 0.34);
+      sg.addColorStop(0, 'rgba(0,0,0,0)');
+      sg.addColorStop(0.5, 'rgba(0,0,0,' + (0.80 * C.shadow).toFixed(3) + ')');
+      sg.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = sg;
+      ctx.save();
+      ctx.translate(Math.sin(t * 0.22) * W * 0.05, 0);
+      ctx.beginPath();
+      ctx.ellipse(W * 0.5, y, W * 0.78, L.waterH * 0.30, 0, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    if (!fish || C.rise <= 0.01) return;
+
+    /* Both of them are drawn from their own centre, and neither one is
+       centred inside its own silhouette: she is nearly all neck above hers,
+       he is a person and splits about evenly. So the frame is worked out from
+       the parts that have to be in shot rather than from the middle. */
+    const isNessie = C.id === 'nessie';
+    const TOP = isNessie ? 1.00 : 0.90;    // reach above centre, in half-heights
+    const BOT = isNessie ? 0.50 : 0.95;    // reach below it
+    const box = isNessie ? Math.min(H * 1.10, W * 1.15) : Math.min(H * 0.76, W * 0.55);
+    const size = VF.fishArt.fitSize(fish, box);
+    const half = size * 2 * VF.fishArt.bodyRatio('being', fish.art.being);
+    const surface = L.horizonY + L.waterH * (isNessie ? 0.62 : 0.58);
+    const k = U.smootherstep(U.clamp(C.rise, 0, 1));
+
+    /* The letterbox bars are DOM, drawn over the canvas, so the renderer has
+       to know where they land or it will put the best part of the shot behind
+       one. They are 11vh, 8vh on a narrow screen. */
+    const bar = H * (W < 760 ? 0.085 : 0.115);
+    const ceiling = bar + H * 0.035 + half * TOP;
+
+    /* She sits at her own waterline; he stands on the surface. Either way the
+       figure is pushed down far enough to clear the top bar — a reveal you
+       cannot see the head of is not a reveal. */
+    const cyEnd = Math.max(ceiling,
+                           isNessie ? surface - half * 0.36 : surface - half * BOT);
+    const cyStart = surface + half * (BOT + 1.30);
+    const cy = U.lerp(cyStart, cyEnd, k);
+    const cx = W * (isNessie ? 0.50 : 0.50);
+
+    ctx.save();
+    // clip at the surface so nothing floats above water it has not left yet
+    ctx.beginPath();
+    ctx.rect(-20, -20, W + 40, surface + L.waterH * 0.30 + 20);
+    ctx.clip();
+    ctx.translate(cx, cy);
+
+    // the water it is displacing
+    ctx.save();
+    ctx.globalAlpha = 0.55 * k;
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.beginPath();
+    ctx.ellipse(0, half * 0.92, size * 1.25, L.waterH * 0.055, 0, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+
+    if (C.lit > 0.02) {
+      // a light on it that is not coming from the sky
+      const gl = ctx.createRadialGradient(0, -half * 0.2, 0, 0, -half * 0.2, size * 1.6);
+      const acc = U.hexToRgb(fish.art.c3);
+      gl.addColorStop(0, U.rgbToCss(acc, 0.20 * C.lit));
+      gl.addColorStop(1, U.rgbToCss(acc, 0));
+      ctx.fillStyle = gl;
+      ctx.fillRect(-size * 1.8, -size * 1.8, size * 3.6, size * 3.6);
+    }
+
+    // she comes out of the dark as she comes up, the same way a hooked fish does
+    if (C.lit < 0.96) {
+      ctx.save();
+      ctx.globalAlpha = 1 - C.lit;
+      VF.fishArt.drawSilhouette(ctx, fish, size, 0.96, k * 0.85);
+      ctx.restore();
+    }
+    if (C.lit > 0.02) {
+      ctx.save();
+      ctx.globalAlpha = C.lit;
+      VF.fishArt.draw(ctx, fish, size, { time: t, traits: C.fish ? C.fish.traits : null });
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
   /* Nothing dramatic — the colour drains, the frame stops, and a few lights
      appear where there is no reason for lights. */
   function drawWrong(k) {
@@ -1345,6 +1592,15 @@
     init: init, resize: resize, update: update, draw: draw,
     L: L, addShadow: addShadow, newCastLateral: newCastLateral,
     groundY: groundY, visitSpots: visitSpots,
+    /* Is this canvas point on the wanderer? The input layer asks before it
+       decides a press was the start of a cast. */
+    merchantHit: function (px, py) {
+      const r = L.merchant;
+      if (!r) return false;
+      const pad = L.figureH * 0.10;
+      return px >= r.x - pad && px <= r.x + r.w + pad &&
+             py >= r.y - pad && py <= r.y + r.h + pad;
+    },
     spawnMeteor: spawnMeteor, seedAmbient: seedAmbient,
     rebuild: function () { backdropKey = ''; buildStars(); },
     profile: function (on) {

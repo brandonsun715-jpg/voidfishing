@@ -72,6 +72,23 @@
         return VF.charms.owned('lantern') && VF.locations.index(d.location) >= 4;
       } },
 
+    /* Above the clouds. Never rolled for — the fallen star quest hands it over
+       when the rod arrives, and `test` exists only so tryFind ignores it. */
+    { id: 'the_heavens', name: 'THE HEAVENS', level: 0, chance: 0, journal: 'theheavens',
+      loc: { id: 'the_heavens', name: 'THE HEAVENS', level: 0,
+        tag: 'above the weather, and there is water up here',
+        desc: 'A flat calm sheet of light lying on top of the cloud, going out further than the sea does. ' +
+              'The rod knows the way. You did not, and it did not need you to.',
+        hint: 'above all of it',
+        rarityBoost: 3.40, valueBoost: 4.00, xpBoost: 48.0, biteBoost: 0.90,
+        sky: ['#2a1c3e', '#f0c07a'], water: ['#e8d6b0', '#8a6f52'], glow: '#ffe6a8',
+        fog: '#c8a878', fogAmt: 0.30, stars: 1.0, starTint: '#fff4d8',
+        horizon: 'ring', silhouette: 'none', depth: 0.34,
+        weather: ['clear', 'aurora', 'meteor'],
+        music: { root: 60, scale: [0, 4, 7, 9, 11], tempo: 0.15, pad: 0.55 } },
+      found: 'water lying on top of the cloud, with nothing under it but weather.',
+      test: function () { return false; } },
+
     /* The end of the game. Not a level unlock — you have to have been told. */
     { id: 'the_last_water', name: 'THE LAST WATER', level: 0, chance: 1,
       loc: { id: 'the_last_water', name: 'THE LAST WATER', level: 0,

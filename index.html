@@ -97,29 +97,24 @@
       </div>
     </div>
 
-    <!-- the fight -->
+    <!-- the fight: hold to drive the white bar right, release and it runs left -->
     <div id="fightUI" class="fight hidden">
       <div class="fight-head">
         <span id="fightName" class="fight-name">&nbsp;</span>
         <span id="fightWarn" class="fight-warn"></span>
       </div>
-      <div class="bar-block">
-        <div class="bar-label"><span>Fish stamina</span><span id="stamPct">100%</span></div>
-        <div class="bar bar-stam"><div id="stamFill" class="bar-fill"></div></div>
-      </div>
-      <div class="bar-block">
-        <div class="bar-label"><span>Line tension</span><span id="tensPct">0%</span></div>
-        <div class="bar bar-tens">
-          <div class="bar-zone-safe"></div>
-          <div class="bar-zone-danger"></div>
-          <div id="tensFill" class="bar-fill"></div>
-          <div id="tensTick" class="bar-tick"></div>
+      <div id="mgTrack" class="mg-track">
+        <div class="mg-inner">
+          <div id="mgBar" class="mg-bar"><span class="mg-bar-arrow"></span></div>
+          <div id="mgFish" class="mg-fish"></div>
         </div>
       </div>
-      <div class="bar-block">
-        <div class="bar-label"><span>Distance</span><span id="distPct">100%</span></div>
-        <div class="bar bar-dist"><div id="distFill" class="bar-fill"></div></div>
+      <div id="mgProg" class="mg-prog"><div id="mgProgFill" class="mg-prog-fill"></div></div>
+      <div class="fight-foot">
+        <span id="fightHint" class="fight-hint">hold <b>space</b> &mdash; keep it in the bar</span>
+        <span id="fightPct" class="fight-pct">&mdash;</span>
       </div>
+    </div>
     </div>
 
     <!-- centred prompts -->
@@ -132,6 +127,16 @@
       <div id="captionWho" class="caption-who"></div>
       <div id="captionText" class="caption-text"></div>
       <div id="captionMore" class="caption-more">click to continue</div>
+    </div>
+  </div>
+
+  <!-- the two sequences: letterbox, one line, and a way out of it -->
+  <div id="cutscene" class="cutscene hidden" aria-live="polite">
+    <div class="cut-bar cut-top"></div>
+    <div class="cut-bar cut-bot"></div>
+    <div class="cut-inner">
+      <div id="cutsceneText" class="cut-text"></div>
+      <div id="cutsceneMore" class="cut-more">click to continue</div>
     </div>
   </div>
 
@@ -152,6 +157,7 @@
 <script src="js/data/traits.js"></script>
 <script src="js/data/fish.js"></script>
 <script src="js/data/rods.js"></script>
+<script src="js/data/merchantRods.js"></script>
 <script src="js/data/bait.js"></script>
 <script src="js/data/locations.js"></script>
 <script src="js/data/weather.js"></script>
@@ -161,6 +167,7 @@
 <script src="js/data/journal.js"></script>
 <script src="js/data/secrets.js"></script>
 <script src="js/data/npcs.js"></script>
+<script src="js/data/quests.js"></script>
 <script src="js/data/cosmetics.js"></script>
 <script src="js/data/cases.js"></script>
 <script src="js/data/achievements.js"></script>
@@ -179,6 +186,9 @@
 <script src="js/systems/wrong.js"></script>
 <script src="js/systems/caseOpen.js"></script>
 <script src="js/systems/visit.js"></script>
+<script src="js/systems/quests.js"></script>
+<script src="js/systems/merchant.js"></script>
+<script src="js/systems/cutscene.js"></script>
 <!-- render -->
 <script src="js/render/palette.js"></script>
 <script src="js/render/particles.js"></script>

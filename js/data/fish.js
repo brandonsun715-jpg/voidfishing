@@ -488,23 +488,11 @@
     art: { body: 'object', object: 'angler', glitch: 0.9, glow: 0.5,
            c1: '#3a3a46', c2: '#0c0c12', c3: '#ffe0b0' } },
 
-  { id: 'g_sunday', name: 'Last Sunday', rarity: 'glitch', value: 26000000, kg: [0.5, 4], m: [0.1, 0.9], diff: 0.85,
-    desc: 'The entire day. Slightly damp. You can still smell the rain on it.',
-    locs: [], baits: [], time: [], weather: ['rain', 'overcast'],
-    art: { body: 'object', object: 'calendar', glitch: 0.7, glow: 0.75,
-           c1: '#e4e8ee', c2: '#5f6f83', c3: '#ffb03a' } },
-
   { id: 'g_bigger', name: 'A Much Larger Hook', rarity: 'glitch', value: 58000000, kg: [1200, 44000], m: [12, 90], diff: 0.99,
     desc: 'Barbed, rusted, and attached to a line going up. Do not look up. You looked up.',
     locs: [], baits: ['null'], time: ['night'], weather: ['voidsurge'],
     art: { body: 'object', object: 'hook', glitch: 0.8, glow: 0.4,
            c1: '#6a5a48', c2: '#241d16', c3: '#ffd8a0' } },
-
-  { id: 'g_applause', name: 'Distant Applause', rarity: 'glitch', value: 33000000, kg: [0, 0.05], m: [0, 0.05], diff: 0.90,
-    desc: 'Not a thing. Not an object. It is on the hook regardless, and it is getting louder.',
-    locs: [], baits: [], time: [], weather: [],
-    art: { body: 'object', object: 'hands', glitch: 1.1, glow: 1,
-           c1: '#e8b490', c2: '#4a2a20', c3: '#ffd166' } },
 
   /* ===================== second catalogue =====================
      Everything below was added after the first survey. The shallow end fills
@@ -661,15 +649,45 @@
     art: { body: 'object', object: 'counter', glitch: 1.3, glow: 1,
            c1: '#d8d4c8', c2: '#0a0a10', c3: '#ff2d55' } },
 
-  { id: 'g_tuesday', name: 'The Idea Of A Fish', rarity: 'glitch', value: 64000000, kg: [0, 0.4], m: [0, 2], diff: 0.95,
-    desc: 'Not a fish. The concept, unattached to any particular one. It is heavier than you would expect.',
-    locs: [], baits: [], time: [], weather: ['fog', 'eclipse'],
-    art: { body: 'unfinished', fin: 'veil', eyes: 1, glow: 0.85, c1: '#dfe8f4', c2: '#2a3444', c3: '#ffd166', ex: ['runes', 'duplicate', 'halo'] } },
-
   { id: 'g_gardener', name: 'THE ONE THAT PLANTED IT', rarity: 'glitch', value: 120000000, kg: [400, 88000], m: [8, 180], diff: 0.99,
     desc: 'The water was put here. The fish were put here. You were put here. It has come to check on the arrangement.',
     locs: [], baits: ['null', 'void'], time: ['night'], weather: ['voidsurge', 'eclipse'],
     art: { body: 'column', fin: 'none', eyes: 12, glow: 1, c1: '#1a2418', c2: '#000000', c3: '#a8ff8a', ex: ['roots', 'eyes_many', 'crown', 'chains'] } },
+
+  { id: 'g_trench', name: 'THE TRENCH ITSELF', rarity: 'glitch', value: 168000000, kg: [900000, 40000000], m: [400, 9000], diff: 0.99,
+    desc: 'You have not been fishing above it. The charts call it a trench because the word for a mouth ' +
+          'that size would have to be invented, and nobody who could invent it came back up.',
+    locs: [], baits: ['null', 'void'], time: [], weather: ['voidsurge', 'eclipse'],
+    art: { body: 'column', fin: 'none', eyes: 8, glow: 0.9, c1: '#0e1a22', c2: '#000000', c3: '#5fe0ff',
+           ex: ['teeth', 'eyes_many', 'roots', 'chains', 'fracture'] } },
+
+  { id: 'g_secondmoon', name: 'A SECOND MOON, LOWERING', rarity: 'glitch', value: 210000000, kg: [4000000, 90000000], m: [1200, 26000], diff: 0.99,
+    desc: 'It is not rising and it is not falling. It is being let down, slowly, on something, ' +
+          'and the something has just gone tight in your hands.',
+    locs: [], baits: ['null'], time: ['night'], weather: ['eclipse', 'clear'],
+    art: { body: 'orb', fin: 'none', eyes: 0, glow: 1, c1: '#e8e4d4', c2: '#6a6858', c3: '#ffffff',
+           ex: ['halo', 'rings', 'chains', 'crown'] } },
+
+  { id: 'g_prayed', name: 'WHAT THE LEVIATHANS PRAY TO', rarity: 'glitch', value: 260000000, kg: [200000, 12000000], m: [300, 4000], diff: 0.99,
+    desc: 'Everything with a name in this catalogue is smaller than it and knows the direction it is in. ' +
+          'They face it when they die. You have it on a hook.',
+    locs: [], baits: ['null', 'void'], time: ['night'], weather: ['voidsurge'],
+    art: { body: 'anomaly', fin: 'wing', eyes: 12, glow: 1, c1: '#2a1038', c2: '#000000', c3: '#ffb8f0',
+           ex: ['crown', 'eyes_many', 'halo', 'runes', 'tentacles', 'wings'] } },
+
+  { id: 'g_unshoal', name: 'THE UNMAKER OF SHOALS', rarity: 'glitch', value: 152000000, kg: [60000, 3000000], m: [180, 2200], diff: 0.99,
+    desc: 'It does not eat them. It goes through a shoal and afterwards the shoal has not been eaten, ' +
+          'it has simply never existed, and nobody is missing anybody.',
+    locs: [], baits: ['null'], time: [], weather: ['voidsurge', 'fog'],
+    art: { body: 'fractal', fin: 'none', eyes: 3, glow: 1, c1: '#100818', c2: '#000000', c3: '#c8a0ff',
+           ex: ['static', 'duplicate', 'fracture', 'threads'] } },
+
+  { id: 'g_firstwater', name: 'THE FIRST WATER, AND WHAT WAS IN IT', rarity: 'glitch', value: 320000000, kg: [1000000, 60000000], m: [500, 14000], diff: 0.99,
+    desc: 'Before there was a shore there was water, and it was not empty when it arrived. ' +
+          'This is the passenger. It has been waiting for somebody to build a rod that could hold it.',
+    locs: [], baits: ['null'], time: [], weather: ['voidsurge', 'eclipse'],
+    art: { body: 'folded', fin: 'veil', eyes: 6, glow: 1, c1: '#0a1418', c2: '#000000', c3: '#8ffce0',
+           ex: ['runes', 'halo', 'eyes_many', 'wrongscale', 'stars'] } },
 
   { id: 'g_reader', name: 'you, reading this', rarity: 'glitch', value: 96000000, kg: [50, 110], m: [1.5, 2.1], diff: 0.99,
     desc: 'Not the one fishing. The other one. Sitting somewhere dry, looking at a lit rectangle, holding nothing.',
@@ -1077,7 +1095,128 @@
     desc: 'A flight of four, complete, going up. There is nothing at the top and they go up regardless.',
     locs: [], baits: ['null', 'void'], time: [], weather: ['voidsurge', 'eclipse'],
     art: { body: 'object', object: 'stairs', glitch: 1.0, glow: 0.6,
-           c1: '#a8a49a', c2: '#2e2c28', c3: '#e0dcd0' } }
+           c1: '#a8a49a', c2: '#2e2c28', c3: '#e0dcd0' } },
+
+  /* ======================= THE FALLEN STAR =======================
+     Two extra tags are used down here and nowhere else:
+       event   the species only exists while that event is running
+       strict  it does not stray — it is only ever where its locs say  */
+
+  { id: 'moonlit', name: 'Moonlit Fish', rarity: 'rare', value: 2600, kg: [0.8, 14.0], m: [0.3, 1.1], diff: 0.44,
+    desc: 'Rises only on nights when the moon has nothing in front of it. Some of them carry a scale that is not theirs.',
+    locs: ['basin', 'flats', 'cradle'], baits: ['prism', 'star', 'minnow'], time: ['night'], weather: ['clear'],
+    art: { body: 'round', fin: 'veil', eyes: 2, glow: 0.72, c1: '#9fb4d8', c2: '#1b2440', c3: '#f2f7ff', ex: ['halo', 'stars'] } },
+
+  { id: 'sky_ember', name: 'Sky Ember', rarity: 'uncommon', value: 900, kg: [0.1, 2.2], m: [0.1, 0.4], diff: 0.30, event: 'skyfall', evWeight: 34,
+    desc: 'Still warm from the fall. It goes out about a minute after you land it, and then it is an ordinary small fish.',
+    locs: [], baits: [], time: [], weather: [],
+    art: { body: 'torpedo', fin: 'spiky', eyes: 1, glow: 0.68, c1: '#e8a860', c2: '#3a2010', c3: '#ffe0a0', ex: ['stars'] } },
+
+  { id: 'fallen_light', name: 'Fallen Light', rarity: 'rare', value: 5200, kg: [0.4, 9.0], m: [0.2, 0.8], diff: 0.52, event: 'skyfall', evWeight: 26,
+    desc: 'It came down as a streak and it is still, faintly, going in that direction.',
+    locs: [], baits: [], time: [], weather: [],
+    art: { body: 'ribbon', fin: 'long', eyes: 2, glow: 0.85, c1: '#cfd8f2', c2: '#1a2038', c3: '#ffffff', ex: ['threads', 'stars'] } },
+
+  { id: 'meteor_carp', name: 'Meteor Carp', rarity: 'epic', value: 22000, kg: [12.0, 240.0], m: [1.0, 4.0], diff: 0.72, event: 'skyfall', evWeight: 30,
+    desc: 'Pitted all over on one side and perfectly smooth on the other. It has only ever been hit from above.',
+    locs: [], baits: [], time: [], weather: [],
+    art: { body: 'round', fin: 'frill', eyes: 2, glow: 0.55, c1: '#8f7a5e', c2: '#2a2018', c3: '#ffcf8a', ex: ['crystals', 'fracture'] } },
+
+  { id: 'celestial_guardian', name: 'Celestial Guardian', rarity: 'mythic', value: 420000, kg: [140, 2600], m: [5, 22], diff: 0.93, event: 'skyfall', evWeight: 300,
+    desc: 'It was not falling. It was coming down deliberately, and it waited to be caught. There is writing inside its largest scale.',
+    locs: [], baits: [], time: [], weather: [],
+    art: { body: 'serpent', fin: 'wing', eyes: 4, glow: 1, c1: '#e3caa0', c2: '#241a10', c3: '#fff3cc', ex: ['halo', 'rings', 'runes', 'wings'] } },
+
+  { id: 'celestial_leviathan', name: 'The Celestial Leviathan', rarity: 'void', value: 3400000, kg: [9000, 120000], m: [40, 180], diff: 0.99, event: 'trial',
+    desc: 'The thing the rod was made to catch, still waiting where the rod was dropped. Four hundred years is not a long time to it.',
+    locs: [], baits: [], time: [], weather: [],
+    art: { body: 'whale', fin: 'wing', eyes: 6, glow: 1, c1: '#f0d79c', c2: '#20180c', c3: '#fffbe8', ex: ['halo', 'rings', 'stars', 'wings', 'runes'] } },
+
+  /* --- and what lives above the clouds, once you can get up there --- */
+
+  { id: 'cloudrunner', name: 'Cloudrunner', rarity: 'rare', value: 7400, kg: [0.6, 11.0], m: [0.3, 1.0], diff: 0.50, strict: true,
+    desc: 'Swims through cloud the way everything else swims through water. It has never once been wet.',
+    locs: ['the_heavens'], baits: [], time: [], weather: [],
+    art: { body: 'ray', fin: 'wing', eyes: 2, glow: 0.6, c1: '#dfe8f5', c2: '#2a3350', c3: '#ffffff', ex: ['threads'] } },
+
+  { id: 'stratus_ray', name: 'Stratus Ray', rarity: 'epic', value: 34000, kg: [20, 420], m: [1.5, 6.0], diff: 0.70, strict: true,
+    desc: 'Flat and enormous and entirely silent. From below it is the reason the light changed.',
+    locs: ['the_heavens'], baits: [], time: [], weather: [],
+    art: { body: 'ray', fin: 'veil', eyes: 2, glow: 0.7, c1: '#c3d2ea', c2: '#1e2740', c3: '#fff4d8', ex: ['halo', 'threads'] } },
+
+  { id: 'sunspear', name: 'Sunspear', rarity: 'legendary', value: 128000, kg: [40, 900], m: [2.5, 11.0], diff: 0.88, strict: true,
+    desc: 'A single straight line of light with a mouth at one end. It hunts by being where the light already was.',
+    locs: ['the_heavens'], baits: [], time: [], weather: [],
+    art: { body: 'eel', fin: 'spiky', eyes: 1, glow: 1, c1: '#ffd98a', c2: '#3a2a0e', c3: '#fff8e0', ex: ['stars', 'spine'] } },
+
+  { id: 'astra_koi', name: "Astra's Koi", rarity: 'mythic', value: 620000, kg: [90, 1800], m: [4, 16], diff: 0.95, strict: true,
+    desc: 'Kept, once, by somebody who fished up here. Still circling the place the pond used to be.',
+    locs: ['the_heavens'], baits: [], time: [], weather: [],
+    art: { body: 'serpent', fin: 'veil', eyes: 3, glow: 0.95, c1: '#f0dcb0', c2: '#2a2012', c3: '#fff6dc', ex: ['halo', 'rings', 'stars'] } }
+,
+
+  /* ============================== ? ==============================
+     Two. That is the whole tier, it is not listed until one of them is in the
+     record, and neither of them is a fish.
+
+     `cutscene` names the sequence that plays before the catch card, and
+     `trial` is a scripted multi-phase fight — the same machinery the heaven's
+     trial uses, so the phase announcements and the loadout maths come along
+     with it. The phases are harder than anything else in the game on purpose:
+     these are meant to be lost several times. */
+
+  { id: 'nessie', name: 'Nessie', rarity: 'unknown', value: 900000000,
+    kg: [1200, 4800], m: [14, 31], diff: 0.99,
+    cutscene: 'nessie',
+    desc: 'Every photograph anybody ever took of her was a log, a wave, or a lie, and all of them ' +
+          'were closer than they had any right to be. She is not a plesiosaur and she is not a fish. ' +
+          'She is simply extremely old and has been extremely careful, and today she was not.',
+    locs: [], baits: [], time: [], weather: [],
+    art: { body: 'being', being: 'nessie', glow: 0.55,
+           c1: '#3f5c50', c2: '#16241f', c3: '#cfe8b8' },
+    trial: {
+      phases: [
+        /* she does not run. she leans, and the line has to lean with her */
+        { at: 0.00, name: 'The Wake',   start: 0.28,
+          barW: 0.160, barSpeed: 1.20, fishSpeed: 0.80, fishTurn: 0.50, dart: 0.50,
+          fill: 0.155, drain: 0.300 },
+        { at: 0.32, name: 'The Neck',
+          barW: 0.135, barSpeed: 1.35, fishSpeed: 0.92, fishTurn: 0.30, dart: 0.68,
+          fill: 0.145, drain: 0.335 },
+        { at: 0.60, name: 'The Turn',
+          barW: 0.112, barSpeed: 1.45, fishSpeed: 1.02, fishTurn: 0.22, dart: 0.75,
+          evade: 0.25, fill: 0.140, drain: 0.365 },
+        /* all of her at once, and she is reading the bar by now */
+        { at: 0.84, name: 'All Of Her',
+          barW: 0.095, barSpeed: 1.60, fishSpeed: 1.15, fishTurn: 0.18, dart: 0.82,
+          evade: 0.40, fill: 0.175, drain: 0.400 }
+      ]
+    } },
+
+  { id: 'oscar_brophy', name: 'Oscar Brophy', rarity: 'unknown', value: 1200000000,
+    kg: [72, 96], m: [1.71, 1.89], diff: 0.99,
+    cutscene: 'oscar',
+    desc: 'A blonde man of about thirty, in good health, entirely dry. The currency is named after him ' +
+          'and nobody has ever been able to say why, including the people who mint it. He does not ' +
+          'appear to have drowned. He does not appear to have been down there. He was down there.',
+    locs: [], baits: [], time: [], weather: [],
+    art: { body: 'being', being: 'human', glow: 0.75,
+           c1: '#2c3444', c2: '#151a24', c3: '#f0d484' },
+    trial: {
+      phases: [
+        /* he is not fighting. he is not doing anything. the meter barely moves
+           and that is the difficulty — you have to hold a man who is drifting */
+        { at: 0.00, name: 'He Has Not Noticed', start: 0.30,
+          barW: 0.150, barSpeed: 1.10, fishSpeed: 0.42, fishTurn: 1.20, dart: 0.15,
+          fill: 0.100, drain: 0.420 },
+        { at: 0.45, name: 'He Has Noticed',
+          barW: 0.105, barSpeed: 1.50, fishSpeed: 1.10, fishTurn: 0.18, dart: 0.80,
+          evade: 0.35, fill: 0.160, drain: 0.400 },
+        { at: 0.78, name: 'He Is Coming Up',
+          barW: 0.088, barSpeed: 1.70, fishSpeed: 1.25, fishTurn: 0.14, dart: 0.88,
+          evade: 0.55, fill: 0.210, drain: 0.440 }
+      ]
+    } }
   ];
 
   const BY_ID = VF.util.byId(F);
@@ -1088,8 +1227,20 @@
     (BY_RARITY[F[i].rarity] || (BY_RARITY[F[i].rarity] = [])).push(F[i]);
   }
 
+  /* A species in a hidden tier does not exist as far as the record is
+     concerned until one has been caught. The Fishdex counts, the filter row
+     and the completion achievement all read these rather than the raw list,
+     so a player who has never landed one has no way to notice the gap. */
+  function known(f) {
+    return !VF.rarities.hidden(f.rarity) || !!VF.state.data.fishdex[f.id];
+  }
+  function knownList() { return F.filter(known); }
+
   VF.fish = {
     list: F,
+    known: known,
+    knownList: knownList,
+    knownCount: function () { return knownList().length; },
     byId: function (id) { return BY_ID[id] || null; },
     byRarity: function (r) { return BY_RARITY[r] || []; },
     count: F.length

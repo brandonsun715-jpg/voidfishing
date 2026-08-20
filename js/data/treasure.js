@@ -68,6 +68,14 @@
       icon: 'coin', color: '#ffd07a', relic: 'coin',
       desc: 'Currency of somewhere that no longer takes payment.' },
 
+    { id: 'rod_pyrewing', name: 'A Bundle Wrapped In Cloth', rarity: 'mythic', weight: 0.30, value: [0, 0],
+      icon: 'strange', color: '#ff3a2a', minLoc: 5, rod: 'pyrewing',
+      desc: 'Heavy, and warm through the cloth. The cloth is not burnt and has never been burnt.' },
+
+    { id: 'rod_longfeather', name: 'Something Long, Wrapped', rarity: 'mythic', weight: 0.22, value: [0, 0],
+      icon: 'strange', color: '#d88aff', minLoc: 6, rod: 'longfeather',
+      desc: 'Longer than the boat. Whatever moulted it was going somewhere and did not come back for it.' },
+
     { id: 'relic_eye', name: 'The Unknown Eye', rarity: 'mythic', weight: 0.16, value: [0, 0],
       icon: 'eye', color: '#e8d0ff', minLoc: 6, relic: 'eye', journal: 'eye',
       desc: 'It is open. It was open when you found it.' },
@@ -76,16 +84,6 @@
       icon: 'strange', color: '#ff8fd0', minLoc: 5, journal: 'strange',
       desc: 'The archivist will want to see this. You are not sure you want her to.' },
 
-    /* Two rods that nobody made and nobody sells. They come up on the line
-       like anything else does, and then they are yours. `rodGift` is handled
-       in js/systems/fishing.js, next to the relics. */
-    { id: 'rod_exsanguine', name: 'Something Wrapped', rarity: 'legendary', weight: 0.55,
-      value: [0, 0], icon: 'rod', color: '#ff2a2a', minLoc: 5, rodGift: 'exsanguine',
-      desc: 'Long, bound in cloth, and wet with something that is not water. The cloth is dry.' },
-
-    { id: 'rod_longfeather', name: 'A Shaft Of Every Colour', rarity: 'legendary', weight: 0.35,
-      value: [0, 0], icon: 'rod', color: '#d88aff', minLoc: 6, rodGift: 'longfeather',
-      desc: 'It was moulted. Whatever dropped it was going somewhere and has not come back for it.' }
   ];
 
   const BY_ID = VF.util.byId(LIST);
@@ -106,6 +104,7 @@
     const pool = LIST.filter(function (t) {
       if (t.minLoc && li < t.minLoc) return false;
       if (t.relic && VF.charms.owned(t.relic)) return false;
+      if (t.rod && VF.rods.owned(t.rod)) return false;
       if (t.rodGift && VF.rods.owned(t.rodGift)) return false;
       return true;
     });

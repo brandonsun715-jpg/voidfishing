@@ -25,10 +25,16 @@
     hole: 0.34, swarm: 0.33, mirror: 0.32, spiral: 0.40,
     tally: 0.30, unfinished: 0.31, folded: 0.35, column: 0.44
   };
-  /* `obj` is only consulted for body 'object', where the proportions belong to
-     the thing itself rather than to any fish silhouette. */
+  /* A being is not a fish and not an object. There are two of them and they
+     are the whole of the tier above the last one. */
+  const BEING_H = { nessie: 0.62, human: 0.82 };
+
+  /* `obj` is only consulted for body 'object' and body 'being', where the
+     proportions belong to the thing itself rather than to any fish
+     silhouette. */
   function bodyRatio(kind, obj) {
     if (kind === 'object') return OBJ_H[obj] === undefined ? 0.50 : OBJ_H[obj];
+    if (kind === 'being') return BEING_H[obj] === undefined ? 0.60 : BEING_H[obj];
     return BODY_H[kind] === undefined ? 0.30 : BODY_H[kind];
   }
 
@@ -1095,8 +1101,10 @@
   function draw(ctx, fish, size, opts) {
     opts = opts || {};
     const art = fish.art;
-    // an object is not a fish and takes none of the fish treatment
+    // an object is not a fish and takes none of the fish treatment; nor is a
+    // being, and there are exactly two of those
     if (art.body === 'object') return drawObject(ctx, fish, size, opts);
+    if (art.body === 'being') return drawBeing(ctx, fish, size, opts);
     const tm = opts.time === undefined ? 0 : opts.time;
     const sway = Math.sin(tm * 2.1) * 0.55;
     const rnd = VF.rng.make(hash(fish.id));
@@ -1310,9 +1318,240 @@
     return j;
   }
 
+  /* ------------------------------------------------------------- beings
+     Filled from three colours so the same code draws the lit version and the
+     shape coming up out of the dark. `P` is { a: body, b: shadow, c: accent }. */
+
+  function beingShape(ctx, kind, L, H, P, tm) {
+    if (kind === 'human') { humanShape(ctx, L, H, P, tm); return; }
+    nessieShape(ctx, L, H, P, tm);
+  }
+
+  /* A long neck out of the water, a body under it, and the rest of her behind
+     that as humps. Drawn facing right; the waterline is at y = H * 0.34, which
+     is why everything below it is only ever hinted at. */
+  function nessieShape(ctx, L, H, P, tm) {
+    const sway = Math.sin(tm * 0.7) * 0.035;
+    const waterY = H * 0.36;
+
+    // the humps, furthest first so they sit behind
+    ctx.fillStyle = P.b;
+    for (let i = 0; i < 3; i++) {
+      const hx = -L * (0.30 + i * 0.20);
+      const hr = L * (0.125 - i * 0.026);
+      ctx.beginPath();
+      ctx.ellipse(hx, waterY - hr * 0.30 + Math.sin(tm * 0.9 + i) * H * 0.012,
+                  hr, hr * 0.58, 0, Math.PI, 0);
+      ctx.fill();
+    }
+
+    // the body, mostly under
+    ctx.fillStyle = P.a;
+    ctx.beginPath();
+    ctx.ellipse(-L * 0.04, waterY - H * 0.03, L * 0.24, H * 0.22, -0.05, 0, TAU);
+    ctx.fill();
+
+    /* The neck. It is the whole silhouette, so it is slim and it is long — at
+       any thickness above about a sixth of the height it stops reading as a
+       neck and starts reading as a fin. Two bezier edges with their control
+       points staggered give it the shallow S every photograph claims. */
+    const sx = L * 0.00, sy = waterY - H * 0.14;        // shoulder
+    const hx2 = L * 0.20 + Math.sin(tm * 0.6) * L * 0.010;
+    const hy2 = -H * 0.80 + sway * H;                    // base of the head
+    const wS = H * 0.100, wH = H * 0.044;
+    ctx.beginPath();
+    ctx.moveTo(sx - wS, sy);
+    // back of the neck, bowing left then carrying right into the skull
+    ctx.bezierCurveTo(sx - wS * 2.6, sy - H * 0.60,
+                      hx2 - H * 0.24, hy2 - H * 0.05, hx2 - wH, hy2 - wH * 0.3);
+    ctx.lineTo(hx2 + wH * 0.8, hy2 + wH * 1.1);
+    // front of the neck, bowing the other way
+    ctx.bezierCurveTo(hx2 - H * 0.05, hy2 + H * 0.34,
+                      sx + wS * 4.2, sy - H * 0.46, sx + wS, sy);
+    ctx.closePath();
+    ctx.fill();
+
+    // the head: a blunt wedge with a jaw, tipped forward off the neck
+    ctx.save();
+    ctx.translate(hx2, hy2);
+    ctx.rotate(-0.22 + sway);
+    const hh = H * 0.098;                                // head half-height
+    ctx.beginPath();
+    ctx.moveTo(-hh * 0.9, hh * 0.55);
+    ctx.quadraticCurveTo(-hh * 1.15, -hh * 0.95, hh * 0.35, -hh * 1.05);
+    ctx.quadraticCurveTo(hh * 2.05, -hh * 0.90, hh * 2.30, -hh * 0.10);
+    ctx.quadraticCurveTo(hh * 2.20, hh * 0.55, hh * 1.30, hh * 0.62);
+    ctx.quadraticCurveTo(hh * 0.30, hh * 0.72, -hh * 0.9, hh * 0.55);
+    ctx.closePath();
+    ctx.fill();
+    // the jawline, so the head has a mouth rather than a profile
+    ctx.save();
+    ctx.globalAlpha *= 0.35;
+    ctx.fillStyle = P.b;
+    ctx.beginPath();
+    ctx.moveTo(hh * 0.25, hh * 0.16);
+    ctx.quadraticCurveTo(hh * 1.40, hh * 0.34, hh * 2.24, hh * 0.02);
+    ctx.quadraticCurveTo(hh * 1.40, hh * 0.74, hh * 0.25, hh * 0.16);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    // the eye, small and set well forward
+    ctx.fillStyle = P.c;
+    ctx.beginPath();
+    ctx.ellipse(hh * 1.10, -hh * 0.40, hh * 0.24, hh * 0.20, 0, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+
+    // a flipper breaking the surface in front of the body
+    ctx.fillStyle = P.b;
+    ctx.save();
+    ctx.translate(L * 0.09, waterY + H * 0.09);
+    ctx.rotate(0.40 + Math.sin(tm * 1.1) * 0.10);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, L * 0.12, H * 0.070, 0, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+
+    // the waterline: everything below it is displaced rather than seen
+    ctx.fillStyle = P.c;
+    ctx.globalAlpha *= 0.28;
+    ctx.beginPath();
+    ctx.ellipse(-L * 0.05, waterY + H * 0.05, L * 0.40, H * 0.052, 0, 0, TAU);
+    ctx.fill();
+    ctx.globalAlpha /= 0.28;
+  }
+
+  /* A person, standing. The accent colour is his hair, which is the one
+     detail anybody actually reports afterwards. */
+  function humanShape(ctx, L, H, P, tm) {
+    const breathe = Math.sin(tm * 0.9) * H * 0.006;
+    const headR = H * 0.125;
+    const headY = -H * 0.75 + breathe;
+    const shoulderY = headY + headR * 1.75;
+
+    // legs
+    ctx.fillStyle = P.b;
+    for (let i = -1; i <= 1; i += 2) {
+      ctx.beginPath();
+      ctx.moveTo(i * H * 0.045 - H * 0.050, H * 0.04);
+      ctx.lineTo(i * H * 0.045 + H * 0.050, H * 0.04);
+      ctx.lineTo(i * H * 0.075 + H * 0.046, H * 0.94);
+      ctx.lineTo(i * H * 0.075 - H * 0.050, H * 0.94);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    /* Arms first and behind, so the torso closes over the shoulder and he
+       stops reading as a set of slabs stood next to each other. */
+    for (let i = -1; i <= 1; i += 2) {
+      ctx.save();
+      ctx.translate(i * H * 0.155, shoulderY + H * 0.02);
+      ctx.rotate(i * (0.055 + Math.sin(tm * 0.8) * 0.015));
+      ctx.beginPath();
+      ctx.moveTo(-H * 0.046, -H * 0.03);
+      ctx.lineTo(H * 0.046, -H * 0.03);
+      ctx.lineTo(H * 0.036, H * 0.60);
+      ctx.lineTo(-H * 0.042, H * 0.60);
+      ctx.closePath();
+      ctx.fill();
+      // the hand, so the arm ends in something
+      ctx.beginPath();
+      ctx.ellipse(-H * 0.003, H * 0.635, H * 0.040, H * 0.048, 0, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // torso: shoulders, then in to the waist
+    ctx.fillStyle = P.a;
+    ctx.beginPath();
+    ctx.moveTo(-H * 0.175, shoulderY);
+    ctx.quadraticCurveTo(-H * 0.195, headY + headR * 2.9, -H * 0.125, H * 0.07);
+    ctx.lineTo(H * 0.125, H * 0.07);
+    ctx.quadraticCurveTo(H * 0.195, headY + headR * 2.9, H * 0.175, shoulderY);
+    ctx.quadraticCurveTo(0, shoulderY - headR * 0.30, -H * 0.175, shoulderY);
+    ctx.closePath();
+    ctx.fill();
+
+    // the collar, which is most of what says "dressed" at this size
+    ctx.save();
+    ctx.globalAlpha *= 0.45;
+    ctx.fillStyle = P.b;
+    ctx.beginPath();
+    ctx.moveTo(-H * 0.062, shoulderY - headR * 0.12);
+    ctx.lineTo(0, shoulderY + headR * 0.55);
+    ctx.lineTo(H * 0.062, shoulderY - headR * 0.12);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    // neck and head
+    ctx.fillStyle = P.a;
+    ctx.fillRect(-H * 0.040, headY + headR * 0.45, H * 0.080, headR * 1.2);
+    ctx.beginPath();
+    ctx.ellipse(0, headY, headR * 0.84, headR, 0, 0, TAU);
+    ctx.fill();
+
+    // the face stays in shadow under the fringe — one band is enough at any
+    // size this is ever drawn, and a drawn-on face would be worse
+    ctx.save();
+    ctx.globalAlpha *= 0.30;
+    ctx.fillStyle = P.b;
+    ctx.beginPath();
+    ctx.ellipse(0, headY - headR * 0.10, headR * 0.78, headR * 0.42, 0, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+
+    // the hair. Fringe forward, a little length at the back.
+    ctx.fillStyle = P.c;
+    ctx.beginPath();
+    ctx.moveTo(-headR * 0.94, headY + headR * 0.42);
+    ctx.quadraticCurveTo(-headR * 1.14, headY - headR * 0.98,
+                         0, headY - headR * 1.04);
+    ctx.quadraticCurveTo(headR * 1.14, headY - headR * 0.98,
+                         headR * 0.94, headY + headR * 0.34);
+    ctx.quadraticCurveTo(headR * 0.74, headY - headR * 0.10,
+                         headR * 0.22, headY - headR * 0.22);
+    ctx.quadraticCurveTo(-headR * 0.52, headY - headR * 0.26,
+                         -headR * 0.94, headY + headR * 0.42);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function drawBeing(ctx, fish, size, opts) {
+    const art = fish.art;
+    const tm = opts.time === undefined ? 0 : opts.time;
+    const L = size * 2;
+    const H = L * bodyRatio('being', art.being);
+    const pal = palette(art, opts.traits || opts.mutation);
+
+    ctx.save();
+    // the light it is standing in, which is not coming from anywhere
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, L * 0.95);
+    g.addColorStop(0, U.rgbToCss(pal.r3, 0.20 * (art.glow || 0.5)));
+    g.addColorStop(1, U.rgbToCss(pal.r3, 0));
+    ctx.fillStyle = g;
+    ctx.fillRect(-L, -L, L * 2, L * 2);
+
+    beingShape(ctx, art.being, L, H, { a: pal.c1, b: pal.c2, c: pal.c3 }, tm);
+
+    // one rim along the lit edge, so it is a body and not a cut-out
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.16;
+    ctx.translate(-Math.max(0.6, L * 0.004), -Math.max(0.6, L * 0.004));
+    beingShape(ctx, art.being, L, H,
+               { a: U.rgbToCss(U.mixRgb(pal.r1, [255, 255, 255], 0.6)),
+                 b: U.rgbToCss(U.mixRgb(pal.r2, [255, 255, 255], 0.45)),
+                 c: U.rgbToCss(pal.r3) }, tm);
+    ctx.restore();
+  }
+
   /* The largest half-size a creature can be drawn at and still fit a box. */
   function fitSize(fish, box) {
     const kind = fish.art.body;
+    if (kind === 'being') {
+      const rb = bodyRatio(kind, fish.art.being);
+      return Math.max(6, Math.min(box * 0.40, (box * 0.44) / (rb * 2)));
+    }
     if (kind === 'object') {
       // an object fills its box in both directions, so fit the taller of the two
       const ro = bodyRatio(kind, fish.art.object);
@@ -1336,6 +1575,20 @@
     /* An object comes up as the object. The same shape code runs with all three
        colours collapsed to one, so what surfaces out of the dark is a
        chair-shaped absence rather than a fish-shaped one. */
+    /* A being surfaces as itself too. Nessie in particular has to be the
+       right shape while she is still a shadow, because that is most of what
+       makes the last few seconds of the fight work. */
+    if (art.body === 'being') {
+      const lb = U.clamp(near === undefined ? 0 : near, 0, 1);
+      const flatB = U.rgbToCss(U.mixRgb([2, 3, 6], U.shade(U.hexToRgb(art.c1), -0.40), lb * 0.85));
+      const accB = U.rgbToCss(U.mixRgb([2, 3, 6], U.shade(U.hexToRgb(art.c3), -0.35), lb * 0.9));
+      ctx.save();
+      ctx.globalAlpha = alpha === undefined ? 0.8 : alpha;
+      beingShape(ctx, art.being, L, L * bodyRatio('being', art.being),
+                 { a: flatB, b: flatB, c: accB }, 0);
+      ctx.restore();
+      return;
+    }
     if (art.body === 'object') {
       const lift0 = U.clamp(near === undefined ? 0 : near, 0, 1);
       const flat = U.rgbToCss(U.mixRgb([2, 3, 6], U.shade(U.hexToRgb(art.c1), -0.40),

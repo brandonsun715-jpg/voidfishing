@@ -1,7 +1,8 @@
 /* VOID FISHING — rods.
    cast   0..1 relative cast distance (drives how far out the bobber lands)
-   reel   reel force per second during the fight
-   line   line strength — how much tension headroom before snapping
+   reel   reel force — steadies the white bar, sharpens how fast it answers the
+          key, and fills the catch meter quicker
+   line   line strength — how wide the white bar is in the catch minigame
    rare   multiplier on high-rarity draw weights
    luck   drives mutation chance and size rolls
    Every rod is a visible upgrade: the on-screen rod changes shape and colour. */
@@ -54,6 +55,12 @@
       desc: 'Visible only when it is under load. Otherwise you are holding a suggestion.',
       art: { c1: '#bfe8f5', c2: '#6f9db0', grip: '#3f5f6e', tip: '#ffffff', len: 1.28, curve: 0.05, glow: 0.78, style: 'glass' } },
 
+    /* Not for sale at any price. It arrives, once, at the end of a long thread. */
+    { id: 'heavens', name: 'Heavens Rod', cost: 0, level: 0, quest: 'heavens',
+      cast: 1.00, reel: 1.95, line: 7.20, rare: 4.10, luck: 1.45,
+      desc: 'Made by somebody who could fish anywhere, and dropped from a height four hundred years ago. It is warm, and it has been waiting.',
+      art: { c1: '#f2d78a', c2: '#8a6620', grip: '#5a4214', tip: '#fff6d0', len: 1.30, curve: 0.05, glow: 1.0, style: 'heavens' } },
+
     { id: 'void', name: 'Void Rod', cost: 40000000, level: 52,
       cast: 1.12, reel: 2.20, line: 7.60, rare: 4.60, luck: 1.65,
       desc: 'It does not cast the line so much as agree with the line about where it should be.',
@@ -64,51 +71,11 @@
       desc: 'Fishes a small radius of collapsed space. Reel speed is technically negative and it works anyway.',
       art: { c1: '#0a0812', c2: '#000000', grip: '#0f0c18', tip: '#ff5fa2', len: 1.40, curve: 0.03, glow: 1.0, style: 'singularity' } },
 
-    { id: 'unknown', name: '??? Rod', cost: 2500000000, level: 74, requiresVoidCatch: true,
-      cast: 1.40, reel: 3.10, line: 12.0, rare: 7.40, luck: 2.90,
-      desc: 'It was already in your hands. Check the photographs. It was always in your hands.',
-      art: { c1: '#ffffff', c2: '#1a1a1a', grip: '#2a2a2a', tip: '#66ffe0', len: 1.46, curve: 0.02, glow: 1.0, style: 'glitch' } },
-
-    /* ---------------------------------------------------------- the far end
-       Past here a rod stops being equipment. Each one is a bigger claim about
-       what the water is, and the art has to carry the claim. */
-
-    { id: 'tidebreaker', name: 'Tidebreaker', cost: 12000000, level: 47,
-      cast: 1.07, reel: 2.02, line: 6.90, rare: 4.10, luck: 1.44,
-      desc: 'Forged in a storm that has not finished yet. The charge never fully leaves the blank.',
-      art: { c1: '#2f4f66', c2: '#0d1a26', grip: '#0a1420', tip: '#7fe0ff', len: 1.31, curve: 0.05, glow: 0.70, style: 'storm' } },
-
-    { id: 'leviathan', name: "Leviathan's Tooth", cost: 120000000, level: 57,
-      cast: 1.18, reel: 2.40, line: 8.50, rare: 5.15, luck: 1.88,
-      desc: 'One tooth. Not a jaw, not a skeleton — one tooth, and it is longer than you are.',
-      art: { c1: '#ded4c0', c2: '#8c8474', grip: '#4a4438', tip: '#fff4d8', len: 1.37, curve: 0.05, glow: 0.55, style: 'bone' } },
-
-    { id: 'chorus', name: 'The Drowned Choir', cost: 900000000, level: 68,
-      cast: 1.32, reel: 2.85, line: 10.6, rare: 6.55, luck: 2.50,
-      desc: 'Every guide holds a voice. They only sing when something is on the line, and they are never wrong.',
-      art: { c1: '#c8b8ff', c2: '#241d44', grip: '#14102a', tip: '#fff0c0', len: 1.43, curve: 0.03, glow: 0.95, style: 'chorus' } },
-
-    { id: 'eclipse', name: 'Eclipse Rod', cost: 6000000000, level: 80, requiresVoidCatch: true,
-      cast: 1.52, reel: 3.45, line: 14.5, rare: 9.10, luck: 3.55,
-      desc: 'The tip holds a small covered sun. Everything it touches gets a second shadow, pointing the wrong way.',
-      art: { c1: '#1c1420', c2: '#000000', grip: '#100a14', tip: '#ffb14a', len: 1.52, curve: 0.02, glow: 1.0, style: 'eclipse' } },
-
-    { id: 'origin', name: 'The First Rod', cost: 26000000000, level: 88, requiresGlitchCatch: true,
-      cast: 1.68, reel: 3.95, line: 18.5, rare: 11.6, luck: 4.50,
-      desc: 'Not the oldest one. The one the others were drawn from. You can still see the construction lines.',
-      art: { c1: '#e8f4ff', c2: '#3a5f8f', grip: '#22344d', tip: '#ffffff', len: 1.58, curve: 0.01, glow: 1.0, style: 'origin' } },
-
-    { id: 'everything', name: 'Everything, At Once', cost: 95000000000, level: 99,
-      requiresGlitchCatch: true, requiresSecret: 'the_last_water',
-      cast: 1.90, reel: 4.60, line: 25.0, rare: 15.5, luck: 6.00,
-      desc: 'It is every rod. It is the tooth and the storm and the covered sun and the line of light. ' +
-            'Holding it is a full-time occupation and you will not be doing anything else.',
-      art: { c1: '#ffffff', c2: '#0a0a12', grip: '#1a1a26', tip: '#ffd6f0', len: 1.66, curve: 0.0, glow: 1.0, style: 'everything' } },
     /* ------------------------------------------------- the strange shelf
-       Ten rods that are not a straight continuation of the ladder. Half of
-       them are never for sale: somebody hands them over, or the water does.
-       Each one interleaves with the tier above and below it, so taking the
-       long way round is a real alternative to saving up. */
+       Ten rods that are not a straight continuation of the ladder. They
+       interleave with the tiers above and below them, so taking the long way
+       round is a real alternative to saving up — and six of them are never
+       for sale at any price: somebody hands them over, or the water does. */
 
     { id: 'frostpoint', name: 'The Frozen Instant', cost: 520000, level: 31,
       requiresSecret: 'glass_shallows',
@@ -135,19 +102,19 @@
              len: 1.29, curve: 0.05, glow: 0.50, style: 'corded' } },
 
     { id: 'ninearms', name: 'Nine Arms', cost: 22000000, level: 50,
-      requiresSpecies: 'deep_hold',
+      requiresSpecies: 'nine_tide',
       cast: 1.09, reel: 2.10, line: 7.20, rare: 4.35, luck: 1.55,
       desc: 'Eight of them hold the blank. The ninth holds the line, and it is better at it than you are.',
       art: { c1: '#8e2f34', c2: '#3c1216', grip: '#2a0e12', tip: '#ff8a7a',
              len: 1.32, curve: 0.045, glow: 0.45, style: 'kraken' } },
 
-    { id: 'exsanguine', name: 'Exsanguine', cost: 0, level: 55, noShop: true,
-      notForSale: 'Not for sale. Nobody made this one, so nobody can sell it.',
+    { id: 'pyrewing', name: 'Pyrewing', cost: 0, level: 55, noShop: true,
+      notForSale: 'Not for sale. It came up on the line wrapped in cloth, and the cloth was not burnt.',
       cast: 1.15, reel: 2.30, line: 8.10, rare: 4.90, luck: 1.78,
-      desc: 'It came up already wet with something that was not water, and it has not stopped. ' +
-            'The drops go upward once they leave the blank. Nobody has explained this.',
-      art: { c1: '#6a0f18', c2: '#0d0406', grip: '#1a0508', tip: '#ff2a2a',
-             len: 1.36, curve: 0.04, glow: 0.90, style: 'hemo' } },
+      desc: 'The fire on it is not flame. It is feathered, it lies along the blank the way plumage does, ' +
+            'and it does not consume the black underneath.',
+      art: { c1: '#8a1420', c2: '#14060a', grip: '#2a0a0e', tip: '#ff3a2a',
+             len: 1.36, curve: 0.04, glow: 0.88, style: 'pyre' } },
 
     { id: 'thunderstruck', name: 'Thunderstruck', cost: 180000000, level: 60,
       requiresSpecies: 'stormcaller',
@@ -165,13 +132,14 @@
       art: { c1: '#12201a', c2: '#040806', grip: '#0a1410', tip: '#5cff8a',
              len: 1.42, curve: 0.03, glow: 1.0, style: 'neon' } },
 
-    { id: 'reliquary', name: 'Reliquary', cost: 0, level: 71, noShop: true,
-      notForSale: 'Not for sale. It is filed, not stocked.',
+    { id: 'seraph', name: 'Seraph', cost: 0, level: 71, noShop: true,
+      requiresQuest: 'heavens',
+      notForSale: 'Not for sale. The astronomer will not discuss it until the sky has been settled.',
       cast: 1.36, reel: 2.95, line: 11.2, rare: 6.95, luck: 2.65,
-      desc: 'Every ring turning around it is a thing that was believed for long enough to become furniture. ' +
-            'The archivist filed it under objects that answer.',
-      art: { c1: '#f4ead0', c2: '#a88a48', grip: '#6a5424', tip: '#ffe9a8',
-             len: 1.45, curve: 0.025, glow: 1.0, style: 'halo' } },
+      desc: 'Rings of standing fire down the blank and a pair of wings opened at your hand. ' +
+            'The astronomer had it the whole time and would not say so until you had proved the point.',
+      art: { c1: '#f4ead0', c2: '#a88a48', grip: '#6a5424', tip: '#ffb14a',
+             len: 1.45, curve: 0.025, glow: 1.0, style: 'seraph' } },
 
     { id: 'longfeather', name: 'The Long Feather', cost: 0, level: 77, noShop: true,
       notForSale: 'Not for sale. It is still in the water, and it is not the only one down there.',
@@ -187,13 +155,15 @@
       desc: 'One at the tip and one at your hand, and the dark between them is the rod. ' +
             'The keeper had it under the counter the entire time. He was waiting to see if you would come back.',
       art: { c1: '#1a1a20', c2: '#050506', grip: '#101014', tip: '#ffffff',
-             len: 1.55, curve: 0.015, glow: 1.0, style: 'twinsun' } }
+             len: 1.55, curve: 0.015, glow: 1.0, style: 'twinsun' } },
+
+    { id: 'unknown', name: '??? Rod', cost: 2500000000, level: 74, requiresVoidCatch: true,
+      cast: 1.40, reel: 3.10, line: 12.0, rare: 7.40, luck: 2.90,
+      desc: 'It was already in your hands. Check the photographs. It was always in your hands.',
+      art: { c1: '#ffffff', c2: '#1a1a1a', grip: '#2a2a2a', tip: '#66ffe0', len: 1.46, curve: 0.02, glow: 1.0, style: 'glitch' } }
   ];
 
-  /* Shop order is progression order, not the order they were written. */
-  LIST.sort(function (a, b) { return a.level - b.level || a.cost - b.cost; });
-
-  const BY_ID = VF.util.byId(LIST);
+  let BY_ID = VF.util.byId(LIST);
 
   /* Every requirement a rod can carry, in one place, so the shop and the till
      never disagree about why something is out of reach. Returns null when the
@@ -206,6 +176,9 @@
     }
     if (rod.requiresGlitchCatch && (d.stats.glitchCatches | 0) < 1) {
       return { why: 'glitch', note: 'Requires a !@#$%^&$# catch' };
+    }
+    if (rod.requiresUnknownCatch && (d.stats.unknownCatches | 0) < 1) {
+      return { why: 'unknown', note: 'Requires something the record has no tier for' };
     }
     if (rod.requiresSecret && !VF.secrets.found(rod.requiresSecret)) {
       const s = VF.secrets.get(rod.requiresSecret);
@@ -220,6 +193,10 @@
       const f = VF.fish.byId(rod.requiresSpecies);
       return { why: 'species', note: 'Requires ' + (f ? f.name : 'a catch you have not made') +
                                      ' in the record' };
+    }
+    if (rod.requiresQuest && !VF.quests.complete(rod.requiresQuest)) {
+      const q = VF.questData.get(rod.requiresQuest);
+      return { why: 'quest', note: 'Requires ' + (q ? q.name.toLowerCase() : 'a thread') + ' finished' };
     }
     return null;
   }
@@ -240,6 +217,10 @@
 
   VF.rods = {
     list: LIST,
+    /* The wanderer's stock is appended to this list at load, so the index has
+       to be rebuildable — everything that draws, prices, equips or compares a
+       rod then handles those without knowing they came from anywhere else. */
+    reindex: function () { BY_ID = VF.util.byId(LIST); },
     get: function (id) { return BY_ID[id] || BY_ID.wood; },
     index: function (id) { for (let i = 0; i < LIST.length; i++) if (LIST[i].id === id) return i; return 0; },
     blocked: blocked,
