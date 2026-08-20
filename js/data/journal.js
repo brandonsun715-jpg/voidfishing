@@ -37,6 +37,22 @@
     thinplace: { title: 'thin places', kind: 'event',
       text: 'the water gets uncommitted. you can see through it to somewhere that is not the bottom. the drifter calls these thin places and says they move, and that they are looking for something too.' },
 
+    /* --- the fallen star --- */
+    astra: { title: 'what elias said', kind: 'lore',
+      text: 'long ago something came down out of the sky and went into the water, and it was not a meteor. it was a rod. it belonged to a fisherman called astra, who is supposed to have been able to fish anywhere at all, including places with no water in them. elias was told this by somebody who was old when elias was young.' },
+    scales: { title: 'three scales', kind: 'find',
+      text: 'laid out side by side on the stone they stop being three scales and start being three points. elias put a finger between them and drew the rest of it from memory, and then sat down, which he does not do.' },
+    compass: { title: 'the celestial compass', kind: 'lore',
+      text: 'brass, glass, and five pieces that were separated on purpose by somebody who thought it was better off broken. assembled, the needle does not lie down. it stands up.' },
+    guardian: { title: 'the writing in the scale', kind: 'event',
+      text: 'the guardian was not falling. it came down on purpose and it waited. inside the largest scale, not on it, there is a line of text: "only the fisherman who can control the heavens may claim what fell from them." the astronomer read it once and went very quiet.' },
+    heavensrod: { title: 'the rod that came back down', kind: 'event',
+      text: 'the light went out of everything for about two seconds. then a single column of it, and the rod at the bottom of the column, coming down slowly enough to catch. the astronomer said you had not found it. he said you had proved you were worthy of it, and then he asked you to leave, politely, because he needed to sit down.' },
+    theheavens: { title: 'above the weather', kind: 'lore', hint: 1,
+      text: 'there is water above the cloud. flat, lit from underneath, going out further than the sea does. the rod knows the way up and does not appear to need you to agree.' },
+    callofdeep: { title: 'what elias said afterwards', kind: 'lore', hint: 1,
+      text: 'he looked at the rod for a long time and did not touch it. "so it finally chose someone," he said, and then: "if the heavens have chosen you, the ocean will come looking for you." he would not say any more than that and he has gone back to facing away.' },
+
     beneath: { title: 'below the nowhere sea', kind: 'lore', hint: 1,
       text: 'the charts stop at the nowhere sea because the people drawing them stopped. it goes further. the old fisherman has been once and will not say how, only that you have to already know it is there.' },
     thelast: { title: 'the last water', kind: 'lore', hint: 2,

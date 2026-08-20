@@ -8,6 +8,7 @@
   const D = {};
   let shownMoney = 0;
   let pressed = false;
+  let shownBarW = -1;
   let hintTimer = 0;
   let promptTimer = 0;
 
@@ -16,11 +17,11 @@
       'hud', 'moneyVal', 'levelVal', 'xpFill', 'xpText', 'locName', 'wxName', 'timeName',
       'chipLoc', 'gearRod', 'gearBait', 'rodName', 'baitName', 'baitCount',
       'castMeter', 'castFill', 'actionBtn', 'actionLabel', 'actionHint',
-      'fightUI', 'fightName', 'fightWarn', 'stamFill', 'stamPct', 'tensFill', 'tensPct',
-      'tensTick', 'distFill', 'distPct', 'prompt', 'hintBox', 'edgeGlow', 'encounter', 'encText',
+      'fightUI', 'fightName', 'fightWarn', 'mgTrack', 'mgBar', 'mgFish',
+      'mgProg', 'mgProgFill', 'fightHint', 'fightPct',
+      'prompt', 'hintBox', 'edgeGlow', 'encounter', 'encText',
       'chipCond', 'condName'
     ].forEach(function (id) { D[id] = document.getElementById(id); });
-    D.tensBar = D.tensFill ? D.tensFill.parentNode : null;
 
     shownMoney = VF.state.data.money;
     bindInput();
@@ -29,6 +30,24 @@
   }
 
   /* ------------------------------------------------------------- input */
+
+  /* A click on the figure standing up the shore opens what he is carrying,
+     rather than starting a cast into him. */
+  function merchantPress(e, canvas) {
+    if (!VF.merchant || !VF.merchant.here()) return false;
+    if (VF.state.rt.panelOpen || VF.visit.active()) return false;
+    if (VF.fishing.state() === 'reeling') return false;
+    // the scene draws in CSS pixels (the context carries the device ratio), so
+    // the rect maps straight onto scene coordinates
+    const r = canvas.getBoundingClientRect();
+    if (!r.width || !r.height) return false;
+    const px = (e.clientX - r.left) * (VF.scene.L.w / r.width);
+    const py = (e.clientY - r.top) * (VF.scene.L.h / r.height);
+    if (!VF.scene.merchantHit(px, py)) return false;
+    VF.audio.click();
+    VF.panels.open('merchant');
+    return true;
+  }
 
   function pressStart(e) {
     if (VF.state.rt.panelOpen) return;
@@ -58,7 +77,12 @@
   function bindInput() {
     const canvas = document.getElementById('scene');
 
-    canvas.addEventListener('pointerdown', function (e) { e.preventDefault(); pressStart(e); });
+    canvas.addEventListener('pointerdown', function (e) {
+      e.preventDefault();
+      // the wanderer gets the press before the water does
+      if (merchantPress(e, canvas)) return;
+      pressStart(e);
+    });
     D.actionBtn.addEventListener('pointerdown', function (e) { e.preventDefault(); pressStart(e); });
     window.addEventListener('pointerup', pressEnd);
     window.addEventListener('pointercancel', pressEnd);
@@ -172,22 +196,40 @@
       VF.toast.plain('It got away with the bait', 'warn', 2200);
     });
     VF.bus.on('fishing:surge', function () { VF.audio.surge(); VF.fx.shake(2.0); });
-    VF.bus.on('fishing:reel:start', function () { VF.audio.reelStart(); });
-    VF.bus.on('fishing:reel:stop', function () { VF.audio.reelStop(); });
+    // the reel runs for the whole fight; these two are the bar catching the
+    // fish and the bar losing it, which is the thing the player needs to hear
+    VF.bus.on('fishing:grip', function () { VF.audio.nibble(); });
+    VF.bus.on('fishing:slip', function () { VF.audio.strain(0.9); });
     VF.bus.on('fishing:lost', function (e) {
       VF.audio.reelStop();
       if (e.reason === 'snap') {
         VF.audio.snap();
         VF.fx.shake(7, 5);
         VF.fx.flash('rgba(255,120,90,0.28)', 0.3);
-        VF.toast.plain('The line snapped', 'bad', 2800);
+        VF.toast.plain('It ran, and the line snapped', 'bad', 2800);
         showPrompt('Line snapped', '#ff8a6a', 1.2);
       } else {
-        VF.toast.plain('Slack line — it threw the hook', 'warn', 2600);
+        VF.toast.plain('It shook the hook loose', 'warn', 2600);
+        showPrompt('It got away', '#ffc36a', 1.0);
+      }
+      if (VF.quests.anyArmed()) {
+        VF.toast.plain('it goes back up, and it waits. cast again.', null, 4200);
       }
       VF.achievements.check();
     });
-    VF.bus.on('fishing:landed', function () { VF.audio.reelStop(); });
+    VF.bus.on('fishing:landed', function () {
+      VF.audio.reelStop();
+      // the heavens rod does not land a fish quietly
+      if (VF.state.data.rod !== 'heavens') return;
+      const b = VF.scene.L.bobber;
+      VF.fx.ripple(b.x, b.y, VF.scene.L.w * 0.085, 1.9, [255, 232, 176], 1.8);
+      VF.fx.ripple(b.x, b.y, VF.scene.L.w * 0.045, 1.2, [255, 246, 214], 1.2);
+      VF.fx.pulse(0.30);
+      VF.particles.burst(b.x, b.y, 26, {
+        color: [255, 230, 168], angle: -Math.PI / 2, spread: 2.2,
+        speedMin: 40, speedMax: 210, sizeMax: 2.6, grav: 120, lifeMax: 1.5
+      });
+    });
     VF.bus.on('fishing:reelin', function () { VF.audio.reelStop(); });
 
     VF.bus.on('money:changed', function () { /* animated in tick */ });
@@ -207,6 +249,106 @@
     VF.bus.on('bait:bought', refreshGear);
     VF.bus.on('bait:changed', refreshGear);
     VF.bus.on('gear:changed', refreshGear);
+
+    /* ------------------------------------------------------- the long threads */
+
+    VF.bus.on('quest:started', function (def) {
+      VF.audio.discover();
+      VF.fx.pulse(0.4);
+      VF.toast.show('<strong>' + U.esc(def.name) + '</strong><br><span style="color:var(--ink-3)">' +
+        U.esc(def.blurb) + '</span>', null, 7000);
+      flashMenu('journal');
+    });
+
+    VF.bus.on('quest:step', function (e) {
+      VF.audio.click();
+      VF.toast.show('<strong>' + U.esc(e.quest.name) + '</strong><br><span style="color:var(--ink-3)">' +
+        U.esc(e.chapter.task) + '</span>', null, 6000);
+      flashMenu('journal');
+    });
+
+    VF.bus.on('quest:item', function (o) {
+      VF.audio.discover();
+      VF.fx.pulse(0.35);
+      VF.toast.show('<strong>' + U.esc(o.name) + '</strong> ' + o.have + ' / ' + o.need +
+        (o.note ? '<br><span style="color:var(--ink-3)">' + U.esc(o.note) + '</span>' : ''), 'good', 5200);
+      flashMenu('journal');
+    });
+
+    VF.bus.on('quest:flag', function (o) {
+      VF.audio.discover();
+      VF.toast.plain('a piece of the celestial compass', 'good', 4200);
+      flashMenu('journal');
+    });
+
+    VF.bus.on('quest:trial', function (o) {
+      VF.audio.achievement();
+      VF.fx.pulse(0.45);
+      showPrompt(o.name, '#ffd88a', 1.2);
+      VF.toast.plain('trial passed — ' + o.name.toLowerCase(), 'good', 4000);
+      flashMenu('journal');
+    });
+
+    VF.bus.on('quest:note', function (o) { VF.toast.plain(o.text, null, 2200); });
+
+    /* Four phases, and each one announces itself before it starts hurting. */
+    VF.bus.on('fishing:phase', function (e) {
+      VF.audio.surge();
+      VF.fx.shake(4.5 + e.index * 1.6, 4);
+      VF.fx.pulse(0.5 + e.index * 0.12);
+      VF.fx.flash(e.index >= 3 ? 'rgba(255,228,160,0.22)' : 'rgba(190,215,255,0.13)', 0.26, 1.6);
+      showPrompt(e.name, e.index >= 3 ? '#ffe6a8' : '#cfe0ff', 1.1);
+      if (D.fightName) {
+        D.fightName.textContent = 'heaven’s trial · ' + e.name.toLowerCase() +
+                                  ' · ' + (e.index + 1) + ' of ' + e.of;
+        D.fightName.style.color = '#ffd88a';
+      }
+    });
+
+    /* The light goes out, and then it comes back in one column. */
+    VF.bus.on('quest:complete', function (def) {
+      VF.audio.stinger('void', 7);
+      VF.fx.flash('rgba(0,0,0,0.96)', 1.0, 0.9);
+      D.hud.classList.add('dimmed');
+      setTimeout(function () {
+        VF.fx.flash('rgba(255,240,200,0.85)', 1.0, 1.1);
+        VF.fx.pulse(1);
+        VF.fx.shake(9, 3);
+        VF.audio.stinger('grand', 6);
+        const L = VF.scene.L;
+        VF.particles.burst(L.w * 0.5, L.h * 0.28, 90, {
+          color: [255, 232, 176], angle: Math.PI / 2, spread: 0.5,
+          speedMin: 40, speedMax: 320, sizeMax: 3.2, grav: -30, lifeMax: 2.4
+        });
+        showPrompt('the heavens rod', '#ffe6a8', 3.0);
+      }, 1500);
+      setTimeout(function () {
+        D.hud.classList.remove('dimmed');
+        VF.toast.show('<strong>' + U.esc(def.name) + '</strong> — complete<br>' +
+          '<span style="color:var(--ink-3)">one ancient power has awakened. something beneath ' +
+          'the ocean has noticed.</span>', 'good', 12000);
+        flashMenu('journal');
+        refreshGear();
+      }, 3400);
+    });
+
+    /* ------------------------------------------------------- the wanderer */
+
+    VF.bus.on('merchant:arrive', function () {
+      VF.audio.discover();
+      VF.fx.pulse(0.28);
+      VF.toast.show('<strong>somebody has walked up the shore</strong><br>' +
+        '<span style="color:var(--ink-3)">a case of rods that are on no shelf anywhere. ' +
+        'click him. he leaves in half an hour.</span>', null, 8000);
+    });
+    VF.bus.on('merchant:leave', function () {
+      if (VF.state.rt.panelOpen === 'merchant') VF.panels.close();
+      VF.toast.plain('he has packed up and gone', null, 3600);
+    });
+    VF.bus.on('merchant:bought', function (rod) {
+      VF.fx.pulse(0.35);
+      refreshGear();
+    });
 
     VF.bus.on('ui:toast', function (o) { VF.toast.plain(o.text, o.kind); });
     VF.bus.on('ui:whisper', function () {
@@ -350,6 +492,12 @@
     b.classList.remove('flash');
     void b.offsetWidth;
     b.classList.add('flash');
+  }
+
+  /* Whether this is a device that can only be pressed, not typed on — the
+     control is the same either way, the sentence that teaches it is not. */
+  function touchOnly() {
+    return !!(window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches);
   }
 
   /* ------------------------------------------------------------ prompts */
@@ -550,11 +698,19 @@
     D.actionBtn.className = 'action-btn' + (cls ? ' ' + cls : '') + (S.charging ? ' charging' : '');
   }
 
+  /* The catch bar. Everything here is a straight read of the fight state the
+     simulation already computed this frame — the HUD never decides anything,
+     so what is drawn and what is being played are always the same thing. */
   function updateFight(S, dt) {
     const on = S.state === 'reeling' && S.fight;
     if (!on) {
       if (!D.fightUI.classList.contains('hidden')) {
         D.fightUI.classList.add('hidden');
+        D.fightUI.classList.remove('shake', 'enter');
+        // the ratchet loop is opened on the hook and closed here, because this
+        // is the one observer that sees every way a fight can end — including
+        // a treasure landing and a save reset, neither of which says anything
+        VF.audio.reelStop();
         VF.audio.setTension(0);
       }
       return;
@@ -562,31 +718,56 @@
     const f = S.fight;
     if (D.fightUI.classList.contains('hidden')) {
       D.fightUI.classList.remove('hidden');
+      D.fightUI.classList.add('enter');
+      setTimeout(function () { D.fightUI.classList.remove('enter'); }, 320);
+      const col = f.c.kind === 'treasure' ? '#d8c79a' : VF.rarities.color(f.c.rarity);
       D.fightName.textContent = f.c.kind === 'treasure' ? 'something heavy'
         : f.c.isNew ? 'unknown — something new'
         : VF.traits.title(f.c.traits, f.c.fish.name);
-      D.fightName.style.color = VF.rarities.color(f.c.rarity);
+      D.fightName.style.color = col;
+      D.mgFish.style.setProperty('--fishcol', col);
+      // sized here and then only when the fight itself moves the walls, which
+      // ordinarily never happens and in the heaven's trial happens four times
+      shownBarW = -1;
+      // a phone has no space bar, and the same press model reaches the screen
+      const key = touchOnly() ? 'hold' : 'hold <b>space</b>';
+      D.fightHint.innerHTML = VF.state.data.stats.catches < 5
+        ? key + ' — keep the fish in the bar'
+        : key + ' to go right, let go to go left';
     }
 
-    D.stamFill.style.width = (f.stamina * 100).toFixed(1) + '%';
-    D.stamPct.textContent = Math.round(f.stamina * 100) + '%';
-    D.tensFill.style.width = (U.clamp(f.tension, 0, 1) * 100).toFixed(1) + '%';
-    D.tensPct.textContent = Math.round(U.clamp(f.tension, 0, 1) * 100) + '%';
-    D.tensTick.style.left = (U.clamp(f.tension, 0, 1) * 100).toFixed(1) + '%';
-    const dist = U.clamp(f.distance, 0, 1);
-    D.distFill.style.width = (dist * 100).toFixed(1) + '%';
-    D.distPct.textContent = Math.round(dist * 100) + '%';
+    /* the bar and the fish */
+    if (f.barW !== shownBarW) {
+      shownBarW = f.barW;
+      D.mgBar.style.width = (f.barW * 100).toFixed(2) + '%';
+    }
+    D.mgBar.style.left = ((f.bar - f.barW * 0.5) * 100).toFixed(3) + '%';
+    D.mgFish.style.left = (f.fish * 100).toFixed(3) + '%';
+    D.mgFish.classList.toggle('left', f.fishV < -0.02);
+    D.mgBar.classList.toggle('grip', f.inside);
+    D.mgBar.classList.toggle('right', f.barV > 0.05);
+    D.mgBar.classList.toggle('still', Math.abs(f.barV) < 0.05);
 
-    const danger = f.tension > 0.82;
-    D.tensBar.classList.toggle('danger', danger);
-    D.tensBar.classList.toggle('sweet', f.inSweet && !danger);
-    D.fightWarn.classList.toggle('on', danger || f.slack > 1.4);
-    D.fightWarn.textContent = danger ? 'line straining' : (f.slack > 1.4 ? 'line slack' : '');
-    D.fightUI.classList.toggle('shake', f.shakeAmt > 0.35);
+    /* the progress */
+    const pr = U.clamp(f.progress, 0, 1);
+    D.mgProgFill.style.width = (pr * 100).toFixed(2) + '%';
+    D.mgProg.classList.toggle('gain', f.inside);
+    D.mgProg.classList.toggle('drain', !f.inside);
+    D.mgProg.classList.toggle('low', pr < 0.22);
+    D.fightPct.textContent = Math.round(pr * 100) + '%';
+
+    /* the warning line only says something once it means something */
+    const losing = !f.inside && f.outsideT > 0.28;
+    const warn = pr < 0.18 ? 'nearly gone' : losing ? 'losing it' : '';
+    if (D.fightWarn.textContent !== warn) D.fightWarn.textContent = warn;
+    D.fightWarn.classList.toggle('on', !!warn);
+    D.fightUI.classList.toggle('shake', f.shakeAmt > 0.45);
 
     VF.audio.reelTension(f.tension);
     VF.audio.setTension(f.tension);
-    if (f.shakeAmt > 0.1) VF.fx.shake(f.shakeAmt * 2.6, 6);
+    // no decay argument: fx.shake's decay is global and last-caller-wins, and
+    // overriding it here would cut the surge shake short every frame
+    if (f.shakeAmt > 0.1) VF.fx.shake(f.shakeAmt * 2.2);
   }
 
   VF.hud = {

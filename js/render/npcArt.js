@@ -21,7 +21,9 @@
     archivist: { h: 1.06, build: 0.86, stoop: 0.05, hat: null,   coat: 'robe',    prop: 'book',    arms: 'hold' },
     fisherman: { h: 0.92, build: 1.05, stoop: 0.30, hat: 'brim', coat: 'oilskin', prop: 'rod',     arms: 'shoulder' },
     drifter:   { h: 1.00, build: 0.95, stoop: 0.00, hat: 'hood', coat: 'rags',    prop: null,      arms: 'down', drift: 1 },
-    collector: { h: 1.02, build: 0.92, stoop: 0.02, hat: 'tall', coat: 'tails',   prop: 'case',    arms: 'one' }
+    collector: { h: 1.02, build: 0.92, stoop: 0.02, hat: 'tall', coat: 'tails',   prop: 'case',    arms: 'one' },
+    astronomer:{ h: 1.04, build: 0.88, stoop: 0.14, hat: 'hood', coat: 'robe',    prop: 'scope',   arms: 'one' },
+    merchant:  { h: 0.98, build: 1.10, stoop: 0.08, hat: 'brim', coat: 'tails',   prop: 'case',    arms: 'one' }
   };
 
   function tone(rgb, k) {
@@ -377,6 +379,28 @@
         ctx.moveTo(hand.x - face * H * 0.20, hand.y + H * 0.30);
         ctx.quadraticCurveTo(hand.x, hand.y - H * 0.06, hand.x + face * H * 0.22, hand.y - H * 0.34);
         ctx.stroke();
+        break;
+      }
+      /* A short refractor, carried muzzle-up the way you carry something you
+         have already decided not to put down. */
+      case 'scope': {
+        ctx.save();
+        ctx.translate(hand.x, hand.y);
+        ctx.rotate(face * -0.62 + Math.sin(t * 0.5) * 0.02);
+        const L = H * 0.20, w = H * 0.026;
+        ctx.fillStyle = U.rgbToCss(U.mixRgb(cloth, accent, 0.28));
+        if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(-w * 0.5, -L * 0.62, w, L, w * 0.4); ctx.fill(); }
+        else ctx.fillRect(-w * 0.5, -L * 0.62, w, L);
+        // the wider objective at the sky end
+        ctx.fillStyle = U.rgbToCss(U.mixRgb(accent, [255, 255, 255], 0.35), 0.85);
+        if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(-w * 0.78, -L * 0.70, w * 1.56, L * 0.16, w * 0.3); ctx.fill(); }
+        else ctx.fillRect(-w * 0.78, -L * 0.70, w * 1.56, L * 0.16);
+        ctx.strokeStyle = U.rgbToCss(U.mixRgb(accent, [255, 255, 255], 0.5), 0.30);
+        ctx.lineWidth = Math.max(0.5, H * 0.004);
+        ctx.beginPath();
+        ctx.moveTo(-w * 0.5, -L * 0.20); ctx.lineTo(w * 0.5, -L * 0.20);
+        ctx.stroke();
+        ctx.restore();
         break;
       }
       case 'case': {

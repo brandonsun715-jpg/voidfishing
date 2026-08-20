@@ -379,6 +379,131 @@
         ctx.restore();
         break;
       }
+      /* --- the wanderer's four families --- */
+
+      /* a wave running the length of it */
+      case 'tide': {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = U.rgbToCss(tipRgb, 0.34);
+        ctx.lineWidth = Math.max(0.7, 1.3 * scale);
+        ctx.beginPath();
+        for (let i = 0; i <= 22; i++) {
+          const k = 0.16 + (i / 22) * 0.82;
+          const p = at(k);
+          const q2 = at(Math.min(0.999, k + 0.01));
+          const m = Math.hypot(q2.x - p.x, q2.y - p.y) || 1;
+          const w = Math.sin(k * 11 - t * 2.4) * Math.max(1.6, 3.4 * scale);
+          const x = p.x - (q2.y - p.y) / m * w, y = p.y + (q2.x - p.x) / m * w;
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        ctx.restore();
+        break;
+      }
+
+      /* sparks coming off it and going out */
+      case 'ember': {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        for (let i = 0; i < 7; i++) {
+          const seed = (t * 0.5 + i * 0.61) % 1;
+          const p = at(0.22 + ((i * 0.13) % 0.74));
+          const rise = seed * Math.max(6, 13 * scale);
+          const a = (1 - seed) * 0.6;
+          const r = Math.max(0.6, 1.5 * scale) * (1 - seed * 0.5);
+          const g2 = ctx.createRadialGradient(p.x, p.y - rise, 0, p.x, p.y - rise, r * 3);
+          g2.addColorStop(0, U.rgbToCss(tipRgb, a));
+          g2.addColorStop(1, U.rgbToCss(tipRgb, 0));
+          ctx.fillStyle = g2;
+          ctx.beginPath(); ctx.arc(p.x, p.y - rise, r * 3, 0, TAU); ctx.fill();
+        }
+        ctx.restore();
+        break;
+      }
+
+      /* spurs of ice growing out of the blank */
+      case 'frost': {
+        ctx.strokeStyle = U.rgbToCss(tipRgb, 0.55);
+        ctx.lineWidth = Math.max(0.5, 0.95 * scale);
+        ctx.lineCap = 'round';
+        for (let i = 0; i < 6; i++) {
+          const k = 0.24 + i * 0.125;
+          const p = at(k), q2 = at(Math.min(0.999, k + 0.01));
+          const m = Math.hypot(q2.x - p.x, q2.y - p.y) || 1;
+          const nx = -(q2.y - p.y) / m, ny = (q2.x - p.x) / m;
+          const side = i % 2 ? 1 : -1;
+          const L2 = Math.max(2.4, (5.4 - i * 0.4) * scale) * (0.8 + 0.2 * Math.sin(t * 1.1 + i));
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(p.x + nx * L2 * side, p.y + ny * L2 * side);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(p.x + nx * L2 * 0.55 * side, p.y + ny * L2 * 0.55 * side);
+          ctx.lineTo(p.x + nx * L2 * 0.8 * side + (q2.x - p.x) / m * L2 * 0.4,
+                     p.y + ny * L2 * 0.8 * side + (q2.y - p.y) / m * L2 * 0.4);
+          ctx.stroke();
+        }
+        break;
+      }
+
+      /* Rings of light standing off the blank, sparks running up it, and a
+         burst of feathered gold where the hand goes. It is not subtle. It is
+         not supposed to be. */
+      case 'heavens': {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+
+        for (let i = 0; i < 5; i++) {
+          const k = 0.30 + i * 0.155;
+          const p = at(k);
+          const q = at(Math.min(0.999, k + 0.02));
+          const ang = Math.atan2(q.y - p.y, q.x - p.x);
+          const puls = 0.62 + 0.38 * Math.sin(t * 2.1 - i * 0.9);
+          const r = Math.max(2.2, (5.6 - i * 0.5) * scale) * puls;
+          ctx.strokeStyle = U.rgbToCss(tipRgb, 0.55 * puls);
+          ctx.lineWidth = Math.max(0.7, 1.5 * scale);
+          ctx.beginPath();
+          ctx.ellipse(p.x, p.y, r, r * 0.34, ang, 0, TAU);
+          ctx.stroke();
+        }
+
+        // sparks travelling toward the tip
+        for (let i = 0; i < 6; i++) {
+          const k = ((t * 0.30 + i / 6) % 1) * 0.74 + 0.24;
+          const p = at(k);
+          const a = 0.6 * Math.sin(k * Math.PI);
+          const r = Math.max(0.9, 2.0 * scale);
+          const grd = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 3.2);
+          grd.addColorStop(0, U.rgbToCss(tipRgb, a));
+          grd.addColorStop(1, U.rgbToCss(tipRgb, 0));
+          ctx.fillStyle = grd;
+          ctx.beginPath(); ctx.arc(p.x, p.y, r * 3.2, 0, TAU); ctx.fill();
+        }
+
+        // the burst at the butt
+        const b = at(0.16);
+        const br = Math.max(5, 11 * scale);
+        const bg = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, br);
+        bg.addColorStop(0, U.rgbToCss(tipRgb, 0.55));
+        bg.addColorStop(0.45, U.rgbToCss(tipRgb, 0.16));
+        bg.addColorStop(1, U.rgbToCss(tipRgb, 0));
+        ctx.fillStyle = bg;
+        ctx.beginPath(); ctx.arc(b.x, b.y, br, 0, TAU); ctx.fill();
+        ctx.strokeStyle = U.rgbToCss(tipRgb, 0.42);
+        ctx.lineWidth = Math.max(0.6, 1.1 * scale);
+        for (let i = 0; i < 7; i++) {
+          const a2 = (i / 7) * TAU + t * 0.25;
+          const l = br * (0.62 + 0.38 * Math.sin(t * 1.7 + i * 2.1));
+          ctx.beginPath();
+          ctx.moveTo(b.x + Math.cos(a2) * br * 0.28, b.y + Math.sin(a2) * br * 0.28);
+          ctx.lineTo(b.x + Math.cos(a2) * l, b.y + Math.sin(a2) * l);
+          ctx.stroke();
+        }
+        ctx.restore();
+        break;
+      }
+
       case 'glitch': {
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';

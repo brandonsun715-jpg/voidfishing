@@ -1,7 +1,7 @@
 /* VOID FISHING — the fishing loop.
    idle -> casting -> waiting -> bite -> reeling -> landed | lost -> idle
    Nothing here can deadlock: every state has a timeout or an exit condition,
-   and a slack line resolves an unattended fight instead of hanging forever. */
+   and the fight drains to nothing on its own if it is left unattended. */
 (function (VF) {
   'use strict';
 
@@ -12,8 +12,8 @@
   const SWEET_FROM = 0.80;         // top of the meter gives a rare-chance bonus
   const BITE_WINDOW = 1.35;        // seconds to react to a bite
   const BITE_WINDOW_BIG = 2.6;     // an encounter is too rare to lose to a slow hand
-  const SLACK_LIMIT = 3.6;         // seconds of no tension before the fish throws the hook
-  const SNAP_GRACE = 0.45;         // seconds at max tension before the line goes
+  const FISH_EDGE = 0.012;         // the indicator has width; it stops short of the wall
+  const SURGE_GAP = 0.85;          // seconds between the runs that shake the screen
 
   const S = {
     state: 'idle',
@@ -38,6 +38,7 @@
     fight: null,
 
     lastResult: null,
+    lastFight: null,     // how the last fight went, for anything watching
     encounterActive: false
   };
 
@@ -101,6 +102,8 @@
               (1 - U.clamp(rod.cast * 0.12, 0, 0.22)) *
               (1 - U.clamp(S.castPower * 0.10, 0, 0.10));
     S.biteWait = U.clamp(base * k, 1.6, 22);
+    // it is already there. it has been there for four hundred years.
+    if (VF.quests && VF.quests.anyArmed()) S.biteWait = Math.min(S.biteWait, 2.6);
     S.nibbleTimer = VF.rng.g.range(1.0, 2.4);
     S.nibble = 0;
     setState('waiting');
@@ -111,6 +114,21 @@
 
   function triggerBite(opts) {
     opts = opts || {};
+
+    /* A quest that has put something specific in the water gets first refusal:
+       no treasure, no roll, and the window is generous — losing the heaven's
+       trial to a slow hand on the hookset would be a poor way to lose it. */
+    const armed = VF.quests && VF.quests.anyArmed();
+    if (armed && armed.trial && !opts.minRank) {
+      S.pending = VF.loot.roll({ forceFish: armed.trial.fish });
+      S.pending.kind = 'fish';
+      S.pending.trial = armed.trial;
+      S.biteWindow = BITE_WINDOW_BIG;
+      setState('bite');
+      VF.bus.emit('fishing:bite', S.pending);
+      return;
+    }
+
     if (S.sweet && !opts.minRank) opts = Object.assign({}, opts, { rareBoost: 1.12 });
 
     // an encounter is always a fish; otherwise the hook may have found an object
@@ -134,136 +152,236 @@
     VF.bus.emit('fishing:bite', S.pending);
   }
 
-  /* ---------------------------------------------------------------- the fight */
+  /* ---------------------------------------------------------------- the fight
+
+     One control, one job. Hold and the white bar drives right; let go and it
+     runs back left. Keep the fish inside the bar and the progress bar fills;
+     let the fish out and it drains. Full is a fish on the bank, empty is a
+     fish that got away.
+
+     Everything about how hard that is comes out of loot.fightParams() — the
+     species, its rarity, its size, the rod and the worn charms — so the loop
+     below has no randomness in it beyond where the fish decides to go next.
+
+     The fight object also keeps `tension`, `surge`, `distance`, `stamina` and
+     `shakeAmt` up to date. Those are what the scene bends the rod with, what
+     the angler leans on and what the reel audio tracks; they are derived from
+     the minigame every frame rather than simulated separately. */
 
   function hook() {
     if (S.state !== 'bite' || !S.pending) return false;
-    const p = S.pending.kind === 'treasure' ? treasureFight() : VF.loot.fightParams(S.pending);
+    const spec = S.pending.trial || null;
+    const p = spec ? VF.loot.trialParams(spec.phases[0])
+            : S.pending.kind === 'treasure' ? treasureFight()
+            : VF.loot.fightParams(S.pending);
     S.fight = {
       c: S.pending,
       p: p,
-      distance: 1,
-      stamina: 1,
-      tension: 0.18,
-      reeling: false,
-      surge: 0,
-      surgeTime: 0,
-      surgeDur: 0,
-      nextSurge: VF.rng.g.range(1.4, 2.6) / p.surgeRate,
-      telegraph: 0,
-      snapTimer: 0,
-      slack: 0,
-      load: 0,
+
+      /* the white bar — centre and velocity, both in track widths */
+      bar: 0.5,
+      barV: 0,
+      barW: p.barW,
+      held: false,
+
+      /* the fish indicator */
+      fish: 0.5,
+      fishV: 0,
+      target: 0.5,
+      turn: 0.30,
+      wob: VF.rng.g.range(0, Math.PI * 2),
+      lastSurge: 0,
+
+      /* the bottom bar */
+      progress: p.start,
+      inside: true,
+      outsideT: 0,
+      lastEdge: -9,        // when grip/slip last spoke, so it cannot chatter
       perfect: true,
-      inSweet: false,
       elapsed: 0,
-      shakeAmt: 0
+
+      /* derived each frame for the scene, the angler and the audio */
+      tension: 0.40, surge: 0, distance: 1, stamina: 1,
+      shakeAmt: 0, reeling: true,
+
+      /* a scripted fight walks its phases as the meter climbs, and never
+         walks back down them */
+      trial: spec ? { spec: spec, i: 0 } : null
     };
     S.pending = null;
+    if (spec) VF.bus.emit('fishing:phase', { fight: S.fight, index: 0,
+      name: spec.phases[0].name, of: spec.phases.length });
     setState('reeling');
     VF.bus.emit('fishing:hooked', S.fight);
     return true;
   }
 
-  /* Objects do not fight back. They are just heavy and awkward. */
+  /* Objects do not fight back. They are heavy and awkward and they sit still,
+     so the bar is generous and the thing on the end of it barely moves. */
   function treasureFight() {
     const rod = VF.rods.get(VF.state.data.rod);
-    const build = VF.build ? VF.build.stats() : null;
+    const b = (VF.build ? VF.build.stats() : null) ||
+              { line: 1, reel: 1, barSize: 1, barSpeed: 1 };
+    const q = VF.util.clamp((rod.reel * b.reel - 0.40) / 2.70, 0, 1.25);
     return {
-      power: 0.20, stamina: 0.55, surgeRate: 0.35,
-      lineStrength: rod.line * (build ? build.line : 1),
-      reelForce: rod.reel * (build ? build.reel : 1),
-      erratic: 0.15
+      diff: 0.12,
+      barW: U.clamp(0.34 * b.barSize, 0.12, 0.52),
+      barSpeed: 0.78 * U.clamp(b.barSpeed * (1 - 0.20 * q), 0.30, 2.2),
+      barTau: 0.170 / (1 + 0.60 * q),
+      fishSpeed: 0.16, fishStiff: 6, fishDrag: 1.10 * Math.sqrt(6),
+      fishTurn: 1.5, dart: 0.05, evade: 0, wobble: 0.015,
+      fill: 0.42 * (1 + 0.35 * q), drain: 0.20, start: 0.40
     };
   }
 
+  /* The one control. The HUD calls this from every input path it owns —
+     space, enter, mouse and touch all arrive here. */
   function setReeling(on) {
     if (S.state !== 'reeling' || !S.fight) return;
-    if (S.fight.reeling === on) return;
-    S.fight.reeling = on;
-    VF.bus.emit(on ? 'fishing:reel:start' : 'fishing:reel:stop');
+    if (S.fight.held === on) return;
+    S.fight.held = on;
+  }
+
+  /* Where the fish decides to go next. Rare fish turn more often, run harder,
+     and — only at the very top of the catalogue — start reading where the bar
+     is and going the other way. */
+  function pickFishTarget(f) {
+    const p = f.p;
+    const R = VF.rng.g;
+    f.turn = p.fishTurn * R.range(0.62, 1.42);
+
+    if (R() < p.dart) {
+      /* a hard run to the other end of the track */
+      let t = R() < 0.5 ? R.range(0.03, 0.34) : R.range(0.66, 0.97);
+      if (R() < p.evade) t = f.bar < 0.5 ? R.range(0.62, 0.97) : R.range(0.03, 0.38);
+      f.target = t;
+      f.fishV += (t > f.fish ? 1 : -1) * p.fishSpeed * R.range(0.45, 0.90);
+      f.turn *= 0.80;
+      // the screen only shakes for runs that are worth shaking for
+      if (f.elapsed - f.lastSurge > SURGE_GAP && p.fishSpeed > 0.34) {
+        f.lastSurge = f.elapsed;
+        VF.bus.emit('fishing:surge', f);
+      }
+    } else {
+      /* a short drift, further the harder the fish is */
+      f.target = U.clamp(f.fish + R.range(-0.30, 0.30) * (0.55 + p.diff), 0.03, 0.97);
+    }
+  }
+
+  /* The frame loop clamps dt to 100ms, which on a machine having a bad moment
+     is six frames of fight in one step. The fish's pull toward its target is a
+     plain Euler integration, so a step that large would overshoot and jitter.
+     Slicing it keeps the fight identical at 144Hz and at 15fps. */
+  const MAX_STEP = 1 / 60;
+
+  /* Phases are gated on the meter rather than on a clock, so the fight is as
+     long as the player makes it, and they only ever go one way — losing ground
+     inside the void does not put you back in the storm. */
+  function advancePhase(f) {
+    const ph = f.trial.spec.phases;
+    let want = f.trial.i;
+    for (let i = f.trial.i + 1; i < ph.length; i++) if (f.progress >= ph[i].at) want = i;
+    if (want === f.trial.i) return;
+    f.trial.i = want;
+    const np = VF.loot.trialParams(ph[want]);
+    f.p = np;
+    f.barW = np.barW;
+    // the walls move; the bar stays where the player left it
+    f.bar = U.clamp(f.bar, np.barW / 2, 1 - np.barW / 2);
+    VF.bus.emit('fishing:phase', { fight: f, index: want, name: ph[want].name, of: ph.length });
   }
 
   function updateFight(dt) {
+    if (!S.fight) { hardReset(); return; }
+    let left = dt;
+    while (left > 1e-6 && S.state === 'reeling' && S.fight) {
+      const h = Math.min(MAX_STEP, left);
+      left -= h;
+      stepFight(h);
+    }
+  }
+
+  function stepFight(dt) {
     const f = S.fight;
-    // reeling without a fight is not a state the game can produce, but a bad
-    // save or an interrupted transition should drop the rod, not the frame
-    if (!f) { hardReset(); return; }
+    if (f.trial) advancePhase(f);
     const p = f.p;
     f.elapsed += dt;
 
-    /* --- surges: the fish makes a run for it --- */
-    if (f.surgeTime > 0) {
-      f.surgeTime -= dt;
-      const k = U.clamp(f.surgeTime / f.surgeDur, 0, 1);
-      f.surge = Math.sin(k * Math.PI) * f.surgeStrength;
-      if (f.surgeTime <= 0) {
-        f.surge = 0;
-        f.nextSurge = VF.rng.g.range(1.9, 4.4) / p.surgeRate;
-      }
+    /* --- the white bar ---
+       Velocity chases +speed while held and -speed while not, on an
+       exponential approach, so it accelerates and decelerates instead of
+       snapping between positions. The same curve at any frame rate, and a
+       quick tap moves it a little rather than not at all. */
+    const half = f.barW / 2;
+    const lo = half, hi = 1 - half;
+    const want = f.held ? p.barSpeed : -p.barSpeed;
+    f.barV += (want - f.barV) * (1 - Math.exp(-dt / p.barTau));
+    f.bar += f.barV * dt;
+    // the bar stops at the ends of the track rather than running past them,
+    // and drops the momentum it had so it leaves again from a standstill
+    if (f.bar <= lo) { f.bar = lo; if (f.barV < 0) f.barV = 0; }
+    else if (f.bar >= hi) { f.bar = hi; if (f.barV > 0) f.barV = 0; }
+
+    /* --- the fish --- */
+    f.turn -= dt;
+    if (f.turn <= 0) pickFishTarget(f);
+    const wob = Math.sin(f.elapsed * 2.3 + f.wob) * p.wobble;
+    f.fishV += ((f.target + wob) - f.fish) * p.fishStiff * dt;
+    f.fishV *= Math.exp(-p.fishDrag * dt);
+    f.fishV = U.clamp(f.fishV, -p.fishSpeed, p.fishSpeed);
+    f.fish += f.fishV * dt;
+    if (f.fish < FISH_EDGE) {
+      f.fish = FISH_EDGE; f.fishV = Math.abs(f.fishV) * 0.45;
+      f.target = VF.rng.g.range(0.18, 0.70);
+    } else if (f.fish > 1 - FISH_EDGE) {
+      f.fish = 1 - FISH_EDGE; f.fishV = -Math.abs(f.fishV) * 0.45;
+      f.target = VF.rng.g.range(0.30, 0.82);
+    }
+
+    /* --- the bar either has the fish or it does not --- */
+    const gap = Math.abs(f.fish - f.bar);
+    const was = f.inside;
+    f.inside = gap <= half;
+    if (f.inside) {
+      f.outsideT = 0;
+      f.progress += p.fill * dt;
     } else {
-      f.nextSurge -= dt;
-      f.telegraph = U.clamp(1 - f.nextSurge / 0.45, 0, 1);
-      if (f.nextSurge <= 0) {
-        f.surgeDur = VF.rng.g.range(0.85, 1.75);
-        f.surgeTime = f.surgeDur;
-        f.surgeStrength = U.clamp(VF.rng.g.range(0.45, 1.0) * (0.55 + p.erratic * 0.7), 0.2, 1.15);
-        f.telegraph = 0;
-        VF.bus.emit('fishing:surge', f);
-      }
+      f.outsideT += dt;
+      f.perfect = false;
+      // the further out the fish gets, the faster the progress goes
+      const away = U.clamp((gap - half) / 0.22, 0, 1);
+      // and it takes a moment to get going, so a slip the player catches
+      // straight away costs a little rather than most of the bar
+      const ramp = U.clamp(f.outsideT / 0.18, 0.25, 1);
+      f.progress -= p.drain * (0.62 + 0.58 * away) * ramp * dt;
+    }
+    f.progress = U.clamp(f.progress, 0, 1);
+    /* Holding the fish against the edge of the bar is exactly what good play
+       looks like, and `inside` can flip on consecutive frames there. The
+       progress above uses every one of those frames; the announcement does
+       not, or it would fire sixty times a second. */
+    if (f.inside !== was && f.elapsed - f.lastEdge > 0.15) {
+      f.lastEdge = f.elapsed;
+      VF.bus.emit(f.inside ? 'fishing:grip' : 'fishing:slip', f);
     }
 
-    /* --- pull: weakens as the fish tires --- */
-    const pull = p.power * (0.34 + 0.66 * f.stamina) * (1 + f.surge * 1.55);
-
-    /* --- tension ---
-       Load is the fish's pull measured against what the line can take, so an
-       over-matched rod is genuinely dangerous and a well-matched one is calm. */
-    const load = pull / Math.max(0.35, p.lineStrength);
-    f.load = load;
-    if (f.reeling) {
-      f.tension += (0.50 + load * 2.70) * dt;
-      f.slack = 0;
-    } else {
-      // a heavily loaded line bleeds off slowly; a surging fish keeps loading it
-      const bleed = 0.95 - Math.min(0.42, load * 0.75);
-      f.tension += (f.surge * 0.30 - bleed) * dt;
-      if (f.tension < 0.07) f.slack += dt; else f.slack = 0;
-    }
-    f.tension = U.clamp(f.tension, 0, 1.05);
-
-    /* --- the sweet band: hold here and the fish comes in faster --- */
-    f.inSweet = f.tension >= 0.45 && f.tension <= 0.74;
-    if (f.tension > 0.82) f.perfect = false;
-
-    /* --- distance --- */
-    if (f.reeling) {
-      const speed = (0.45 + Math.pow(p.reelForce, 0.6) * 0.32) / (0.85 + p.power * 5.6);
-      const bonus = f.inSweet ? 1.35 : 1.0;
-      const fight = 1 - U.clamp(f.surge * 0.55, 0, 0.75);
-      f.distance -= speed * bonus * fight * dt;
-      f.stamina -= dt / (p.stamina * 22);
-    } else if (f.surge > 0.55) {
-      // the fish takes line back if you let it run
-      f.distance += f.surge * 0.055 * dt;
-      f.stamina -= dt / (p.stamina * 64);
-    }
-    f.distance = U.clamp(f.distance, 0, 1.15);
-    f.stamina = U.clamp(f.stamina, 0, 1);
-
-    f.shakeAmt = U.clamp((f.tension - 0.72) / 0.28, 0, 1) * (0.5 + f.surge * 0.5);
+    /* --- what the rest of the game reads ---
+       The rod bends off `tension`, the hooked shadow swims in on `distance`
+       and thrashes on `surge`. All three are the minigame, seen from outside. */
+    const speed01 = U.clamp(Math.abs(f.fishV) / Math.max(0.05, p.fishSpeed), 0, 1);
+    const edge = half > 0 ? U.clamp(gap / half, 0, 1) : 1;
+    f.tension = f.inside ? 0.30 + edge * 0.34 : U.clamp(0.70 + (gap - half) * 1.3, 0, 1);
+    f.surge = speed01;
+    // the ground gained on top of where the fight started, so the hooked
+    // shadow swims up out of the dark rather than starting a third of the way in
+    f.distance = 1 - U.clamp((f.progress - p.start) / Math.max(0.05, 1 - p.start), 0, 1);
+    f.stamina = U.clamp(1 - f.progress * 0.92, 0, 1);
+    f.shakeAmt = f.inside ? 0 : U.clamp(f.outsideT * 1.5, 0, 1) * (0.45 + speed01 * 0.55);
+    f.reeling = f.inside;
 
     /* --- resolution --- */
-    if (f.tension >= 0.995) {
-      f.snapTimer += dt;
-      if (f.snapTimer >= SNAP_GRACE) { lose('snap'); return; }
-    } else {
-      f.snapTimer = Math.max(0, f.snapTimer - dt * 1.6);
-    }
-
-    if (f.slack >= SLACK_LIMIT) { lose('slack'); return; }
-
-    if (f.distance <= 0) { land(); return; }
+    if (f.progress >= 1) { land(); return; }
+    if (f.progress <= 0) { lose(gap > half + 0.20 ? 'snap' : 'slack'); return; }
   }
 
   /* ---------------------------------------------------------------- outcomes */
@@ -272,6 +390,11 @@
     const f = S.fight;
     const c = f.c;
     const d = VF.state.data;
+
+    // the fight is about to be thrown away; anything that wants to know how it
+    // went — the quest trials, mostly — reads it from here
+    S.lastFight = { perfect: f.perfect, barW: f.barW, diff: f.p.diff,
+                    elapsed: f.elapsed, trial: !!f.trial };
 
     if (c.kind === 'treasure') { landTreasure(c, f); return; }
 
@@ -283,7 +406,6 @@
     const rank = VF.rarities.rank(c.rarity);
     if (rank >= 4) d.stats.legendaryCatches++;
     if (rank >= 6) d.stats.voidCatches++;
-    if (rank >= 7) d.stats.glitchCatches = (d.stats.glitchCatches | 0) + 1;
     d.flags['rare_' + c.rarity] = true;
 
     const traits = c.traits || [];
@@ -348,8 +470,6 @@
     if (t.journal) VF.journal.add(t.journal);
     if (t.token) d.caseTokens++;
     if (t.relic) VF.charms.grant(t.relic);
-    // a rod the water gave back: it goes into the hand, same as a gifted one
-    if (t.rodGift) VF.rods.grant(t.rodGift);
     S.fight = null;
     S.lastResult = c;
     S.encounterActive = false;
@@ -438,7 +558,9 @@
         break;
 
       case 'reeling':
-        updateFight(dt);
+        // nothing opens over a fight by design, but if anything ever does the
+        // fight waits rather than draining away behind it
+        if (!VF.state.rt.panelOpen) updateFight(dt);
         break;
 
       case 'landed':

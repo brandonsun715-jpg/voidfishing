@@ -10,7 +10,10 @@
   const BASE = {
     luck: 0,        // additive
     rare: 1, value: 1, xp: 1, bite: 1, reel: 1, line: 1,
-    size: 1, trait: 1, treasure: 1, encounter: 1, secret: 1, void: 1
+    size: 1, trait: 1, treasure: 1, encounter: 1, secret: 1, void: 1,
+    /* the catch minigame reads these two directly */
+    barSize: 1,     // how wide the white bar is
+    barSpeed: 1     // how fast the white bar travels
   };
 
   let cache = null;
@@ -50,6 +53,9 @@
     s.reel = U.clamp(s.reel, 0.5, 2.5);
     s.rare = Math.max(0.3, s.rare);
     s.value = Math.max(0.4, s.value);
+    // five stacked size charms should be a real build, not an auto-win
+    s.barSize = U.clamp(s.barSize, 0.6, 2.4);
+    s.barSpeed = U.clamp(s.barSpeed, 0.5, 2.0);
     return s;
   }
 
@@ -93,6 +99,9 @@
     if (s.encounter >= 1.4) parts.push('encounters');
     if (s.secret >= 1.5) parts.push('discovery');
     if (s['void'] >= 1.5) parts.push('the deep');
+    if (s.barSize >= 1.18) parts.push('the white bar');
+    if (s.barSpeed <= 0.93) parts.push('a steady bar');
+    else if (s.barSpeed >= 1.12) parts.push('a quick bar');
     if (!parts.length) return 'balanced';
     return parts.slice(0, 3).join(' · ');
   }

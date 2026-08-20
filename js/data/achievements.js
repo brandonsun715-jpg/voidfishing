@@ -90,6 +90,15 @@
       test: function (d) { return d.stats.perfectReels >= 10; } },
     { id: 'snapped', name: 'It Happens', desc: 'Snap your line. Everyone does eventually.', reward: 50,
       test: function (d) { return d.stats.linesSnapped >= 1; } },
+    { id: 'chosen_stars', name: 'Chosen by the Stars', desc: 'Take the Heavens Rod out of the sky it fell from.',
+      hidden: true, reward: 250000,
+      test: function (d) { return !!(d.quests.heavens && d.quests.heavens.done); } },
+    { id: 'above_weather', name: 'Above the Weather', desc: 'Land something in the water above the clouds.',
+      hidden: true, reward: 120000,
+      test: function (d) {
+        return !!(d.fishdex.cloudrunner || d.fishdex.stratus_ray ||
+                  d.fishdex.sunspear || d.fishdex.astra_koi);
+      } },
     { id: 'encounters', name: 'Something Is Below You', desc: 'Survive 5 legendary encounters.', reward: 30000,
       test: function (d) { return d.stats.encounters >= 5; } },
     { id: 'patient', name: 'Patient', desc: 'Spend two hours at the water.', reward: 5000,

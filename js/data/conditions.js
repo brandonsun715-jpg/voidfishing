@@ -48,7 +48,22 @@
     { id: 'lowtide', name: 'Low Water', weight: 14, dur: [130, 260],
       blurb: 'the level has dropped and left things exposed',
       mods: { treasure: 3.0, secret: 1.8, rare: 0.9 },
-      tint: '#c8b890' }
+      tint: '#c8b890' },
+
+    /* Not in the rotation until the sky has been given a reason to answer.
+       `test` is the gate; everything above it has none and is always eligible.
+       Common while somebody is waiting on one, and an occasional event
+       afterwards — the sky is not on a schedule, but it is not cruel either. */
+    { id: 'skyfall', name: 'Skyfall',
+      weight: function () { return VF.quests.at('heavens', 8) ? 150 : 26; },
+      dur: [165, 280],
+      blurb: 'things are coming down, and they are still lit when they land',
+      // only bite, rare, treasure and secret are read off a condition — the
+      // other NEUTRAL keys have no consumer, so listing them would be a lie
+      mods: { rare: 1.85, bite: 0.78, treasure: 1.4, secret: 1.3 },
+      skyfall: 1,
+      tint: '#ffd88a', minLoc: 3,
+      test: function () { return VF.quests && VF.quests.reached('heavens', 8); } }
   ];
 
   const BY_ID = VF.util.byId(LIST);

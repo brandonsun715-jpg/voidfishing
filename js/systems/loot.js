@@ -39,9 +39,14 @@
     if (!f.locs.length) return 1;                 // "anywhere" species
     let best = 99;
     for (let i = 0; i < f.locs.length; i++) {
+      // a spot nobody has discovered yet is not a spot: locations.index()
+      // answers 0 for an unknown id, which would put its fish on the shore
+      if (!VF.locations.isRegistered(f.locs[i])) continue;
       const d = Math.abs(VF.locations.index(f.locs[i]) - locIdx);
       if (d < best) best = d;
     }
+    if (best === 99) return 0;
+    if (f.strict) return best === 0 ? 1 : 0;      // never one spot over
     return best < STRAY.length ? STRAY[best] : 0;
   }
 
@@ -107,17 +112,18 @@
     const rp = rarityPower(opts);
     const minRank = opts.minRank || 0;
 
-    const candidates = minRank
-      ? p.pool.filter(function (e) { return VF.rarities.rank(e.f.rarity) >= minRank; })
-      : p.pool;
+    // event species are not in the water unless their event is happening, so
+    // the pool is filtered per cast rather than per location
+    const candidates = p.pool.filter(function (e) {
+      if (e.f.event && !(VF.quests && VF.quests.eventActive(e.f.event))) return false;
+      if (minRank && VF.rarities.rank(e.f.rarity) < minRank) return false;
+      return true;
+    });
     if (!candidates.length) return VF.fish.byId('smallmouth') || VF.fish.list[0];
 
-    let counts = p.perRarity;
-    if (minRank) {
-      counts = Object.create(null);
-      for (let i = 0; i < candidates.length; i++) {
-        counts[candidates[i].f.rarity] = (counts[candidates[i].f.rarity] || 0) + candidates[i].stray;
-      }
+    const counts = Object.create(null);
+    for (let i = 0; i < candidates.length; i++) {
+      counts[candidates[i].f.rarity] = (counts[candidates[i].f.rarity] || 0) + candidates[i].stray;
     }
     const means = prefMeans(p, loc.id);
 
@@ -127,7 +133,10 @@
       const mean = means[e.f.rarity] || 1;
       // presence < 1 means this tier only drifts in from elsewhere — damp it
       const presence = Math.min(1, n);
-      return (VF.rarities.weightAt(r, rp) * presence * e.stray / n) * (prefBonus(e.f) / mean);
+      let w = (VF.rarities.weightAt(r, rp) * presence * e.stray / n) * (prefBonus(e.f) / mean);
+      // an event is only an event if the things it brings actually turn up
+      if (e.f.event && e.f.evWeight) w *= e.f.evWeight;
+      return w;
     }, VF.rng.g);
 
     return chosen ? chosen.f : candidates[0].f;
@@ -198,23 +207,105 @@
     };
   }
 
-  /* Fight parameters derived from the fish and the player's rod. */
-  function fightParams(c) {
+  /* What the rod and the worn charms are worth to the white bar, pulled out on
+     its own so a scripted fight can apply the same loadout to numbers it wrote
+     itself. Gear has to matter in the heaven's trial too, or the trial is not
+     a test of the player, it is a test of a constant. */
+  function loadout() {
     const rod = VF.rods.get(VF.state.data.rod);
-    const build = VF.build ? VF.build.stats() : null;
+    const b = (VF.build ? VF.build.stats() : null) ||
+              { line: 1, reel: 1, barSize: 1, barSpeed: 1 };
+    const q = U.clamp((rod.reel * b.reel - 0.40) / 2.70, 0, 1.25);
+
+    /* Most rods have their bar worked out for them: width from line strength,
+       steadiness from reel force. The wanderer's stock states its own numbers
+       instead, and those are the figures printed on the row it is sold from —
+       so they are used as written rather than being quietly adjusted on top.
+       Charms multiply into either kind. */
+    const stated = rod.barSize !== undefined;
+    const lineTotal = Math.max(0.25, (stated ? 1 : rod.line) * b.line);
+    return {
+      q: q,
+      rodBar: (stated ? rod.barSize : 1) * (1 + 0.155 * (Math.log(lineTotal) / Math.LN2)),
+      barSize: b.barSize,
+      barMul: U.clamp(b.barSpeed * (rod.barSpeed !== undefined ? rod.barSpeed
+                                                              : (1 - 0.20 * q)), 0.30, 2.2),
+      fillMul: (1 + 0.35 * q) * (rod.barFill || 1)
+    };
+  }
+
+  /* One phase of a scripted fight. The phase writes the shape of it; the
+     loadout still moves the numbers, on exactly the same terms as a normal
+     fight, so a better rod is a better rod all the way to the top. */
+  function trialParams(ph) {
+    const L = loadout();
+    const stiff = ph.fishStiff || 24;
+    const barTop = Math.max(0.80, ph.fishSpeed * 1.45) * (ph.barSpeed || 1);
+    return {
+      diff: 1.15,
+      barW: U.clamp(ph.barW * L.rodBar * L.barSize, 0.050, 0.46),
+      barSpeed: Math.max(ph.fishSpeed * 1.20, barTop * L.barMul),
+      barTau: 0.170 / (1 + 0.60 * L.q),
+      fishSpeed: ph.fishSpeed,
+      fishStiff: stiff,
+      fishDrag: 1.10 * Math.sqrt(stiff),
+      fishTurn: ph.fishTurn,
+      dart: ph.dart,
+      evade: ph.evade || 0,
+      wobble: ph.wobble || 0.045,
+      fill: ph.fill * L.fillMul,
+      drain: ph.drain,
+      start: ph.start || 0.30
+    };
+  }
+
+  function fightParams(c) {
+    const L = loadout();
     const f = c.fish;
     const rank = VF.rarities.rank(c.rarity);
     const tf = VF.traits.fight(c.traits);
-    // difficulty grows with species difficulty, rarity and how big this individual is
+
+    /* One difficulty number, 0 at the easiest common and 1 at the worst thing
+       in the catalogue. Traits push past 1, which is the point of them. */
     const raw = f.diff * 0.55 + rank * 0.100 + c.pct * 0.16;
-    const power = U.clamp(raw * tf.power, 0.08, 1.9);
+    const D = U.clamp(((raw - 0.05) / 1.25) * Math.pow(tf.power, 0.55), 0, 1.15);
+
+    const stam = U.clamp(tf.stamina, 0.7, 1.7);
+    const surge = U.clamp(tf.surge, 0.6, 2.2);
+
+    const fishSpeed = 0.30 + 0.66 * D;
+    const stiff = 9 + 17 * D;
+
+    /* The bar's top speed. Charms that slow it make it steadier — but a stack
+       of them must never drop it below the fish it has to chase, or the fight
+       stops being a question of control and becomes one of arithmetic. */
+    const barTop = Math.max(0.74, fishSpeed * 1.45);
+
     return {
-      power: power,                                              // how hard it pulls
-      stamina: U.clamp(0.55 + raw * 0.85, 0.5, 1.6) * tf.stamina, // how long it lasts
-      surgeRate: U.clamp(0.55 + rank * 0.13 + f.diff * 0.5, 0.5, 2.1) * tf.surge,
-      lineStrength: rod.line * (build ? build.line : 1),
-      reelForce: rod.reel * (build ? build.reel : 1),
-      erratic: U.clamp(f.diff * 0.8 + rank * 0.06, 0.1, 1.1) * tf.surge
+      diff: D,
+
+      /* --- the white bar ---
+         The bar is always faster than the fish. That is the whole contract of
+         the minigame: a rarer fish is harder to *hold*, never impossible to
+         *reach*, so losing one is a mistake the player made rather than a
+         race the numbers had already decided. */
+      barW: U.clamp((0.300 - 0.195 * D) * L.rodBar * L.barSize, 0.055, 0.52),
+      barSpeed: Math.max(fishSpeed * 1.20, barTop * L.barMul),     // track widths / second
+      barTau: 0.170 / (1 + 0.60 * L.q),                            // seconds to reach it
+
+      /* --- the fish --- */
+      fishSpeed: fishSpeed,                             // top speed of the indicator
+      fishStiff: stiff,                                 // how hard it drives at its target
+      fishDrag: 1.10 * Math.sqrt(stiff),                // damped the same at every difficulty
+      fishTurn: (1.05 - 0.77 * D) / surge,              // seconds between direction changes
+      dart: U.clamp((0.10 + 0.45 * D) * surge, 0, 0.85),// chance a turn is a hard run
+      evade: U.clamp((D - 0.55) / 0.45, 0, 1) * 0.40,   // only the rarest read the bar
+      wobble: 0.020 + 0.040 * D,
+
+      /* --- the progress bar --- */
+      fill: (0.400 - 0.170 * D) / stam * L.fillMul,
+      drain: 0.230 + 0.260 * D,
+      start: 0.33
     };
   }
 
@@ -222,6 +313,8 @@
     roll: roll,
     pickFish: pickFish,
     fightParams: fightParams,
+    trialParams: trialParams,
+    loadout: loadout,
     rarityPower: rarityPower,
     invalidatePool: function () { for (const k in poolCache) delete poolCache[k]; prefKey = ''; }
   };

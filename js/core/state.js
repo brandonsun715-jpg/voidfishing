@@ -38,6 +38,14 @@
       secrets: {},            // secret id -> discovery timestamp
       journal: [],            // { id, title, text, at, kind }
       npcs: {},               // npc id -> { met, stage, heard: [] }
+      quests: {},             // quest id -> { started, step, done, flags: {}, counts: {} }
+      merchant: {             // the wanderer: when he is here, and what he brought
+        until: 0,             // wall-clock ms he leaves at; 0 = not here
+        next: 0,              // wall-clock ms he next turns up
+        stock: [],            // rod ids he is carrying this visit
+        sold: [],             // ids already bought out of this visit
+        visits: 0
+      },
       cosmetics: [],          // owned cosmetic ids
       equipped: {},           // cosmetic slot -> id
       cases: {},              // case id -> times opened

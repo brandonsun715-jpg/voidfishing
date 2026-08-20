@@ -148,6 +148,8 @@
         VF.fishing.tick(dt);
         VF.conditions.tick(dt);
         VF.encounters.tick(dt);
+        VF.quests.tick(dt);
+        VF.merchant.tick(dt);
         VF.wrong.tick(dt);
         VF.achievements.tick(dt);
         VF.state.data.stats.playSeconds += dt;

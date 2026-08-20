@@ -181,18 +181,25 @@
 }
 .hint-box.on { opacity: 1; transform: none; }
 
-/* ----------------------------------------------------------- the fight */
+/* ----------------------------------------------------------- the fight
+   The catch bar. One long track, a white bar the player drives with space, a
+   fish indicator loose inside it, and the progress bar underneath. Nothing in
+   here transitions on position — the fight writes left/width every frame and a
+   transition would read as input lag. */
 
+/* The entrance is its own class, removed once it has played. Left on .fight it
+   would re-run every time .shake was toggled off, because that is a change of
+   animation-name — the panel would fade back in mid-fight. */
+.fight.enter { animation: fightIn 280ms var(--ease) both; }
 .fight {
-  position: absolute; left: 50%; bottom: clamp(96px, 13vh, 140px);
+  position: absolute; left: 50%; bottom: clamp(96px, 13vh, 146px);
   transform: translateX(-50%);
-  width: clamp(266px, 32vw, 372px);
-  padding: 13px 16px 14px;
+  width: clamp(320px, 46vw, 620px);
+  padding: 13px 18px 15px;
   border: 1px solid var(--line-2); border-radius: var(--r-lg);
   background: var(--pane-2);
   backdrop-filter: blur(13px); -webkit-backdrop-filter: blur(13px);
   box-shadow: 0 18px 50px rgba(0,0,0,0.55);
-  animation: fightIn 280ms var(--ease) both;
 }
 @keyframes fightIn { from { opacity: 0; transform: translateX(-50%) translateY(10px); } to { opacity: 1; transform: translateX(-50%); } }
 .fight.shake { animation: fightShake 110ms linear infinite; }
@@ -202,39 +209,172 @@
   75% { transform: translateX(-50%) translate(-1.6px,1px); }
 }
 
-.fight-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 11px; }
+.fight-head { display: flex; justify-content: space-between; align-items: baseline; }
 .fight-name { font-size: 11px; letter-spacing: 0.16em; text-transform: lowercase; color: var(--ink-2); }
 .fight-warn { font-size: 10px; letter-spacing: 0.16em; text-transform: lowercase; color: var(--bad); opacity: 0; transition: opacity 120ms; }
 .fight-warn.on { opacity: 1; animation: warnBlink 480ms steps(2) infinite; }
 @keyframes warnBlink { 50% { opacity: 0.25; } }
 
-.bar-block { margin-bottom: 9px; }
-.bar-block:last-child { margin-bottom: 0; }
-.bar-label {
-  display: flex; justify-content: space-between;
-  font-size: 9.5px; letter-spacing: 0.17em; text-transform: lowercase;
-  color: var(--ink-3); margin-bottom: 4px;
-}
-.bar-label span:last-child { font-family: var(--mono); }
-.bar {
-  position: relative; height: 8px;
-  background: rgba(255,255,255,0.055);
-  border-radius: 2px; overflow: hidden;
-}
-.bar-fill {
-  position: absolute; inset: 0 auto 0 0; width: 0%;
-  border-radius: 2px;
-  transition: background 200ms linear;
-}
-.bar-stam .bar-fill { background: linear-gradient(90deg, #3f7f66, #6fd8a4); }
-.bar-dist .bar-fill { background: linear-gradient(90deg, rgba(255,255,255,0.20), rgba(255,255,255,0.45)); }
-.bar-tens .bar-fill { background: linear-gradient(90deg, #4a80b8, #7fb8e8); }
-.bar-tens.sweet .bar-fill { background: linear-gradient(90deg, #4f9f76, #86f0bc); }
-.bar-tens.danger .bar-fill { background: linear-gradient(90deg, #b8523f, #ff8a6a); }
+/* ------------------------------------------------------------- the track */
 
-.bar-zone-safe { position: absolute; top: 0; bottom: 0; left: 45%; width: 29%; background: rgba(110, 220, 160, 0.13); }
-.bar-zone-danger { position: absolute; top: 0; bottom: 0; left: 82%; right: 0; background: rgba(255, 90, 70, 0.18); }
-.bar-tick { position: absolute; top: -2px; bottom: -2px; width: 1.5px; background: var(--ink); left: 0%; opacity: 0.8; }
+.mg-track {
+  position: relative;
+  height: 30px;
+  margin: 21px 13px 0;
+  border-radius: 4px;
+  background:
+    linear-gradient(180deg, rgba(0,0,0,0.55), rgba(0,0,0,0.30)),
+    rgba(10, 14, 21, 0.9);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.07),
+              inset 0 2px 9px rgba(0,0,0,0.6);
+}
+/* the red end markers — they sit outside the track and point in at the two
+   walls the white bar can never cross */
+.mg-track::before, .mg-track::after {
+  content: ''; position: absolute; top: 50%; margin-top: -5px;
+  width: 0; height: 0;
+  border-top: 5px solid transparent; border-bottom: 5px solid transparent;
+  opacity: 0.85;
+}
+.mg-track::before { left: -12px; border-left: 8px solid #d2453f; }
+.mg-track::after  { right: -12px; border-right: 8px solid #d2453f; }
+
+/* The strip the bar and the fish live in. Nothing is clipped: the bar is
+   already clamped so it cannot leave, and the fish marker needs to hang its
+   tag above the track. */
+.mg-inner { position: absolute; inset: 3px; border-radius: 3px; }
+
+/* the white bar — the player's zone */
+.mg-bar {
+  position: absolute; top: 0; bottom: 0; left: 0; width: 30%;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #ffffff, #d7dee6);
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.55), 0 0 14px rgba(255,255,255,0.16);
+  display: grid; place-items: center;
+}
+.mg-bar.grip {
+  background: linear-gradient(180deg, #ffffff, #e6f2ea);
+  box-shadow: 0 0 0 1px rgba(150,255,205,0.7), 0 0 20px rgba(120,240,190,0.34);
+}
+/* the chevron reads which way the bar is travelling — it is the only moving
+   thing that says "released" */
+.mg-bar-arrow {
+  width: 13px; height: 13px; opacity: 0.34;
+  background: #0b1119;
+  -webkit-mask: var(--chev) center / contain no-repeat;
+          mask: var(--chev) center / contain no-repeat;
+  --chev: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M10.5 2.5 4.5 8l6 5.5' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  transition: transform 140ms var(--ease), opacity 140ms linear;
+}
+.mg-bar.right .mg-bar-arrow { transform: scaleX(-1); }
+.mg-bar.still .mg-bar-arrow { opacity: 0.14; }
+
+/* The fish. A hairline marker, because the rule is a point test — the fish is
+   in the bar when its centre is, and a fat marker would lie about that. The
+   silhouette hangs above the track where there is room for it to be legible,
+   and it is the same colour as the fish's own rarity. */
+.mg-fish { position: absolute; top: 0; bottom: 0; left: 0; width: 0; }
+.mg-fish::before {
+  content: ''; position: absolute; top: -2px; bottom: -2px; left: -2.5px; width: 5px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #fff, var(--fishcol, #7fd0ff) 60%, #fff);
+  box-shadow: 0 0 0 1.5px rgba(4,7,12,0.85), 0 0 13px var(--fishcol, #7fd0ff);
+}
+.mg-fish::after {
+  content: ''; position: absolute; left: -12px; top: -18px;
+  width: 24px; height: 16px;
+  background: var(--fishcol, #7fd0ff);
+  /* the eye is a hole in the mask, so it reads at this size instead of
+     disappearing into the silhouette */
+  -webkit-mask: var(--fishglyph) center / contain no-repeat;
+          mask: var(--fishglyph) center / contain no-repeat;
+  --fishglyph: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 16'%3E%3Cpath fill-rule='evenodd' d='M14 1.4c4 .9 6.6 4 7.4 6.6-.8 2.6-3.4 5.7-7.4 6.6-4.5 1-9.2-2-11.4-6.6C4.8 3.4 9.5.4 14 1.4Zm2.6 5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z'/%3E%3Cpath d='M1.1 2.2 5 8l-3.9 5.8Z'/%3E%3C/svg%3E");
+}
+/* the fish turns to face the way it is swimming */
+.mg-fish.left::after { transform: scaleX(-1); }
+
+/* ---------------------------------------------------------- the progress */
+
+.mg-prog {
+  position: relative; height: 11px; margin: 9px 13px 0;
+  border-radius: 3px;
+  background: rgba(10, 14, 21, 0.9);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.07), inset 0 2px 7px rgba(0,0,0,0.55);
+  overflow: hidden;
+}
+.mg-prog-fill {
+  position: absolute; inset: 1px auto 1px 1px; width: 32%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #b7c4d0, #ffffff);
+  box-shadow: 0 0 12px rgba(255,255,255,0.22);
+}
+.mg-prog.gain .mg-prog-fill { background: linear-gradient(90deg, #63c79a, #b9ffdc); box-shadow: 0 0 14px rgba(120,240,190,0.30); }
+.mg-prog.drain .mg-prog-fill { background: linear-gradient(90deg, #a5453c, #ff9c86); box-shadow: 0 0 14px rgba(255,120,90,0.30); }
+/* the last of the progress is the part worth panicking about */
+.mg-prog.low { box-shadow: inset 0 0 0 1px rgba(255,110,90,0.45), inset 0 2px 7px rgba(0,0,0,0.55); }
+.mg-prog.low .mg-prog-fill { animation: progPanic 380ms steps(2) infinite; }
+@keyframes progPanic { 50% { opacity: 0.55; } }
+
+.fight-foot {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-top: 7px;
+  font-size: 9.5px; letter-spacing: 0.17em; text-transform: lowercase;
+  color: var(--ink-3);
+}
+.fight-pct { font-family: var(--mono); color: var(--ink-2); }
+.fight-hint b { color: var(--ink-2); font-weight: 500; }
+
+@media (max-width: 620px) {
+  .fight { width: min(92vw, 460px); padding: 11px 15px 13px; }
+  .mg-track { height: 26px; }
+}
+
+/* ------------------------------------------------------------ the wanderer */
+
+.merch-intro {
+  font-size: 12px; color: var(--ink-3); line-height: 1.55;
+  padding: 0 2px 12px; border-bottom: 1px solid var(--line); margin-bottom: 12px;
+}
+
+/* ---------------------------------------------------------- the quest log */
+
+.quest {
+  border: 1px solid var(--line-2); border-radius: var(--r-lg);
+  background: var(--fill); padding: 14px 16px 15px; margin-bottom: 12px;
+}
+.quest.done { opacity: 0.62; }
+.quest-head { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
+.quest-name { font-size: 15px; color: var(--ink); letter-spacing: 0.02em; }
+.quest-tag {
+  font-size: 9px; letter-spacing: 0.18em; padding: 2px 7px;
+  border: 1px solid currentColor; border-radius: 999px; opacity: 0.8;
+}
+.quest-of { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--ink-3); }
+.quest-blurb { font-size: 12px; color: var(--ink-3); margin-top: 3px; }
+
+.quest-ch { margin-top: 13px; padding-top: 12px; border-top: 1px solid var(--line); }
+.quest-ch-name { font-size: 10px; letter-spacing: 0.19em; color: var(--accent); }
+.quest-text { font-size: 12.5px; color: var(--ink-2); line-height: 1.55; margin-top: 6px; }
+.quest-task {
+  margin-top: 9px; font-size: 13px; color: var(--ink);
+  display: flex; gap: 8px; align-items: baseline;
+}
+.quest-task::before { content: '▸'; color: var(--accent); font-size: 11px; }
+.quest-where { margin-top: 4px; font-size: 11.5px; color: var(--ink-3); padding-left: 18px; }
+
+.quest-track { margin-top: 10px; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.06); overflow: hidden; }
+.quest-fill { height: 100%; width: 0%; border-radius: 3px; background: linear-gradient(90deg, #6d8fb8, #a8cdf0); }
+.quest.gold .quest-fill { background: linear-gradient(90deg, #c8a24e, #ffe6a8); }
+.quest-count { margin-top: 5px; font-size: 10px; letter-spacing: 0.14em; color: var(--ink-3); font-family: var(--mono); }
+
+.quest-list { margin-top: 11px; display: grid; gap: 7px; }
+.quest-item { display: flex; gap: 9px; align-items: baseline; font-size: 12px; }
+.quest-item .tick { width: 12px; flex: 0 0 12px; color: var(--ink-4); font-size: 11px; }
+.quest-item.on .tick { color: var(--good); }
+.quest-item .who { color: var(--ink-2); min-width: 118px; }
+.quest-item.on .who { color: var(--ink); }
+.quest-item .want { color: var(--ink-3); }
+.quest-done-line { margin-top: 11px; font-size: 12px; color: var(--good); letter-spacing: 0.04em; }
 
 /* ------------------------------------------------------------- prompts */
 
@@ -320,11 +460,11 @@
   .gear-row { order: 2; }
   .action-col { order: 1; }
   .menu-row { flex-wrap: wrap; justify-content: flex-end; }
-  .fight { width: min(88vw, 340px); bottom: 150px; }
+  .fight { width: min(92vw, 430px); bottom: 152px; }
 }
 @media (max-height: 620px) {
-  .fight { bottom: 88px; padding: 9px 13px 10px; }
-  .bar-block { margin-bottom: 6px; }
+  .fight { bottom: 88px; padding: 9px 13px 11px; }
+  .mg-track { height: 24px; }
   .hint-box { display: none; }
 }
 

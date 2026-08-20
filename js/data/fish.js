@@ -1077,7 +1077,64 @@
     desc: 'A flight of four, complete, going up. There is nothing at the top and they go up regardless.',
     locs: [], baits: ['null', 'void'], time: [], weather: ['voidsurge', 'eclipse'],
     art: { body: 'object', object: 'stairs', glitch: 1.0, glow: 0.6,
-           c1: '#a8a49a', c2: '#2e2c28', c3: '#e0dcd0' } }
+           c1: '#a8a49a', c2: '#2e2c28', c3: '#e0dcd0' } },
+
+  /* ======================= THE FALLEN STAR =======================
+     Two extra tags are used down here and nowhere else:
+       event   the species only exists while that event is running
+       strict  it does not stray — it is only ever where its locs say  */
+
+  { id: 'moonlit', name: 'Moonlit Fish', rarity: 'rare', value: 2600, kg: [0.8, 14.0], m: [0.3, 1.1], diff: 0.44,
+    desc: 'Rises only on nights when the moon has nothing in front of it. Some of them carry a scale that is not theirs.',
+    locs: ['basin', 'flats', 'cradle'], baits: ['prism', 'star', 'minnow'], time: ['night'], weather: ['clear'],
+    art: { body: 'round', fin: 'veil', eyes: 2, glow: 0.72, c1: '#9fb4d8', c2: '#1b2440', c3: '#f2f7ff', ex: ['halo', 'stars'] } },
+
+  { id: 'sky_ember', name: 'Sky Ember', rarity: 'uncommon', value: 900, kg: [0.1, 2.2], m: [0.1, 0.4], diff: 0.30, event: 'skyfall', evWeight: 34,
+    desc: 'Still warm from the fall. It goes out about a minute after you land it, and then it is an ordinary small fish.',
+    locs: [], baits: [], time: [], weather: [],
+    art: { body: 'torpedo', fin: 'spiky', eyes: 1, glow: 0.68, c1: '#e8a860', c2: '#3a2010', c3: '#ffe0a0', ex: ['stars'] } },
+
+  { id: 'fallen_light', name: 'Fallen Light', rarity: 'rare', value: 5200, kg: [0.4, 9.0], m: [0.2, 0.8], diff: 0.52, event: 'skyfall', evWeight: 26,
+    desc: 'It came down as a streak and it is still, faintly, going in that direction.',
+    locs: [], baits: [], time: [], weather: [],
+    art: { body: 'ribbon', fin: 'long', eyes: 2, glow: 0.85, c1: '#cfd8f2', c2: '#1a2038', c3: '#ffffff', ex: ['threads', 'stars'] } },
+
+  { id: 'meteor_carp', name: 'Meteor Carp', rarity: 'epic', value: 22000, kg: [12.0, 240.0], m: [1.0, 4.0], diff: 0.72, event: 'skyfall', evWeight: 30,
+    desc: 'Pitted all over on one side and perfectly smooth on the other. It has only ever been hit from above.',
+    locs: [], baits: [], time: [], weather: [],
+    art: { body: 'round', fin: 'frill', eyes: 2, glow: 0.55, c1: '#8f7a5e', c2: '#2a2018', c3: '#ffcf8a', ex: ['crystals', 'fracture'] } },
+
+  { id: 'celestial_guardian', name: 'Celestial Guardian', rarity: 'mythic', value: 420000, kg: [140, 2600], m: [5, 22], diff: 0.93, event: 'skyfall', evWeight: 300,
+    desc: 'It was not falling. It was coming down deliberately, and it waited to be caught. There is writing inside its largest scale.',
+    locs: [], baits: [], time: [], weather: [],
+    art: { body: 'serpent', fin: 'wing', eyes: 4, glow: 1, c1: '#e3caa0', c2: '#241a10', c3: '#fff3cc', ex: ['halo', 'rings', 'runes', 'wings'] } },
+
+  { id: 'celestial_leviathan', name: 'The Celestial Leviathan', rarity: 'void', value: 3400000, kg: [9000, 120000], m: [40, 180], diff: 0.99, event: 'trial',
+    desc: 'The thing the rod was made to catch, still waiting where the rod was dropped. Four hundred years is not a long time to it.',
+    locs: [], baits: [], time: [], weather: [],
+    art: { body: 'whale', fin: 'wing', eyes: 6, glow: 1, c1: '#f0d79c', c2: '#20180c', c3: '#fffbe8', ex: ['halo', 'rings', 'stars', 'wings', 'runes'] } },
+
+  /* --- and what lives above the clouds, once you can get up there --- */
+
+  { id: 'cloudrunner', name: 'Cloudrunner', rarity: 'rare', value: 7400, kg: [0.6, 11.0], m: [0.3, 1.0], diff: 0.50, strict: true,
+    desc: 'Swims through cloud the way everything else swims through water. It has never once been wet.',
+    locs: ['the_heavens'], baits: [], time: [], weather: [],
+    art: { body: 'ray', fin: 'wing', eyes: 2, glow: 0.6, c1: '#dfe8f5', c2: '#2a3350', c3: '#ffffff', ex: ['threads'] } },
+
+  { id: 'stratus_ray', name: 'Stratus Ray', rarity: 'epic', value: 34000, kg: [20, 420], m: [1.5, 6.0], diff: 0.70, strict: true,
+    desc: 'Flat and enormous and entirely silent. From below it is the reason the light changed.',
+    locs: ['the_heavens'], baits: [], time: [], weather: [],
+    art: { body: 'ray', fin: 'veil', eyes: 2, glow: 0.7, c1: '#c3d2ea', c2: '#1e2740', c3: '#fff4d8', ex: ['halo', 'threads'] } },
+
+  { id: 'sunspear', name: 'Sunspear', rarity: 'legendary', value: 128000, kg: [40, 900], m: [2.5, 11.0], diff: 0.88, strict: true,
+    desc: 'A single straight line of light with a mouth at one end. It hunts by being where the light already was.',
+    locs: ['the_heavens'], baits: [], time: [], weather: [],
+    art: { body: 'eel', fin: 'spiky', eyes: 1, glow: 1, c1: '#ffd98a', c2: '#3a2a0e', c3: '#fff8e0', ex: ['stars', 'spine'] } },
+
+  { id: 'astra_koi', name: "Astra's Koi", rarity: 'mythic', value: 620000, kg: [90, 1800], m: [4, 16], diff: 0.95, strict: true,
+    desc: 'Kept, once, by somebody who fished up here. Still circling the place the pond used to be.',
+    locs: ['the_heavens'], baits: [], time: [], weather: [],
+    art: { body: 'serpent', fin: 'veil', eyes: 3, glow: 0.95, c1: '#f0dcb0', c2: '#2a2012', c3: '#fff6dc', ex: ['halo', 'rings', 'stars'] } }
   ];
 
   const BY_ID = VF.util.byId(F);
