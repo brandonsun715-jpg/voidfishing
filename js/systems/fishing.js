@@ -148,6 +148,15 @@
     S.pending = VF.loot.roll(opts);
     S.pending.kind = 'fish';
     S.biteWindow = opts.minRank ? BITE_WINDOW_BIG : BITE_WINDOW;
+    /* A species can carry its own scripted fight. It runs on exactly the same
+       machinery the heaven's trial does, so the phase announcements and the
+       loadout maths come along with it and nothing here has to know which
+       species it is. Losing one of these to a slow hand on the hookset would
+       be a miserable way to lose it, so the window opens wide. */
+    if (S.pending.fish && S.pending.fish.trial) {
+      S.pending.trial = S.pending.fish.trial;
+      S.biteWindow = BITE_WINDOW_BIG;
+    }
     setState('bite');
     VF.bus.emit('fishing:bite', S.pending);
   }
@@ -406,6 +415,8 @@
     const rank = VF.rarities.rank(c.rarity);
     if (rank >= 4) d.stats.legendaryCatches++;
     if (rank >= 6) d.stats.voidCatches++;
+    if (rank >= 7) d.stats.glitchCatches = (d.stats.glitchCatches | 0) + 1;
+    if (rank >= 8) d.stats.unknownCatches = (d.stats.unknownCatches | 0) + 1;
     d.flags['rare_' + c.rarity] = true;
 
     const traits = c.traits || [];

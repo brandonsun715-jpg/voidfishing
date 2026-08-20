@@ -14,13 +14,29 @@
     { id: 'legendary', name: 'Legendary', rank: 4, weight: 3.5,   pow: 2.25, color: '#ffb03a', glow: '#ffdc9a', xp: 1100,  shake: 6,   stinger: 'grand' },
     { id: 'mythic',    name: 'Mythic',    rank: 5, weight: 0.55,  pow: 2.80, color: '#ff5c9e', glow: '#ffb0d2', xp: 3100,  shake: 9,   stinger: 'grand' },
     { id: 'void',      name: 'Void',      rank: 6, weight: 0.075, pow: 3.40, color: '#8a5cff', glow: '#c9a8ff', xp: 9200,  shake: 13,  stinger: 'void' },
-    { id: 'glitch',    name: '!@#$%^&$#', rank: 7, weight: 0.012, pow: 2.80, color: '#ff2d55', glow: '#66ffe0', xp: 31000, shake: 18,  stinger: 'glitch' }
+    { id: 'glitch',    name: '!@#$%^&$#', rank: 7, weight: 0.012, pow: 2.80, color: '#ff2d55', glow: '#66ffe0', xp: 31000, shake: 18,  stinger: 'glitch' },
+
+    /* One tier above the last one, and it is not listed anywhere until you have
+       one. `hidden` keeps it out of the Fishdex, out of the filter row and out
+       of the species total, so a player who has never caught one has no way of
+       knowing the tier is there. `pow` is deliberately low: gear moves this
+       almost not at all, so it stays a lightning strike at level 99 with every
+       bonus stacked, which is the entire point of it. */
+    { id: 'unknown',   name: '?',         rank: 8, weight: 0.0000036, pow: 3.60, color: '#ffffff', glow: '#ffe9a8', xp: 260000, shake: 26, stinger: 'unknown', hidden: true }
   ];
 
   const BY_ID = VF.util.byId(LIST);
 
+  /* Tiers a player who has caught nothing from them is allowed to know about. */
+  function visible() {
+    const d = VF.state.data;
+    return LIST.filter(function (r) { return !r.hidden || d.flags['rare_' + r.id]; });
+  }
+
   VF.rarities = {
     list: LIST,
+    visible: visible,
+    hidden: function (id) { return !!(BY_ID[id] && BY_ID[id].hidden); },
     get: function (id) { return BY_ID[id] || BY_ID.common; },
     rank: function (id) { return (BY_ID[id] || BY_ID.common).rank; },
     color: function (id) { return (BY_ID[id] || BY_ID.common).color; },

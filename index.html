@@ -130,6 +130,16 @@
     </div>
   </div>
 
+  <!-- the two sequences: letterbox, one line, and a way out of it -->
+  <div id="cutscene" class="cutscene hidden" aria-live="polite">
+    <div class="cut-bar cut-top"></div>
+    <div class="cut-bar cut-bot"></div>
+    <div class="cut-inner">
+      <div id="cutsceneText" class="cut-text"></div>
+      <div id="cutsceneMore" class="cut-more">click to continue</div>
+    </div>
+  </div>
+
   <div id="toasts" class="toasts" aria-live="polite"></div>
   <div id="encounter" class="encounter hidden"><div class="enc-inner"><div id="encText" class="enc-text"></div></div></div>
   <div id="overlay" class="overlay hidden"></div>
@@ -178,6 +188,7 @@
 <script src="js/systems/visit.js"></script>
 <script src="js/systems/quests.js"></script>
 <script src="js/systems/merchant.js"></script>
+<script src="js/systems/cutscene.js"></script>
 <!-- render -->
 <script src="js/render/palette.js"></script>
 <script src="js/render/particles.js"></script>

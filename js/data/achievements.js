@@ -42,6 +42,12 @@
       test: function (d) { return !!d.flags.rare_mythic; } },
     { id: 'void_walker', name: 'Void Walker', desc: 'Land a Void fish.', reward: 500000,
       test: function (d) { return d.stats.voidCatches >= 1; } },
+    { id: 'nessie', name: '??????', desc: 'Land the one everybody has a photograph of.', hidden: true, reward: 40000000,
+      test: function (d) { return !!d.fishdex.nessie; } },
+    { id: 'oscar', name: '??????', desc: 'Land the man the money is named after.', hidden: true, reward: 40000000,
+      test: function (d) { return !!d.fishdex.oscar_brophy; } },
+    { id: 'both_unknown', name: '?', desc: 'Land both of them.', hidden: true, reward: 500000000,
+      test: function (d) { return !!d.fishdex.nessie && !!d.fishdex.oscar_brophy; } },
     { id: 'glitch', name: '??????', desc: 'Land something that should not exist.', hidden: true, reward: 4000000,
       test: function (d) { return !!d.flags.rare_glitch; } },
 
@@ -59,7 +65,9 @@
     { id: 'collector_50', name: 'Cataloguer', desc: 'Discover 50 species.', reward: 80000,
       test: function (d) { return dexCount(d) >= 50; } },
     { id: 'collector_all', name: 'The Complete Record', desc: 'Discover every species.', reward: 25000000,
-      test: function (d) { return dexCount(d) >= VF.fish.count; } },
+      // every species the record admits to having — a tier nobody can know
+      // about is not something to be asked for
+      test: function (d) { return dexCount(d) >= VF.fish.knownCount(); } },
     { id: 'all_common', name: 'Thorough', desc: 'Discover every Common species.', reward: 1500,
       test: function (d) { return dexOf(d, 'common') >= VF.fish.byRarity('common').length; } },
 

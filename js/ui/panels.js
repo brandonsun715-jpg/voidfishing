@@ -1013,13 +1013,17 @@
 
   function buildDex() {
     const d = VF.state.data;
-    const found = Object.keys(d.fishdex).length;
-    const p = shell('Fishdex', found + ' of ' + VF.fish.count + ' species recorded');
+    /* Species in a hidden tier are not in the total, not in the filter row and
+       not in the grid until one has been caught — so the record never shows a
+       gap the player has no way to explain. */
+    const shown = VF.fish.knownList();
+    const found = shown.filter(function (f) { return !!d.fishdex[f.id]; }).length;
+    const p = shell('Fishdex', found + ' of ' + shown.length + ' species recorded');
     const b = body();
 
     const bar = U.el('div', 'dex-toolbar');
     const segR = U.el('div', 'seg');
-    [{ id: 'all', label: 'All' }].concat(VF.rarities.list.map(function (r) {
+    [{ id: 'all', label: 'All' }].concat(VF.rarities.visible().map(function (r) {
       return { id: r.id, label: r.name };
     })).forEach(function (o) {
       const btn = U.el('button', dexFilter === o.id ? 'active' : '', o.label);
@@ -1046,7 +1050,7 @@
     bar.appendChild(segM);
     b.appendChild(bar);
 
-    const list = VF.fish.list.filter(function (f) {
+    const list = shown.filter(function (f) {
       if (dexFilter !== 'all' && f.rarity !== dexFilter) return false;
       const has = !!d.fishdex[f.id];
       if (dexMode === 'found' && !has) return false;

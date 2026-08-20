@@ -150,6 +150,7 @@
         VF.encounters.tick(dt);
         VF.quests.tick(dt);
         VF.merchant.tick(dt);
+        VF.cutscene.tick(dt);
         VF.wrong.tick(dt);
         VF.achievements.tick(dt);
         VF.state.data.stats.playSeconds += dt;

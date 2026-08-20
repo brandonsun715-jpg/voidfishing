@@ -76,6 +76,7 @@
         legendaryCatches: 0,
         voidCatches: 0,
         glitchCatches: 0,
+        unknownCatches: 0,
         mutationsFound: 0,
         recordsBroken: 0,
         encounters: 0,

@@ -50,6 +50,8 @@
   }
 
   function pressStart(e) {
+    // a sequence owns the input while it is running
+    if (VF.cutscene && VF.cutscene.active()) { VF.cutscene.skip(); return; }
     if (VF.state.rt.panelOpen) return;
     if (e && e.type === 'pointerdown' && e.button !== undefined && e.button !== 0) return;
     // a conversation owns the input while it is running
@@ -93,6 +95,13 @@
       const tag = document.activeElement && document.activeElement.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
+      if (VF.cutscene && VF.cutscene.active()) {
+        if (e.code === 'Space' || e.code === 'Enter' || e.code === 'Escape') {
+          e.preventDefault();
+          VF.cutscene.skip();
+        }
+        return;
+      }
       if (e.code === 'Escape') {
         if (VF.panels.isOpen()) { e.preventDefault(); VF.panels.close(); return; }
         if (VF.visit.talking()) { e.preventDefault(); VF.visit.leave(); }

@@ -1153,6 +1153,70 @@
     desc: 'Kept, once, by somebody who fished up here. Still circling the place the pond used to be.',
     locs: ['the_heavens'], baits: [], time: [], weather: [],
     art: { body: 'serpent', fin: 'veil', eyes: 3, glow: 0.95, c1: '#f0dcb0', c2: '#2a2012', c3: '#fff6dc', ex: ['halo', 'rings', 'stars'] } }
+,
+
+  /* ============================== ? ==============================
+     Two. That is the whole tier, it is not listed until one of them is in the
+     record, and neither of them is a fish.
+
+     `cutscene` names the sequence that plays before the catch card, and
+     `trial` is a scripted multi-phase fight — the same machinery the heaven's
+     trial uses, so the phase announcements and the loadout maths come along
+     with it. The phases are harder than anything else in the game on purpose:
+     these are meant to be lost several times. */
+
+  { id: 'nessie', name: 'Nessie', rarity: 'unknown', value: 900000000,
+    kg: [1200, 4800], m: [14, 31], diff: 0.99,
+    cutscene: 'nessie',
+    desc: 'Every photograph anybody ever took of her was a log, a wave, or a lie, and all of them ' +
+          'were closer than they had any right to be. She is not a plesiosaur and she is not a fish. ' +
+          'She is simply extremely old and has been extremely careful, and today she was not.',
+    locs: [], baits: [], time: [], weather: [],
+    art: { body: 'being', being: 'nessie', glow: 0.55,
+           c1: '#3f5c50', c2: '#16241f', c3: '#cfe8b8' },
+    trial: {
+      phases: [
+        /* she does not run. she leans, and the line has to lean with her */
+        { at: 0.00, name: 'The Wake',   start: 0.28,
+          barW: 0.160, barSpeed: 1.20, fishSpeed: 0.80, fishTurn: 0.50, dart: 0.50,
+          fill: 0.155, drain: 0.300 },
+        { at: 0.32, name: 'The Neck',
+          barW: 0.135, barSpeed: 1.35, fishSpeed: 0.92, fishTurn: 0.30, dart: 0.68,
+          fill: 0.145, drain: 0.335 },
+        { at: 0.60, name: 'The Turn',
+          barW: 0.112, barSpeed: 1.45, fishSpeed: 1.02, fishTurn: 0.22, dart: 0.75,
+          evade: 0.25, fill: 0.140, drain: 0.365 },
+        /* all of her at once, and she is reading the bar by now */
+        { at: 0.84, name: 'All Of Her',
+          barW: 0.095, barSpeed: 1.60, fishSpeed: 1.15, fishTurn: 0.18, dart: 0.82,
+          evade: 0.40, fill: 0.175, drain: 0.400 }
+      ]
+    } },
+
+  { id: 'oscar_brophy', name: 'Oscar Brophy', rarity: 'unknown', value: 1200000000,
+    kg: [72, 96], m: [1.71, 1.89], diff: 0.99,
+    cutscene: 'oscar',
+    desc: 'A blonde man of about thirty, in good health, entirely dry. The currency is named after him ' +
+          'and nobody has ever been able to say why, including the people who mint it. He does not ' +
+          'appear to have drowned. He does not appear to have been down there. He was down there.',
+    locs: [], baits: [], time: [], weather: [],
+    art: { body: 'being', being: 'human', glow: 0.75,
+           c1: '#2c3444', c2: '#151a24', c3: '#f0d484' },
+    trial: {
+      phases: [
+        /* he is not fighting. he is not doing anything. the meter barely moves
+           and that is the difficulty — you have to hold a man who is drifting */
+        { at: 0.00, name: 'He Has Not Noticed', start: 0.30,
+          barW: 0.150, barSpeed: 1.10, fishSpeed: 0.42, fishTurn: 1.20, dart: 0.15,
+          fill: 0.100, drain: 0.420 },
+        { at: 0.45, name: 'He Has Noticed',
+          barW: 0.105, barSpeed: 1.50, fishSpeed: 1.10, fishTurn: 0.18, dart: 0.80,
+          evade: 0.35, fill: 0.160, drain: 0.400 },
+        { at: 0.78, name: 'He Is Coming Up',
+          barW: 0.088, barSpeed: 1.70, fishSpeed: 1.25, fishTurn: 0.14, dart: 0.88,
+          evade: 0.55, fill: 0.210, drain: 0.440 }
+      ]
+    } }
   ];
 
   const BY_ID = VF.util.byId(F);
@@ -1163,8 +1227,20 @@
     (BY_RARITY[F[i].rarity] || (BY_RARITY[F[i].rarity] = [])).push(F[i]);
   }
 
+  /* A species in a hidden tier does not exist as far as the record is
+     concerned until one has been caught. The Fishdex counts, the filter row
+     and the completion achievement all read these rather than the raw list,
+     so a player who has never landed one has no way to notice the gap. */
+  function known(f) {
+    return !VF.rarities.hidden(f.rarity) || !!VF.state.data.fishdex[f.id];
+  }
+  function knownList() { return F.filter(known); }
+
   VF.fish = {
     list: F,
+    known: known,
+    knownList: knownList,
+    knownCount: function () { return knownList().length; },
     byId: function (id) { return BY_ID[id] || null; },
     byRarity: function (r) { return BY_RARITY[r] || []; },
     count: F.length

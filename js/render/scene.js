@@ -507,6 +507,7 @@
     mark('line', function () { drawLineAndBobber(P); });
     mark('particles', function () { VF.particles.draw(ctx); });
     mark('fore', function () { drawForeground(P); });
+    mark('cutscene', function () { drawCutscene(); });
     mark('overlay', function () { VF.fx.drawOverlay(ctx, W, H); });
     syncVignette();
 
@@ -1437,6 +1438,117 @@
       tx: tip.x, ty: tip.y,
       len: tip.len, angle: a
     }, t, { spin: reeling ? t * 12 : t * 0.4 });
+  }
+
+  /* The two sequences, drawn over the shore rather than instead of it: the
+     water and the sky keep running underneath, which is most of why it reads
+     as something happening here rather than as a cut to somewhere else.
+
+     Nessie is drawn at very nearly the height of the frame. That is not a
+     flourish — the whole claim the tier makes about her is scale, and a
+     tastefully sized Nessie would be a different animal. */
+  function drawCutscene() {
+    const C = VF.cutscene && VF.cutscene.state();
+    if (!C) return;
+    const fish = C.fish && C.fish.fish;
+
+    // the frame goes down, but never all the way — the water stays visible
+    if (C.dark > 0.01) {
+      const g = ctx.createRadialGradient(W * 0.5, L.horizonY + L.waterH * 0.30, 0,
+                                         W * 0.5, L.horizonY + L.waterH * 0.30,
+                                         Math.max(W, H) * 0.78);
+      g.addColorStop(0, 'rgba(0,0,0,' + (C.dark * 0.42).toFixed(3) + ')');
+      g.addColorStop(1, 'rgba(0,0,0,' + Math.min(0.96, C.dark * 1.05).toFixed(3) + ')');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    // something the width of the bay, passing underneath
+    if (C.shadow > 0.01) {
+      const y = L.horizonY + L.waterH * 0.46;
+      const sg = ctx.createLinearGradient(0, y - L.waterH * 0.30, 0, y + L.waterH * 0.34);
+      sg.addColorStop(0, 'rgba(0,0,0,0)');
+      sg.addColorStop(0.5, 'rgba(0,0,0,' + (0.80 * C.shadow).toFixed(3) + ')');
+      sg.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = sg;
+      ctx.save();
+      ctx.translate(Math.sin(t * 0.22) * W * 0.05, 0);
+      ctx.beginPath();
+      ctx.ellipse(W * 0.5, y, W * 0.78, L.waterH * 0.30, 0, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    if (!fish || C.rise <= 0.01) return;
+
+    /* Both of them are drawn from their own centre, and neither one is
+       centred inside its own silhouette: she is nearly all neck above hers,
+       he is a person and splits about evenly. So the frame is worked out from
+       the parts that have to be in shot rather than from the middle. */
+    const isNessie = C.id === 'nessie';
+    const TOP = isNessie ? 1.00 : 0.90;    // reach above centre, in half-heights
+    const BOT = isNessie ? 0.50 : 0.95;    // reach below it
+    const box = isNessie ? Math.min(H * 1.10, W * 1.15) : Math.min(H * 0.76, W * 0.55);
+    const size = VF.fishArt.fitSize(fish, box);
+    const half = size * 2 * VF.fishArt.bodyRatio('being', fish.art.being);
+    const surface = L.horizonY + L.waterH * (isNessie ? 0.62 : 0.58);
+    const k = U.smootherstep(U.clamp(C.rise, 0, 1));
+
+    /* The letterbox bars are DOM, drawn over the canvas, so the renderer has
+       to know where they land or it will put the best part of the shot behind
+       one. They are 11vh, 8vh on a narrow screen. */
+    const bar = H * (W < 760 ? 0.085 : 0.115);
+    const ceiling = bar + H * 0.035 + half * TOP;
+
+    /* She sits at her own waterline; he stands on the surface. Either way the
+       figure is pushed down far enough to clear the top bar — a reveal you
+       cannot see the head of is not a reveal. */
+    const cyEnd = Math.max(ceiling,
+                           isNessie ? surface - half * 0.36 : surface - half * BOT);
+    const cyStart = surface + half * (BOT + 1.30);
+    const cy = U.lerp(cyStart, cyEnd, k);
+    const cx = W * (isNessie ? 0.50 : 0.50);
+
+    ctx.save();
+    // clip at the surface so nothing floats above water it has not left yet
+    ctx.beginPath();
+    ctx.rect(-20, -20, W + 40, surface + L.waterH * 0.30 + 20);
+    ctx.clip();
+    ctx.translate(cx, cy);
+
+    // the water it is displacing
+    ctx.save();
+    ctx.globalAlpha = 0.55 * k;
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.beginPath();
+    ctx.ellipse(0, half * 0.92, size * 1.25, L.waterH * 0.055, 0, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+
+    if (C.lit > 0.02) {
+      // a light on it that is not coming from the sky
+      const gl = ctx.createRadialGradient(0, -half * 0.2, 0, 0, -half * 0.2, size * 1.6);
+      const acc = U.hexToRgb(fish.art.c3);
+      gl.addColorStop(0, U.rgbToCss(acc, 0.20 * C.lit));
+      gl.addColorStop(1, U.rgbToCss(acc, 0));
+      ctx.fillStyle = gl;
+      ctx.fillRect(-size * 1.8, -size * 1.8, size * 3.6, size * 3.6);
+    }
+
+    // she comes out of the dark as she comes up, the same way a hooked fish does
+    if (C.lit < 0.96) {
+      ctx.save();
+      ctx.globalAlpha = 1 - C.lit;
+      VF.fishArt.drawSilhouette(ctx, fish, size, 0.96, k * 0.85);
+      ctx.restore();
+    }
+    if (C.lit > 0.02) {
+      ctx.save();
+      ctx.globalAlpha = C.lit;
+      VF.fishArt.draw(ctx, fish, size, { time: t, traits: C.fish ? C.fish.traits : null });
+      ctx.restore();
+    }
+    ctx.restore();
   }
 
   /* Nothing dramatic — the colour drains, the frame stops, and a few lights
