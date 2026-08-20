@@ -18,8 +18,9 @@ const path = require('path');
   const CYCLES = Number(process.argv[2] || 60);
   const result = await page.evaluate(async (CYCLES) => {
     const sleep = ms => new Promise(r => setTimeout(r, ms));
-    const out = { cycles: 0, landed: 0, lost: 0, missed: 0, stuck: [], rarities: {}, mutations: 0,
-                  newSpecies: 0, levels: 0, encounters: 0, maxKept: 0 };
+    const out = { cycles: 0, landed: 0, lost: 0, missed: 0, stuck: [], slow: [], rarities: {},
+                  mutations: 0, newSpecies: 0, levels: 0, encounters: 0, maxKept: 0,
+                  longestFight: 0 };
     VF.bus.on('fishing:missed', () => out.missed++);
     VF.bus.on('level:up', () => out.levels++);
     VF.bus.on('encounter:start', () => out.encounters++);
@@ -63,13 +64,28 @@ const path = require('path');
         }
       }
 
+      /* A long fight is not a stuck fight. A starter rod against a legendary
+         legitimately runs over a minute, so a fixed timeout here reports the
+         balance curve as a defect and would hide a real hang in the noise.
+         What actually matters is whether the fight is still moving. */
       guard = 0;
-      while (VF.fishing.state() === 'reeling' && guard++ < 3000) {
+      let lastProg = null, stale = 0, ticks = 0;
+      while (VF.fishing.state() === 'reeling' && guard++ < 24000) {
         const f = VF.fishing.S.fight;
-        if (f) VF.fishing.setReeling(f.tension < 0.62);
+        if (f) {
+          VF.fishing.setReeling(f.tension < 0.62);
+          const prog = Math.round((f.distance + f.stamina) * 1e4);
+          if (prog === lastProg) stale++; else { stale = 0; lastProg = prog; }
+          if (stale > 300) break;      // nothing moved for ~2.5s of ticks
+        }
+        ticks++;
         await sleep(8);
       }
-      if (guard >= 3000) out.stuck.push('reeling at cycle ' + i);
+      const secs = Math.round(ticks * 8 / 100) / 10;
+      out.longestFight = Math.max(out.longestFight, secs);
+      if (stale > 300) out.stuck.push('fight stopped moving at cycle ' + i + ' after ' + secs + 's');
+      else if (guard >= 24000) out.stuck.push('fight ran past 190s at cycle ' + i);
+      else if (secs > 45) out.slow.push('cycle ' + i + ': ' + secs + 's');
 
       if (VF.fishing.state() === 'landed') {
         // wait for the card, then take one of the three actions
@@ -93,9 +109,12 @@ const path = require('path');
       out.maxKept = Math.max(out.maxKept, VF.state.data.kept.length);
       out.cycles++;
 
+      // reel in whatever is left, then the rod must come back to idle
+      if (VF.fishing.state() !== 'idle') VF.fishing.reelIn();
       guard = 0;
       while (VF.fishing.state() !== 'idle' && guard++ < 200) await sleep(16);
-      if (guard >= 200) out.stuck.push('not idle after cycle ' + i);
+      if (guard >= 200) out.stuck.push('rod not idle after cycle ' + i +
+                                       ' (state ' + VF.fishing.state() + ')');
     }
     return out;
   }, CYCLES);
@@ -105,6 +124,8 @@ const path = require('path');
   console.log('mutations:', result.mutations, '| new species:', result.newSpecies,
               '| levels gained:', result.levels, '| encounters:', result.encounters);
   console.log('stuck states:', result.stuck.length ? result.stuck : 'none');
+  console.log('longest fight:', result.longestFight + 's',
+              result.slow.length ? '| over 45s: ' + result.slow.join(', ') : '');
 
   // every menu, every tab
   const menus = [['shop','rods'],['shop','bait'],['fishdex',null],['bag','catches'],['bag','rods'],
