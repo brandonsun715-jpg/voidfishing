@@ -10,11 +10,12 @@
   let current = null, artT = 0, lastFrame = 0, resolved = false;
   let revealT = 0;   // 0..1 silhouette-to-creature wipe for a new species
 
-  /* The card does not appear the instant a fish lands — it waits a beat for the
-     landing to read. That gap is a card that is going to open and has not
-     opened yet, which nothing could cancel: resetting or importing a save
-     while a catch was in flight left the pending open to fire afterwards and
-     put a card up for a fish out of a save that no longer exists.
+  /* The card does not appear the instant a fish lands — it waits a beat for
+     the landing to read. That gap is a card that is going to open and has not
+     opened yet, which nothing could cancel: changing slot, erasing or
+     importing while a catch was in flight left the pending open to fire
+     afterwards and put a card up for a fish out of a game that is no longer
+     the one being played.
 
      Every deferred open now carries a token, and anything that invalidates it
      bumps the token instead of trying to close a card that is not there. */
@@ -32,8 +33,9 @@
       /* Two species stop the game to show you something first. The catch is
          already recorded by the time this runs, so the card is the same card
          whether the sequence is watched or skipped. */
-      if (c.fish && c.fish.cutscene && VF.cutscene) {
-        VF.cutscene.play(c.fish.cutscene, c, function () {
+      const scene = VF.cutscene && VF.cutscene.forCatch(c);
+      if (scene) {
+        VF.cutscene.play(scene, c, function () {
           later(function () { show(c); }, 260);
         });
         return;
@@ -41,9 +43,10 @@
       later(function () { show(c); }, 340);
     });
     VF.bus.on('fishing:treasure', function (c) { later(function () { showTreasure(c); }, 320); });
-    // a save that has been wiped or replaced has no catch worth showing
+    // a save that has been wiped, swapped or replaced has no catch worth showing
     VF.bus.on('save:reset', cancelPending);
     VF.bus.on('save:imported', cancelPending);
+    VF.bus.on('save:slot', cancelPending);
   }
 
   function banner(c) {
@@ -56,6 +59,22 @@
     if (c.isGiant) return { text: 'enormous', color: '#ffb03a' };
     if (c.isRecord) return { text: 'personal best', color: '#6fd8a4' };
     return { text: VF.rarities.get(c.rarity).name, color: VF.rarities.color(c.rarity) };
+  }
+
+  /* A picture of this one, to keep. Quiet — it is not one of the three
+     things you are here to decide, so it does not sit in the row with them. */
+  function pictureRow(c) {
+    const row = U.el('div', 'catch-extra');
+    const b = U.el('button', 'btn-quiet', 'save a picture');
+    b.title = 'Draw this catch as an image and download it.';
+    b.addEventListener('click', function () {
+      VF.audio.click();
+      const ok = VF.catchCard && VF.catchCard.save(c);
+      b.textContent = ok ? 'saved' : 'could not save that one';
+      b.disabled = true;
+    });
+    row.appendChild(b);
+    return row;
   }
 
   function show(c) {
@@ -165,16 +184,21 @@
     body.appendChild(val);
 
     const acts = U.el('div', 'catch-actions');
+    /* A run that never sells does not get a sell button greyed out — it gets
+       no sell button. A control that is only ever refused is furniture. */
+    const canSell = !VF.runs || VF.runs.sellAllowed();
     const sellBtn = U.el('button', 'btn btn-primary', 'Sell');
     sellBtn.addEventListener('click', function () { act('sell'); });
-    const keepBtn = U.el('button', 'btn', 'Keep');
+    const keepBtn = U.el('button', canSell ? 'btn' : 'btn', 'Keep');
     keepBtn.title = 'Store it in your bag. Sell it later.';
     keepBtn.addEventListener('click', function () { act('keep'); });
-    const relBtn = U.el('button', 'btn', 'Release');
+    const relBtn = U.el('button', canSell ? 'btn' : 'btn btn-primary', 'Release');
     relBtn.title = 'Let it go for reputation, which quietly improves your luck.';
     relBtn.addEventListener('click', function () { act('release'); });
-    acts.appendChild(sellBtn); acts.appendChild(keepBtn); acts.appendChild(relBtn);
+    if (canSell) acts.appendChild(sellBtn);
+    acts.appendChild(keepBtn); acts.appendChild(relBtn);
     body.appendChild(acts);
+    body.appendChild(pictureRow(c));
 
     card.appendChild(body);
     U.clear(host);
@@ -405,24 +429,31 @@
     close();
   }
 
-  function defaultAction() { act('sell'); }
+  /* Space and Enter take the default action. On a run that never sells, the
+     default is the one the run leaves you. */
+  function defaultAction() {
+    act(VF.runs && !VF.runs.sellAllowed() ? 'release' : 'sell');
+  }
 
   /* Dismissing the card must never strand the catch. If no choice was made the
-     fish is sold, so the player cannot lose progress by closing the window. */
+     fish is sold, so the player cannot lose progress by closing the window —
+     and on a run that never sells it is released instead, because the fallback
+     has to be something the rule actually permits or the game sits in `landed`
+     with the rod unusable. */
   function close() {
     cancelPending();
     if (!open) {
       /* The card is already gone, but the panel flag may not be: anything that
          tears the card down without coming through here leaves 'catch' sitting
-         in rt.panelOpen, and every menu key checks that flag before doing
-         anything. One stranded flag deadens the whole keyboard, so clear it
-         even on the way out. */
+         in rt.panelOpen, and every menu key — and the admin door — checks that
+         flag before doing anything. One stranded flag deadens the keyboard. */
       if (VF.state.rt.panelOpen === 'catch') VF.state.rt.panelOpen = null;
       return;
     }
     if (!resolved && VF.fishing.state() === 'landed') {
       resolved = true;
       if (current && current.treasure) VF.fishing.resolveCatch();
+      else if (VF.runs && !VF.runs.sellAllowed()) VF.catches.release();
       else VF.catches.sell();
     }
     open = false;
@@ -441,6 +472,5 @@
     VF.hud.pressEnd();
   }
 
-  VF.catchUI = { init: init, isOpen: function () { return open; },
-                 defaultAction: defaultAction, close: close, cancelPending: cancelPending };
+  VF.catchUI = { init: init, isOpen: function () { return open; }, defaultAction: defaultAction, close: close };
 })(window.VF = window.VF || {});

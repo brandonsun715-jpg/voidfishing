@@ -27,7 +27,9 @@ const path = require('path');
   });
 
   let clicked = 0, dead = 0;
-  const panels = ['shop','fishdex','bag','stats','settings','map','journal','wardrobe','admin'];
+  // 'admin' is not in this list on purpose: it is behind the door, and a
+  // build handed to anybody does not have it at all.
+  const panels = ['shop','fishdex','bag','stats','settings','map','journal','wardrobe'];
   for (const p of panels) {
     await page.evaluate(p => { VF.panels.close(); VF.panels.open(p); }, p);
     await page.waitForTimeout(300);
@@ -81,17 +83,20 @@ const path = require('path');
 
   console.log('controls clicked:', clicked, '| broken:', dead);
 
-  // reset-save confirmation flow
-  await page.evaluate(() => { VF.panels.open('settings'); });
-  await page.waitForTimeout(250);
+  /* Erasing a slot, which is what "reset" became once there were four games.
+     Erase the slot being played: that is the one with the confirmation and the
+     one that has to leave a playable game behind. */
+  await page.evaluate(() => { VF.panels.close(); VF.panels.open('settings'); });
+  await page.waitForTimeout(300);
   await page.evaluate(() => {
-    const b = Array.from(document.querySelectorAll('.panel button')).find(x => /reset everything/i.test(x.textContent));
+    const here = Array.from(document.querySelectorAll('.saveslot')).find(r => r.classList.contains('here'));
+    const b = here && Array.from(here.querySelectorAll('button')).find(x => /erase/i.test(x.textContent));
     if (b) b.click();
   });
   await page.waitForTimeout(250);
   const dlg = await page.evaluate(() => !!document.querySelector('.dialog'));
   await page.evaluate(() => {
-    const b = Array.from(document.querySelectorAll('.dialog button')).find(x => /^reset$/i.test(x.textContent.trim()));
+    const b = Array.from(document.querySelectorAll('.dialog button')).find(x => /^(reset|erase)$/i.test(x.textContent.trim()));
     if (b) b.click();
   });
   await page.waitForTimeout(500);
@@ -100,7 +105,7 @@ const path = require('path');
     dex: Object.keys(VF.state.data.fishdex).length,
     panelOpen: VF.panels.isOpen(), modalHidden: document.getElementById('modal').classList.contains('hidden')
   }));
-  console.log('reset dialog shown:', dlg, '| after reset:', JSON.stringify(afterReset));
+  console.log('erase dialog shown:', dlg, '| after reset:', JSON.stringify(afterReset));
 
   // the game must still be playable after a reset
   const playable = await page.evaluate(async () => {

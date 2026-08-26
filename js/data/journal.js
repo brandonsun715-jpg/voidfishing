@@ -28,6 +28,15 @@
     strange: { title: 'the unidentifiable thing', kind: 'lore',
       text: 'you can describe every part of it. the parts do not add up to anything. writing this down has not helped.' },
 
+    /* Three entries about one animal, which is the only thing in here that is
+       an animal rather than a kind of animal. */
+    returning1: { title: 'the one that went', kind: 'event',
+      text: 'it took the bait and it did not fight. it just kept going, at the same speed, in the same direction, until the line was gone. the hook went with it. it was not in a hurry and it was not afraid, and those are the two things that are bothering me.' },
+    returning2: { title: 'it came back', kind: 'event',
+      text: 'the same one. bigger, which is expected, and the old hook is still in the corner of its mouth, which is not — that was a long time ago. it fought this time. i think it fought because it knew what the line was for.' },
+    returning3: { title: 'the last time', kind: 'event',
+      text: 'it did not run. it came up on its own and waited while the line came in, and the whole business took as long as it took. i have not decided whether that was surrender. it did not look like surrender.' },
+
     firstvoid: { title: 'the first void catch', kind: 'event',
       text: 'it came up wrong. not damaged — wrong, in the way a sentence can be grammatical and still mean nothing. it is in the fishdex now, which is the only reason you believe it happened.' },
     firstwrong: { title: 'the quiet minute', kind: 'event',
@@ -56,7 +65,31 @@
     beneath: { title: 'below the nowhere sea', kind: 'lore', hint: 1,
       text: 'the charts stop at the nowhere sea because the people drawing them stopped. it goes further. the old fisherman has been once and will not say how, only that you have to already know it is there.' },
     thelast: { title: 'the last water', kind: 'lore', hint: 2,
-      text: 'every clue points the same direction and none of them name it. the chart circle, the plate\'s second date, the fragment\'s sense of down. there is one more place. it is not on the map because the map is what it is under.' }
+      text: 'every clue points the same direction and none of them name it. the chart circle, the plate\'s second date, the fragment\'s sense of down. there is one more place. it is not on the map because the map is what it is under.' },
+
+    /* ---- what a place leaves ---- */
+    nolog: { title: 'a log with no positions', kind: 'find',
+      text: 'four hundred pages. a date, a depth and a catch on every one of them, and not one position anywhere. whoever kept it knew where they were and did not think it needed saying, or knew that saying it would not have helped.' },
+    otherhook: { title: 'the other hook', kind: 'find', hint: 1,
+      text: 'the same shape as the one on your line and about the size of a chair. the barb has been used. the shank is worn smooth in one place, the way a handle wears, which means something held it there for a long time and held it often.' },
+
+    /* ---- count backwards ---- */
+    shores: { title: 'the order of shores', kind: 'lore',
+      text: 'the archivist laid the four charts out end to end and did not explain them. the coastline in the last one is the coastline in the first one, worn down by exactly as much as four hundred years would wear it. she said: you have been fishing the same shore the whole time. you have been fishing it at different ages.' },
+    oldnames: { title: 'the same names twice', kind: 'lore',
+      text: 'the plate lists eleven names, then a date. four hundred and six years further down, in a hand that is trying very hard to look like the first hand, the same eleven names again. she has a third list. she will not say where the third list is from and she will not say what the date on it is.' },
+    countback: { title: 'count backwards', kind: 'lore',
+      text: 'the note in the bottle said count backwards and everyone who read it counted years. the archivist counted shores. there are eight. she says the eighth is not a shore, it is where a shore stops being possible, and that whoever wrote the note got there before we did and came back to leave it.' },
+    plategift: { title: 'the older plate', kind: 'find',
+      text: 'she gave it to you face down and asked you not to turn it over in front of her. the names on it are not finished. there is room left at the bottom and the room is not accidental.' },
+
+    /* ---- what the drifter left ---- */
+    driftname: { title: 'a name that is not his', kind: 'lore',
+      text: 'the drifter remembered a name today. he said it twice, carefully, the way you say something you have been keeping. then he asked whose it was. it was not his. he has been carrying somebody else\'s name for long enough to have forgotten it was borrowed.' },
+    errand: { title: "the drifter's errand", kind: 'lore',
+      text: 'he did not leave the lantern behind. he put it down where it would be found, which is a different thing, and he has done it before, and he will not say how many times. he says the light does not go out. he says that is the problem.' },
+    nightglass: { title: 'night glass', kind: 'find',
+      text: 'a disc of something that is not glass, ground flat on one side. held up to a dark window it shows the same dark, a little closer. he said keep it, and then he said he was sorry, and he would not say which one he meant.' }
   };
 
   /* Add an entry once. Later entries never overwrite earlier ones. */

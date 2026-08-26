@@ -17,6 +17,8 @@
     VF.scene.seedAmbient();
 
     VF.toast.init();
+    // the boot load has already been and gone; this is for a slot picked up later
+    VF.bus.on('save:revoked', saidRevoked);
     VF.hud.init();
     VF.panels.init();
     VF.catchUI.init();
@@ -24,7 +26,9 @@
     VF.weather.reconcile();
     VF.secrets.registerFound();
     VF.loot.invalidatePool();
-    VF.slate.init();
+    // rolled here, shown after Begin — a catch card over the title card is a
+    // strange way to say hello
+    if (VF.away) VF.away.boot();
 
     window.addEventListener('resize', onResize, { passive: true });
     window.addEventListener('orientationchange', onResize, { passive: true });
@@ -65,9 +69,30 @@
     document.getElementById('hud').classList.remove('hidden');
     VF.hud.show();
     VF.hud.refreshAll();
+    saidRevoked(VF.save.revoked());
     VF.tutorial.init();
     VF.achievements.check();
     if (VF.state.data.stats.casts === 0) VF.hud.showPrompt(VF.locations.current().name, VF.locations.current().glow, 1.8);
+    if (VF.away) VF.away.announce();
+  }
+
+  /* A save can arrive holding something no game could have given it. Taking
+     it back quietly would read as the save being broken, so it is said out
+     loud, once, and only to somebody it actually happened to.
+
+     Boot has to ask save.js for this rather than listen for it: the load runs
+     before there is a toast to show it in. A slot picked up later goes
+     through the event instead, which by then has somewhere to land. */
+  function saidRevoked(info) {
+    if (!info) return;
+    const bits = [];
+    if (info.rods) bits.push(info.rods === 1 ? 'a rod that is not in the game'
+                                            : info.rods + ' rods that are not in the game');
+    if (info.took) bits.push(U.money(info.took));
+    if (!bits.length) return;
+    VF.toast.show('<strong>this save was carrying something it could not have earned</strong>' +
+                  '<br><span style="color:var(--ink-3)">' + U.esc(bits.join(' and ')) +
+                  ' taken back. everything you caught is still here.</span>', 'warn', 7000);
   }
 
   function onResize() {

@@ -323,6 +323,22 @@ input[type=range]::-moz-range-thumb {
 
 /* ------------------------------------------------------------ locations */
 
+.loc-list { display: flex; flex-direction: column; gap: 8px; }
+.loc {
+  display: grid; grid-template-columns: 4px 1fr auto; gap: 14px; align-items: center;
+  padding: 14px 16px;
+  border: 1px solid var(--line); border-radius: var(--r);
+  background: var(--fill);
+  transition: all var(--dur) var(--ease);
+}
+.loc:hover { border-color: var(--line-2); background: var(--fill-2); }
+.loc.current { border-color: var(--accent); background: rgba(127,168,200,0.07); }
+.loc.locked { opacity: 0.5; }
+.loc-mark { align-self: stretch; border-radius: 2px; min-height: 40px; }
+.loc-name { font-size: 14px; color: var(--ink); letter-spacing: 0.02em; }
+.loc-tag { font-size: 11px; color: var(--ink-3); font-style: italic; margin-top: 2px; }
+.loc-desc { font-size: 11.5px; color: var(--ink-3); margin-top: 6px; line-height: 1.55; }
+.loc-meta { display: flex; gap: 10px; margin-top: 7px; font-family: var(--mono); font-size: 10px; color: var(--ink-4); }
 
 @media (max-width: 780px) {
   .row-rod { grid-template-columns: auto 1fr auto; }
@@ -592,6 +608,464 @@ input[type=range]::-moz-range-thumb {
   .cut-inner { bottom: 12vh; width: calc(100vw - 40px); }
 }
 
+
+/* Four games. A row is the same shape as a location row on the map, because
+   choosing which game to be in is the same kind of choice. */
+.saveslot-list { display: flex; flex-direction: column; gap: 8px; }
+.saveslot {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 13px;
+  border: 1px solid var(--line); border-radius: 8px;
+  background: rgba(255, 255, 255, 0.012);
+}
+.saveslot.here { border-color: var(--accent-dim); background: rgba(255, 255, 255, 0.028); }
+.saveslot.blank .saveslot-desc { color: var(--ink-4); font-style: italic; }
+.saveslot-mark { width: 3px; align-self: stretch; border-radius: 2px; flex: none; }
+.saveslot-main { flex: 1 1 auto; min-width: 0; text-align: left; }
+.saveslot-name {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.10em;
+  color: var(--ink-2); display: flex; align-items: baseline; gap: 8px;
+}
+.saveslot-desc { font-size: 12px; color: var(--ink-3); margin-top: 4px; }
+.saveslot-sub { font-size: 11px; color: var(--ink-4); margin-top: 2px; }
+.saveslot-acts { display: flex; gap: 7px; flex: none; }
+
+@media (max-width: 560px) {
+  .saveslot { flex-wrap: wrap; }
+  .saveslot-acts { width: 100%; justify-content: flex-end; }
+}
+
+/* ------------------------------------------------- the index, by water */
+.water-grid {
+  display: grid; gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(258px, 1fr));
+}
+.water {
+  border: 1px solid var(--line); border-radius: var(--r-lg);
+  background: rgba(255, 255, 255, 0.014);
+  padding: 13px 14px 12px;
+  display: flex; flex-direction: column; gap: 9px;
+}
+.water.here { border-color: var(--accent-dim); background: rgba(255, 255, 255, 0.03); }
+.water-head { display: flex; align-items: flex-start; gap: 10px; }
+.water-mark { width: 3px; align-self: stretch; border-radius: 2px; flex: none; }
+.water-head > div:nth-child(2) { flex: 1 1 auto; min-width: 0; }
+.water-name {
+  font-size: 13.5px; color: var(--ink);
+  display: flex; align-items: baseline; gap: 8px;
+}
+.water-tag { font-size: 11px; color: var(--ink-4); margin-top: 2px; }
+.water-of { font-family: var(--mono); font-size: 10.5px; color: var(--ink-3); flex: none; }
+
+.water-track { height: 4px; border-radius: 2px; background: rgba(255,255,255,0.07); overflow: hidden; }
+.water-fill { height: 100%; width: 0%; border-radius: 2px; transition: width 420ms var(--ease); }
+
+.water-tiers { display: flex; flex-wrap: wrap; gap: 9px; }
+.water-tier {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-family: var(--mono); font-size: 10px; color: var(--ink-3);
+}
+.water-dot { width: 5px; height: 5px; border-radius: 50%; display: inline-block; }
+
+.water-foot {
+  display: flex; flex-wrap: wrap; gap: 4px 12px;
+  font-size: 11px; color: var(--ink-4);
+}
+.water-sig { width: 100%; font-size: 11px; display: flex; gap: 8px; align-items: baseline; }
+.water-sig-k {
+  font-family: var(--mono); font-size: 9px; letter-spacing: 0.16em;
+  color: var(--ink-4); flex: none;
+}
+.water .btn { align-self: flex-start; margin-top: 2px; }
+
+.water-odd {
+  margin-top: 12px; padding: 12px 14px;
+  border: 1px dashed var(--line); border-radius: var(--r-lg);
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+}
+.water-odd-k {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.18em;
+  color: var(--ink-4);
+}
+.water-odd-v { font-size: 12px; color: var(--ink-3); flex: 1 1 200px; }
+
+/* Why a species is still missing, when the answer is the loadout rather than
+   luck. Quiet: it is a note on the record, not a warning. */
+.dex-thin {
+  margin-top: 3px;
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  color: var(--warn);
+  opacity: 0.7;
+  line-height: 1.3;
+}
+
+/* The quiet control under the three that matter. */
+.catch-extra { margin-top: 10px; text-align: center; }
+.btn-quiet {
+  background: none;
+  border: none;
+  color: var(--ink-3);
+  font: inherit;
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  padding: 4px 8px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--line);
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.btn-quiet:hover:not(:disabled) { color: var(--ink); border-bottom-color: var(--line-3); }
+.btn-quiet:disabled { color: var(--good); cursor: default; border-bottom-color: transparent; }
+.btn-quiet:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* What to save for, pinned above a hundred and twenty-nine rows. */
+.next-up {
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--accent);
+  border-radius: var(--r);
+  background: var(--fill);
+  padding: 10px 14px 11px;
+  margin-bottom: 14px;
+}
+.next-up.ready { border-left-color: var(--good); }
+.next-up.quiet { border-left-color: var(--line-2); }
+.next-up-k {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: var(--ink-3);
+}
+.next-up-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-top: 4px;
+}
+.next-up-name { font-size: 15px; color: var(--ink); flex: 1; }
+.next-up-cost {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.next-up.ready .next-up-cost { color: var(--good); }
+.next-up-sub { font-size: 11.5px; color: var(--ink-3); margin-top: 2px; }
+
+/* How far along an achievement is, for the ones that count something. */
+.ach-prog {
+  height: 2px;
+  background: var(--fill-2);
+  border-radius: 2px;
+  margin-top: 7px;
+  overflow: hidden;
+}
+.ach-prog-fill {
+  height: 100%;
+  background: var(--accent);
+  opacity: 0.7;
+  transition: width var(--dur) var(--ease);
+}
+.ach-prog-n {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-3);
+  margin-top: 3px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Choosing what a new game will be played under. */
+.run-pick { padding: 4px 2px 10px; }
+.run-pick-k { font-size: 11px; letter-spacing: 0.16em; color: var(--ink-3); }
+.run-pick-sub { font-size: 12.5px; color: var(--ink-2); margin: 6px 0 14px; }
+.run-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.run-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--fill);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--line-2);
+  border-radius: var(--r);
+  padding: 10px 14px;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.run-row:hover { background: var(--fill-2); border-left-color: var(--accent); }
+.run-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.run-name { font-size: 14px; color: var(--ink); display: flex; gap: 8px; align-items: baseline; }
+.run-desc { font-size: 12px; color: var(--ink-3); margin-top: 4px; line-height: 1.5; }
+
+/* And what the game being played says about itself. */
+.run-tag {
+  display: inline-block;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--warn);
+  border: 1px solid rgba(255, 195, 106, 0.35);
+  border-radius: 3px;
+  padding: 1px 6px;
+  margin-left: 8px;
+}
+
+/* The one thing in this game two people can compare. */
+.daily {
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--warn);
+  border-radius: var(--r);
+  background: var(--fill);
+  padding: 11px 14px 12px;
+  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+.daily.here { border-left-color: var(--good); }
+.daily.locked { border-left-color: var(--line-2); opacity: 0.72; }
+.daily-k { font-size: 10px; letter-spacing: 0.16em; color: var(--ink-3); }
+.daily-v { font-size: 14px; color: var(--ink); line-height: 1.45; }
+.daily-sub { font-size: 11.5px; color: var(--ink-3); }
+.daily .btn { margin-top: 4px; }
+
+/* The board: somebody wants a particular fish, and will wait. */
+.board-note { font-size: 12.5px; color: var(--ink-3); margin-bottom: 12px; }
+.bounty {
+  display: grid;
+  grid-template-columns: 3px 168px 1fr auto;
+  gap: 0 14px;
+  align-items: center;
+  background: var(--fill);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  overflow: hidden;
+  margin-bottom: 9px;
+}
+.bounty.done { border-color: rgba(111, 216, 164, 0.35); }
+.bounty-mark { align-self: stretch; }
+.bounty-art { display: block; width: 168px; height: 84px; }
+.bounty-main { min-width: 0; padding: 10px 0; }
+.bounty-who { font-size: 10px; letter-spacing: 0.14em; color: var(--ink-3); }
+.bounty-name { font-size: 15px; margin-top: 2px; }
+.bounty-where { font-size: 11px; color: var(--ink-3); margin-top: 2px; }
+.bounty-track {
+  height: 3px;
+  background: var(--fill-2);
+  border-radius: 2px;
+  margin-top: 8px;
+  overflow: hidden;
+  max-width: 220px;
+}
+.bounty-fill { height: 100%; background: var(--accent); transition: width var(--dur) var(--ease); }
+.bounty-n {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+  margin-top: 3px;
+  font-variant-numeric: tabular-nums;
+}
+.bounty-acts {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 10px 14px 10px 0;
+}
+.bounty-pay {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--warn);
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 640px) {
+  .bounty { grid-template-columns: 3px 1fr; }
+  .bounty-art { display: none; }
+  .bounty-main { padding: 10px 14px 0 0; }
+  .bounty-acts { grid-column: 2; flex-direction: row; align-items: center; padding: 0 14px 10px 0; }
+}
+
+/* The wall. Where a catch stops being inventory. */
+.wall-head {
+  display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+  font-size: 12px; color: var(--ink-2); margin-bottom: 14px;
+}
+.wall-next { color: var(--ink-3); }
+.wall-worth { margin-left: auto; font-family: var(--mono); color: var(--warn); }
+.wall-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+.mount {
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--fill);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.mount.bare {
+  border-style: dashed;
+  min-height: 150px;
+  align-items: center;
+  justify-content: center;
+  background: none;
+}
+.mount-empty { font-size: 11px; letter-spacing: 0.14em; color: var(--ink-4); }
+.mount-art {
+  display: block; width: 100%; height: 150px;
+  background: radial-gradient(ellipse at 50% 48%, rgba(255,255,255,0.045), rgba(0,0,0,0) 70%);
+}
+.mount-plate {
+  padding: 9px 12px 10px;
+  border-top: 1px solid var(--line);
+  background: var(--pane-2);
+}
+.mount-name { font-size: 14px; }
+.mount-kg {
+  font-family: var(--mono); font-size: 11px; color: var(--ink-2);
+  margin-top: 2px; font-variant-numeric: tabular-nums;
+}
+.mount-traits { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; }
+.mount-trait {
+  font-size: 9.5px; letter-spacing: 0.1em;
+  border: 1px solid var(--line-2); border-radius: 3px; padding: 1px 5px;
+}
+.mount-where { font-size: 10.5px; color: var(--ink-3); margin-top: 5px; }
+.mount-acts { display: flex; gap: 6px; padding: 0 12px 11px; }
+.wall-sub { font-size: 12px; color: var(--ink-3); margin: 16px 0 8px; }
+.wall-pick { display: flex; flex-direction: column; gap: 4px; }
+.wall-pick-row {
+  display: flex; align-items: baseline; gap: 12px; width: 100%;
+  background: var(--fill); border: 1px solid var(--line); border-radius: var(--r-sm);
+  padding: 6px 12px; cursor: pointer; color: inherit; font: inherit;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.wall-pick-row:hover { background: var(--fill-2); border-color: var(--accent); }
+.wall-pick-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.wall-pick-name { flex: 1; text-align: left; font-size: 13px; }
+.wall-pick-kg {
+  font-family: var(--mono); font-size: 11px; color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* What the objects are for. */
+.make { margin-bottom: 18px; }
+.make-k { font-size: 10px; letter-spacing: 0.16em; color: var(--ink-3); margin-bottom: 9px; }
+.make-list { display: flex; flex-direction: column; gap: 7px; }
+.make-row {
+  display: flex; align-items: center; gap: 14px;
+  background: var(--fill); border: 1px solid var(--line);
+  border-left: 2px solid var(--line-2);
+  border-radius: var(--r); padding: 9px 13px;
+}
+.make-row.can { border-left-color: var(--good); }
+.make-main { flex: 1; min-width: 0; }
+.make-name { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; font-size: 13.5px; }
+.make-gives { font-family: var(--mono); font-size: 11px; color: var(--accent); }
+.make-row.can .make-gives { color: var(--good); }
+.make-desc { font-size: 11.5px; color: var(--ink-3); margin-top: 3px; line-height: 1.45; }
+.make-need { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 7px; }
+.make-chip {
+  font-family: var(--mono); font-size: 10px;
+  border: 1px solid var(--line); border-radius: 3px;
+  padding: 1px 6px; color: var(--ink-3);
+}
+.make-chip.ok { color: var(--good); border-color: rgba(111, 216, 164, 0.35); }
+.make-acts { flex: none; }
+.make-why { font-size: 10.5px; color: var(--ink-3); text-align: right; max-width: 150px; line-height: 1.4; }
+
+/* Line, reel and hook: what is on the rod, and what it costs you. */
+.modslots {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.modslot {
+  border: 1px dashed var(--line-2);
+  border-radius: var(--r);
+  padding: 9px 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+}
+.modslot.on { border-style: solid; border-color: var(--accent); background: var(--fill); }
+.modslot-k { font-size: 10px; letter-spacing: 0.16em; color: var(--ink-3); }
+.modslot-v { font-size: 13px; color: var(--ink-2); }
+.modslot.on .modslot-v { color: var(--ink); }
+.mod-slot {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--ink-3);
+  margin-left: 8px;
+}
+.mod-effects { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 7px; }
+.mod-eff {
+  font-family: var(--mono);
+  font-size: 10px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 1px 6px;
+}
+.mod-eff.up { color: var(--good); border-color: rgba(111, 216, 164, 0.32); }
+.mod-eff.down { color: var(--warn); border-color: rgba(255, 195, 106, 0.30); }
+
+/* What catching the same thing repeatedly taught you. */
+.catch-desc.lore {
+  border-left: 1px solid var(--line-2);
+  padding-left: 11px;
+  margin-top: 10px;
+}
+.lore-at {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--ink-3);
+  margin-right: 8px;
+}
+.lore-soon {
+  font-size: 11px;
+  color: var(--ink-4);
+  margin-top: 10px;
+  letter-spacing: 0.04em;
+}
+
+/* ============================================ moving a game off this machine
+
+   Sits under the four slots because that is the question it answers: a slot
+   lives in this browser at this address, and copying the build somewhere else
+   leaves every one of them behind. */
+
+.transfer {
+  display: flex; flex-direction: column; gap: 9px;
+  margin-top: 16px; padding-top: 15px;
+  border-top: 1px solid var(--line);
+}
+.transfer-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.transfer-hint { font-size: 11px; color: var(--ink-4); line-height: 1.5; }
+.transfer-box {
+  width: 100%; min-height: 58px; max-height: 130px;
+  padding: 9px 11px;
+  border: 1px solid var(--line); border-radius: var(--r);
+  background: rgba(0,0,0,0.30);
+  color: var(--ink-2);
+  font-family: var(--mono); font-size: 10.5px; line-height: 1.5;
+  resize: vertical;
+  text-transform: none;   /* a base64 save is case-sensitive */
+  word-break: break-all;
+}
+.transfer-box:focus { outline: none; border-color: var(--accent-dim); }
+.transfer-box::placeholder { color: var(--ink-4); }
+.transfer-acts { gap: 8px; }
+.transfer-into { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.transfer-slots { display: flex; gap: 5px; }
+.transfer-slots .btn { min-width: 34px; font-family: var(--mono); }
+/* a slot with a game in it is the one worth hesitating over */
+.transfer-slots .btn.is-full { border-color: rgba(120,200,160,0.30); }
+.transfer-slots .btn.is-cur { border-color: var(--accent); color: var(--ink); }
 /* ==================================================================== chart
 
    The map is a sounding: a canvas column on the left with a plumb line
@@ -659,25 +1133,6 @@ input[type=range]::-moz-range-thumb {
 .spot-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
 .spot-here { font-family: var(--mono); font-size: 11px; color: var(--accent); letter-spacing: 0.06em; }
 
-/* ==================================================================== slate */
-
-.row.job { grid-template-columns: auto 1fr auto; }
-.job-track {
-  height: 3px; margin: 9px 0 6px;
-  background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden;
-}
-.job-fill {
-  height: 100%; border-radius: 2px;
-  background: linear-gradient(90deg, var(--accent-dim), var(--accent));
-  transition: width 420ms var(--ease);
-}
-.job-foot { display: flex; align-items: center; gap: 9px; }
-.job-n {
-  font-family: var(--mono); font-size: 10.5px; color: var(--ink-3);
-  font-variant-numeric: tabular-nums;
-}
-.job-pay { font-family: var(--mono); font-size: 10.5px; color: var(--good); }
-
 /* ================================================================== charter */
 
 /* The condition rows are the widest in the game, and the shared stat grid
@@ -697,101 +1152,6 @@ input[type=range]::-moz-range-thumb {
 .charter-note.good { border-color: var(--accent-dim); color: var(--ink-2); }
 .charter-sur { color: var(--warn); border-color: rgba(255,195,106,0.24); }
 
-/* ================================================================ transfer */
-
-.transfer { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
-.transfer-box {
-  width: 100%; min-height: 62px; max-height: 130px;
-  padding: 9px 11px;
-  border: 1px solid var(--line); border-radius: var(--r);
-  background: rgba(0,0,0,0.30);
-  color: var(--ink-2);
-  font-family: var(--mono); font-size: 10.5px; line-height: 1.5;
-  resize: vertical;
-  text-transform: none;   /* a base64 save is case-sensitive */
-  word-break: break-all;
-}
-.transfer-box:focus { outline: none; border-color: var(--accent-dim); }
-.transfer-box::placeholder { color: var(--ink-4); }
-
-/* =================================================================== admin
-
-   A tool, not a screen anyone is meant to live in — so it is built for
-   finding one thing fast and looking obviously different from the game. */
-
-.panel-admin { width: min(940px, 95vw); }
-.panel-admin .panel-head { border-bottom-color: rgba(255,195,106,0.22); }
-.panel-admin .panel-title { color: var(--warn); }
-
-.admin-search {
-  position: sticky; top: -18px; z-index: 3;
-  display: flex; align-items: center; gap: 10px;
-  padding: 10px 0 12px;
-  margin: -18px 0 12px;
-  background: linear-gradient(180deg, rgba(10,13,20,0.99) 76%, rgba(10,13,20,0));
-}
-.admin-input {
-  flex: 1 1 auto; min-width: 0; max-width: 520px;
-  padding: 8px 12px;
-  border: 1px solid var(--line-2); border-radius: var(--r);
-  background: rgba(0,0,0,0.32);
-  color: var(--ink);
-  font-family: var(--font); font-size: 12px; letter-spacing: 0.03em;
-}
-.admin-input:focus { outline: none; border-color: var(--warn); }
-.admin-input::placeholder { color: var(--ink-4); }
-.admin-count {
-  font-family: var(--mono); font-size: 10px; color: var(--ink-4);
-  white-space: nowrap; font-variant-numeric: tabular-nums;
-}
-
-.admin-group { margin-bottom: 18px; }
-.admin-group-head {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 12px; flex-wrap: wrap;
-  padding-bottom: 8px; margin-bottom: 10px;
-  border-bottom: 1px solid var(--line);
-}
-.admin-acts { display: flex; gap: 5px; align-items: center; }
-.admin-acts.wrap { flex-wrap: wrap; }
-
-.admin-hero {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 9px;
-  padding: 16px 18px; margin-bottom: 18px;
-  border: 1px solid rgba(255,195,106,0.26); border-radius: var(--r);
-  background: linear-gradient(150deg, rgba(255,195,106,0.075), rgba(0,0,0,0.28));
-}
-.admin-hero-t { font-size: 15px; color: var(--ink); letter-spacing: 0.03em; }
-.admin-hero-d { font-size: 11.5px; color: var(--ink-3); line-height: 1.6; max-width: 62ch; }
-.admin-hero .btn + .btn { margin-top: 2px; }
-
-.admin-row .row-desc { font-family: var(--mono); font-size: 10.5px; }
-.admin-rod { width: 116px; flex: 0 0 116px; }
-.admin-rod .rod-art { height: 50px; }
-.admin-fish-art {
-  width: 108px; height: 42px; flex: 0 0 108px;
-  border: 1px solid var(--line); border-radius: var(--r-sm);
-  background: rgba(0,0,0,0.26);
-}
-.admin-fish .row { grid-template-columns: auto auto 1fr auto; }
-
-.admin-cos {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(126px, 1fr));
-  gap: 7px;
-}
-.admin-cos-cell { cursor: pointer; }
-.admin-cos-cell.owned { border-color: rgba(120, 200, 160, 0.26); }
-
-.admin-pick { transition: all var(--dur) var(--ease); }
-.admin-pick.on {
-  border-color: currentColor;
-  background: rgba(255,255,255,0.075);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);
-}
-.btn.is-open { border-color: rgba(120,200,160,0.32); }
-.btn.is-cur { border-color: var(--accent); color: var(--ink); }
-.btn.is-secret { border-color: rgba(255,195,106,0.30); color: var(--warn); }
 
 @media (max-width: 780px) {
   /* Stacked, the chart loses its column and gets a squat box instead — and
@@ -806,4 +1166,3 @@ input[type=range]::-moz-range-thumb {
   }
   .spot-meta { grid-template-columns: repeat(2, 1fr); }
   .map-side { overflow: visible; }
-}

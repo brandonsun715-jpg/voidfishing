@@ -30,6 +30,7 @@
     if (!rod || d.ownedRods.indexOf(id) >= 0) return { ok: false, why: 'owned' };
     // some rods are never sold — they are handed over, or the water returns them
     if (rod.noShop) return { ok: false, why: 'notforsale' };
+    if (VF.runs && !VF.runs.rodAllowed(id)) return { ok: false, why: 'run' };
     const block = VF.rods.blocked(rod);
     if (block) return { ok: false, why: block.why };
     if (!spend(rod.cost, 'rod')) return { ok: false, why: 'money' };

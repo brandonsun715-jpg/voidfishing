@@ -15,6 +15,11 @@
   let total = 0;          // what remain started at, so the HUD can show a fraction
   let idle = 90;
   let blend = 0;          // 0..1 presence
+  /* What the water is going to do next, decided when the last one ended
+     rather than at the moment it starts. Nothing in the game acts on this —
+     the roll is identical either way — but somebody who watches the water for
+     a living can now be asked, and be right. */
+  let coming = null;
 
   const NEUTRAL = { bite: 1, rare: 1, value: 1, size: 1, trait: 1, treasure: 1,
                     encounter: 1, secret: 1, 'void': 1 };
@@ -30,12 +35,16 @@
     });
   }
 
+  /* Pick what is next without starting it. */
+  function draw() {
+    return VF.rng.weighted(available(), function (x) {
+      return typeof x.weight === 'function' ? x.weight() : x.weight;
+    }, VF.rng.g);
+  }
+
   function start(id) {
-    const pool = available();
-    const c = id ? VF.conditionData.get(id)
-      : VF.rng.weighted(pool, function (x) {
-          return typeof x.weight === 'function' ? x.weight() : x.weight;
-        }, VF.rng.g);
+    const c = id ? VF.conditionData.get(id) : (coming || draw());
+    coming = null;
     if (!c) return false;
     active = c;
     remain = VF.rng.g.range(c.dur[0], c.dur[1]);
@@ -50,6 +59,7 @@
     active = null;
     remain = 0;
     idle = VF.rng.g.range(IDLE_MIN, IDLE_MAX);
+    coming = draw();
     VF.bus.emit('condition:end', was);
   }
 
@@ -82,7 +92,7 @@
     return out;
   }
 
-  function reset() { active = null; remain = 0; total = 0; blend = 0; idle = 90; }
+  function reset() { active = null; remain = 0; total = 0; blend = 0; idle = 90; coming = null; }
 
   /* Bring the next roll forward without forcing a particular condition — the
      sky still decides, it just decides sooner. */
@@ -95,11 +105,16 @@
   VF.conditions = {
     tick: tick, mods: mods, start: start, end: end, reset: reset, hasten: hasten,
     current: function () { return active; },
-    name: function () { return active ? active.name : null; },
-    /* A condition is a window, and a window you cannot see the end of is not a
-       decision. These two are what put a clock on the HUD chip. */
+    /* A condition is a window with the largest multipliers in the game behind
+       it, and a window you cannot see the end of is not a decision. These two
+       are what put a clock on the HUD chip. */
     remain: function () { return active ? Math.max(0, remain) : 0; },
     fraction: function () { return active && total > 0 ? U.clamp(remain / total, 0, 1) : 0; },
+    /* What is coming, and roughly how long until it does. Null while one is
+       already running, because then the answer is "this one". */
+    next: function () { return active ? null : (coming || (coming = draw())); },
+    nextIn: function () { return active ? 0 : Math.max(0, idle); },
+    name: function () { return active ? active.name : null; },
     strength: function () { return active ? U.smoothstep(blend) : 0; },
     has: function (id) { return !!active && active.id === id; },
     flag: function (f) { return active && active[f] ? U.smoothstep(blend) : 0; }

@@ -9,7 +9,7 @@
     { id: 1, text: 'Now wait. Watch the bobber. The void takes its time.' },
     { id: 2, text: 'Something is on. Press now to set the hook.' },
     { id: 3, text: 'Hold Space — or press and hold anywhere — to drive the white bar right. Let go and it runs back left. Keep the fish inside the bar and the bottom meter fills; let it out and the meter drains. Empty it and the fish is gone.' },
-    { id: 4, text: 'Sell it for Brophys, keep it for the collection, or release it for reputation.' },
+    { id: 4, text: 'Sell it for Jias, keep it for the collection, or release it for reputation.' },
     { id: 5, text: 'Spend what you earn in the Shop. Better rods reach further and find stranger things.' }
   ];
 

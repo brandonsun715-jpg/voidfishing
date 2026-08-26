@@ -13,6 +13,12 @@
     const rod = VF.rods.get(d.rod);
     const bait = VF.bait.get(d.bait);
     const loc = VF.locations.current();
+    /* A bait can refuse the whole stack. That is the plain worm: it is not a
+       small negative bonus fighting a large positive one — at the top of the
+       ladder the rod alone is worth +13 and nothing subtractive could reach
+       it — it is the bonuses not applying. What comes up is what would come
+       up for somebody who had just started. */
+    if (bait.plain) return 1;
     const build = VF.build ? VF.build.stats() : null;
     const cond = VF.conditions ? VF.conditions.mods() : null;
     const sum = Math.max(0,
@@ -22,6 +28,7 @@
       (loc.rarityBoost - 1) +
       (build ? build.rare - 1 : 0) +
       (cond ? cond.rare - 1 : 0) +
+      (VF.mods ? VF.mods.stats().rare - 1 : 0) +
       VF.progression.luck() * 0.5
     );
     // diminishing returns: stacking every bonus is strong, never runaway
@@ -30,23 +37,47 @@
     return Math.max(1, rp);
   }
 
-  /* Species not native to a spot can still stray in from one or two locations
-     away, at heavily reduced odds. Keeps every tier populated everywhere without
-     making the deep spots feel like the shallow ones. */
-  const STRAY = [1, 0.22, 0.045, 0];
+  /* Where a species belongs, and how far it wanders.
 
-  function strayFactor(f, locIdx) {
+     `locs[0]` is its home water; anything after that is a neighbour it also
+     turns up in, at a fraction of the odds. Every species now lives in a band
+     of at most two adjacent waters, so a spot's catch is mostly its own —
+     before, a fish listed in four scattered places was equally native to all
+     of them and the trench drew the same things as the shore.
+
+     Straying is what keeps a tier from being empty somewhere. It used to reach
+     two waters, which is how shore species turned up in the abyss; one water
+     at a tenth is enough to fill a gap without erasing the difference. */
+  const HOME = 1;
+  const RANGE = 0.34;                             // its own band, but not home
+  const STRAY = [1, 0.10, 0];
+
+  function strayFactor(f, locId, locRank) {
     if (!f.locs.length) return 1;                 // "anywhere" species
-    let best = 99;
+    let best = 99, own = -1;
     for (let i = 0; i < f.locs.length; i++) {
+      const home = f.locs[i];
       // a spot nobody has discovered yet is not a spot: locations.index()
       // answers 0 for an unknown id, which would put its fish on the shore
-      if (!VF.locations.isRegistered(f.locs[i])) continue;
-      const d = Math.abs(VF.locations.index(f.locs[i]) - locIdx);
-      if (d < best) best = d;
+      if (!VF.locations.isRegistered(home)) continue;
+      /* What lives in hidden water lives only there. Rank puts a secret spot
+         beside the shelf water it belongs next to, which is what lets the
+         shelf's species reach it — but that road only runs one way, or the
+         four species written for the heavens would turn up in the Nowhere Sea
+         because the two now sit at the same depth. */
+      if (home !== locId && VF.locations.isSecret(home)) continue;
+      /* Distance in the progression, not in the list. Hidden water is
+         appended to the list as it is found, so measuring by index put every
+         secret spot eight or more steps from the entire map: nothing could
+         stray in, the pool fell back to the species that live anywhere, and
+         those are almost all one tier. Four of the six hidden waters drew
+         !@#$%^&$# on every single cast. */
+      const d = Math.abs(VF.locations.rank(home) - locRank);
+      if (d < best) { best = d; own = i; }
     }
     if (best === 99) return 0;
-    if (f.strict) return best === 0 ? 1 : 0;      // never one spot over
+    if (best === 0) return own === 0 ? HOME : RANGE;
+    if (f.strict) return 0;                       // never one spot over
     return best < STRAY.length ? STRAY[best] : 0;
   }
 
@@ -54,13 +85,13 @@
      summed presence per rarity so tier probability stays independent of how
      many species happen to sit in that tier. */
   function buildPool(locId) {
-    const locIdx = VF.locations.index(locId);
+    const locRank = VF.locations.rank(locId);
     const pool = [];
     const perRarity = Object.create(null);
     const prefTotal = Object.create(null);
     for (let i = 0; i < VF.fish.list.length; i++) {
       const f = VF.fish.list[i];
-      const s = strayFactor(f, locIdx);
+      const s = strayFactor(f, locId, locRank);
       if (s <= 0) continue;
       pool.push({ f: f, stray: s });
       perRarity[f.rarity] = (perRarity[f.rarity] || 0) + s;
@@ -126,6 +157,10 @@
       counts[candidates[i].f.rarity] = (counts[candidates[i].f.rarity] || 0) + candidates[i].stray;
     }
     const means = prefMeans(p, loc.id);
+    /* A rod may lean on the tier draw itself. Nothing on the shelf does and
+       nothing on the shelf should — the exponents in rarities.js are the shape
+       of the game — so this is almost always undefined and costs nothing. */
+    const tier = VF.rods.get(VF.state.data.rod).tierBoost;
 
     const chosen = VF.rng.weighted(candidates, function (e) {
       const r = VF.rarities.get(e.f.rarity);
@@ -136,6 +171,7 @@
       let w = (VF.rarities.weightAt(r, rp) * presence * e.stray / n) * (prefBonus(e.f) / mean);
       // an event is only an event if the things it brings actually turn up
       if (e.f.event && e.f.evWeight) w *= e.f.evWeight;
+      if (tier && tier[e.f.rarity]) w *= tier[e.f.rarity];
       return w;
     }, VF.rng.g);
 
@@ -174,20 +210,8 @@
     // traits are rolled against the size percentile, then the size is nudged by
     // whichever of them changes how big the fish is
     let size = rollSize(f, luck);
-    /* `forceSize` and `forceTraits` exist for the admin console and for
-       anything scripted that needs a specific catch rather than a likely one.
-       They sit here rather than downstream so the value, the xp and the
-       fishdex record all come out of the same maths a rolled catch does. */
-    if (opts.forceSize !== undefined) {
-      const t = U.clamp(opts.forceSize, 0, 1);
-      const kMin = Math.max(f.kg[0], 1e-4), kMax = Math.max(f.kg[1], kMin * 1.0001);
-      const mMin = Math.max(f.m[0], 1e-4), mMax = Math.max(f.m[1], mMin * 1.0001);
-      size = { kg: kMin * Math.pow(kMax / kMin, t), m: mMin * Math.pow(mMax / mMin, t), pct: t, u: t };
-    }
     const traitBoost = (1 + (opts.traitBoost || 0)) * (build ? build.traitChance : 1);
-    const traits = opts.forceTraits
-      ? VF.traits.sort(opts.forceTraits.filter(function (id) { return !!VF.traits.get(id); }))
-      : VF.traits.roll(luck + (opts.mutBoost || 0), size.u, VF.rng.g, traitBoost);
+    const traits = VF.traits.roll(luck + (opts.mutBoost || 0), size.u, VF.rng.g, traitBoost);
     const scale = VF.traits.sizeScale(traits);
     if (scale !== 1) size = { kg: size.kg * scale, m: size.m * Math.pow(scale, 0.4), pct: size.pct, u: size.u };
 
@@ -195,8 +219,14 @@
     const traitMult = VF.traits.multiplier(traits);
 
     const sizeValue = 0.55 + size.pct * 1.75;
+    /* The run of clean catches is worth something now. It was counted, stored,
+       shown next to your level as `×7`, and multiplied nothing at all — a
+       number that looks like a reward and is not one. It pays on the fish's
+       value, so a long run is worth protecting and losing one costs you
+       something you can feel. */
     const value = Math.max(1, Math.round(
-      f.value * sizeValue * traitMult * loc.valueBoost * (build ? build.value : 1)
+      f.value * sizeValue * traitMult * loc.valueBoost * (build ? build.value : 1) *
+      VF.progression.streakMult()
     ));
     const xp = Math.max(1, Math.round(
       rarity.xp * (0.8 + size.pct * 0.6) * loc.xpBoost * (build ? build.xp : 1)
@@ -219,30 +249,43 @@
     };
   }
 
+  /* However slow a loadout asks the bar to be, it still has to be able to run
+     the fish down. This is that guarantee, as a multiple of the fish's speed. */
+  const BAR_FLOOR = 1.08;
+
   /* What the rod and the worn charms are worth to the white bar, pulled out on
      its own so a scripted fight can apply the same loadout to numbers it wrote
      itself. Gear has to matter in the heaven's trial too, or the trial is not
      a test of the player, it is a test of a constant. */
+  /* How far reel force is allowed to carry. It was 1.25, which the three rods
+     at the top of the list were all sitting against — so their stated numbers
+     stopped moving while their reel kept going up. The shop reads the same two
+     constants, or the row and the fight disagree. */
+  const Q_MAX = 2.0;
+  const SLOW_FLOOR = 0.30;
+
   function loadout() {
     const rod = VF.rods.get(VF.state.data.rod);
     const b = (VF.build ? VF.build.stats() : null) ||
               { line: 1, reel: 1, barSize: 1, barSpeed: 1 };
-    const q = U.clamp((rod.reel * b.reel - 0.40) / 2.70, 0, 1.25);
+    /* What is fitted to the rod, in the same terms the charms speak, so this
+       folds in where they do and the fight never learns that mods exist. */
+    const m = VF.mods ? VF.mods.stats() : { line: 1, reel: 1, fill: 1 };
+    const q = U.clamp((rod.reel * b.reel * m.reel - 0.40) / 2.70, 0, Q_MAX);
 
-    /* Most rods have their bar worked out for them: width from line strength,
-       steadiness from reel force. The wanderer's stock states its own numbers
-       instead, and those are the figures printed on the row it is sold from —
-       so they are used as written rather than being quietly adjusted on top.
-       Charms multiply into either kind. */
-    const stated = rod.barSize !== undefined;
-    const lineTotal = Math.max(0.25, (stated ? 1 : rod.line) * b.line);
+    /* One rule for every rod. Width comes from line strength and steadiness
+       from reel force, exactly as it always has — and a rod may then declare
+       its own bar numbers on top of that, which the wanderer's stock does.
+       Those are a specialty, not a replacement: a rod that says +14% bar is
+       a rod of its tier and then fourteen per cent more, which is why his
+       epics beat the shop's best rather than trailing them. */
+    const lineTotal = Math.max(0.25, rod.line * b.line * m.line);
     return {
       q: q,
-      rodBar: (stated ? rod.barSize : 1) * (1 + 0.155 * (Math.log(lineTotal) / Math.LN2)),
+      rodBar: (1 + 0.155 * (Math.log(lineTotal) / Math.LN2)) * (rod.barSize || 1),
       barSize: b.barSize,
-      barMul: U.clamp(b.barSpeed * (rod.barSpeed !== undefined ? rod.barSpeed
-                                                              : (1 - 0.20 * q)), 0.30, 2.2),
-      fillMul: (1 + 0.35 * q) * (rod.barFill || 1)
+      barMul: U.clamp(b.barSpeed * (1 - 0.20 * q) * (rod.barSpeed || 1), SLOW_FLOOR, 2.2),
+      fillMul: (1 + 0.35 * q) * (rod.barFill || 1) * m.fill
     };
   }
 
@@ -252,11 +295,28 @@
   function trialParams(ph) {
     const L = loadout();
     const stiff = ph.fishStiff || 24;
-    const barTop = Math.max(0.80, ph.fishSpeed * 1.45) * (ph.barSpeed || 1);
+    const barTop = Math.max(0.80, ph.fishSpeed * 1.55) * (ph.barSpeed || 1);
+    /* How much reel force is allowed to shorten this particular fight.
+
+       Fill is the duration lever, and across the rod ladder fillMul spans 1.0
+       to 1.7 — enough that one phase table cannot hold both ends of it. At the
+       bottom the fight is right and at the top the same fight is over in a
+       third of the time, which on the last tier in the game is the wrong way
+       round. A tier-written trial damps it: gear still buys a wider bar, a
+       faster bar and a steadier one, and it still fills quicker, just not
+       enough to erase the fight. The two authored trials pass nothing and keep
+       the full effect, because their numbers were written against it. */
+    const fillGear = ph.gearFill === undefined ? 1 : ph.gearFill;
+    const fillMul = 1 + (L.fillMul - 1) * fillGear;
+    /* Same argument for width. Line strength spans the ladder wide enough that
+       the top rods hand a tier-written fight a bar the fish can barely leave,
+       and a fight you cannot fall out of is not one. */
+    const barGear = ph.gearBar === undefined ? 1 : ph.gearBar;
+    const rodBar = 1 + (L.rodBar - 1) * barGear;
     return {
       diff: 1.15,
-      barW: U.clamp(ph.barW * L.rodBar * L.barSize, 0.050, 0.46),
-      barSpeed: Math.max(ph.fishSpeed * 1.20, barTop * L.barMul),
+      barW: U.clamp(ph.barW * rodBar * L.barSize, 0.050, 0.46),
+      barSpeed: Math.max(ph.fishSpeed * BAR_FLOOR, barTop * L.barMul),
       barTau: 0.170 / (1 + 0.60 * L.q),
       fishSpeed: ph.fishSpeed,
       fishStiff: stiff,
@@ -265,8 +325,9 @@
       dart: ph.dart,
       evade: ph.evade || 0,
       wobble: ph.wobble || 0.045,
-      fill: ph.fill * L.fillMul,
+      fill: ph.fill * fillMul,
       drain: ph.drain,
+      maxTime: ph.maxTime || 0,
       start: ph.start || 0.30
     };
   }
@@ -291,7 +352,12 @@
     /* The bar's top speed. Charms that slow it make it steadier — but a stack
        of them must never drop it below the fish it has to chase, or the fight
        stops being a question of control and becomes one of arithmetic. */
-    const barTop = Math.max(0.74, fishSpeed * 1.45);
+    /* The headroom between the baseline and the floor matters as much as the
+       floor does. At 1.45 against a 1.20 floor everything below 0.83 collapsed
+       onto the floor, so fifty-three of the wanderer's rods moved the bar at
+       exactly the same speed on any rare-or-better fish and the slow-versus-
+       fast axis they are built around did nothing. */
+    const barTop = Math.max(0.74, fishSpeed * 1.55);
 
     return {
       diff: D,
@@ -302,7 +368,7 @@
          *reach*, so losing one is a mistake the player made rather than a
          race the numbers had already decided. */
       barW: U.clamp((0.300 - 0.195 * D) * L.rodBar * L.barSize, 0.055, 0.52),
-      barSpeed: Math.max(fishSpeed * 1.20, barTop * L.barMul),     // track widths / second
+      barSpeed: Math.max(fishSpeed * BAR_FLOOR, barTop * L.barMul), // track widths / second
       barTau: 0.170 / (1 + 0.60 * L.q),                            // seconds to reach it
 
       /* --- the fish --- */
@@ -311,7 +377,13 @@
       fishDrag: 1.10 * Math.sqrt(stiff),                // damped the same at every difficulty
       fishTurn: (1.05 - 0.77 * D) / surge,              // seconds between direction changes
       dart: U.clamp((0.10 + 0.45 * D) * surge, 0, 0.85),// chance a turn is a hard run
-      evade: U.clamp((D - 0.55) / 0.45, 0, 1) * 0.40,   // only the rarest read the bar
+      /* How much of the time the fish reads where the bar is and goes the
+         other way. This used to start at D = 0.55, which put it entirely
+         inside the top third of the range — so six tiers had no resistance at
+         all and then the seventh was a wall. Starting it earlier and arriving
+         gentler spreads the winnable-but-tense band across three tiers
+         instead of one. */
+      evade: U.clamp((D - 0.35) / 0.65, 0, 1) * 0.40,
       wobble: 0.020 + 0.040 * D,
 
       /* --- the progress bar --- */
@@ -321,7 +393,32 @@
     };
   }
 
+  /* What share of the draw each tier currently holds, for the loadout and the
+     water the player is actually standing in. No sampling — it is the same
+     weightAt() the roll uses, normalised — so it cannot drift away from the
+     truth the way a re-derived estimate would.
+
+     The record uses it to say something the game otherwise never admits: that
+     a gap in the Fishdex can be the rod's fault. Nothing tells a player their
+     gear has become too good for a fish, and on the last rod the shore
+     commons are exactly that. */
+  function tierShare() {
+    const rp = rarityPower(null);
+    const out = Object.create(null);
+    let total = 0;
+    for (let i = 0; i < VF.rarities.list.length; i++) {
+      const r = VF.rarities.list[i];
+      const w = VF.rarities.weightAt(r, rp);
+      out[r.id] = w;
+      total += w;
+    }
+    if (total > 0) for (const k in out) out[k] /= total;
+    return out;
+  }
+
   VF.loot = {
+    Q_MAX: Q_MAX, SLOW_FLOOR: SLOW_FLOOR,
+    tierShare: tierShare,
     roll: roll,
     pickFish: pickFish,
     fightParams: fightParams,

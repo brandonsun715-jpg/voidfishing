@@ -4,24 +4,48 @@
 (function (VF) {
   'use strict';
 
+  const U = VF.util;
+
   const MAX_LEVEL = 99;
+  /* Releasing pays into luck up to here — 480 reputation, a couple of hundred
+     fish — and then stops. It is worth being able to see that coming. */
+  const REP_LUCK_CAP = 1.2;
+  const REP_FULL = REP_LUCK_CAP / 0.0025;
 
   function xpForLevel(n) {
     return Math.round(30 * Math.pow(n, 1.72));
   }
   function xpToNext() { return xpForLevel(VF.state.data.level); }
 
-  /* Past the cap the ladder is over, but the fishing is not — and the last
-     gate in the game is a rod at level 84, so a capped player who kept fishing
-     used to be pouring experience into a number that had stopped reading it.
-     Overflow becomes reputation instead, which is already the quiet luck track
-     the release button feeds, so the top of the curve keeps paying into
-     something the loot roll can actually see. */
-  const OVERFLOW_PER_REP = 900;
+  /* Past 99 the experience keeps arriving and there is nothing left to spend
+     it on, so it used to be dropped on the floor: the bar froze part-filled at
+     whatever it happened to hold and never moved again, which reads as broken
+     rather than as finished. It buys fathoms instead — a slow count of how far
+     down you have been, each one worth a little luck, with the returns
+     flattening so it stays a long tail and not a second ladder. */
+  const FATHOM_XP = 250000;
+  const FATHOM_LUCK = 1.60;
+  const FATHOM_SOFT = 12;
+
+  function fathomLuck(n) {
+    if (!(n > 0)) return 0;
+    return FATHOM_LUCK * (1 - Math.exp(-n / FATHOM_SOFT));
+  }
 
   function addXp(amount) {
     const d = VF.state.data;
-    if (d.level >= MAX_LEVEL) return { levels: 0, rep: overflow(amount) };
+    amount = Math.max(0, amount | 0);
+    if (!amount) return { levels: 0, fathoms: 0 };
+
+    if (d.level >= MAX_LEVEL) {
+      d.fathomXp = (d.fathomXp | 0) + amount;
+      let deep = 0;
+      while (d.fathomXp >= FATHOM_XP) { d.fathomXp -= FATHOM_XP; d.fathoms = (d.fathoms | 0) + 1; deep++; }
+      if (deep) VF.bus.emit('fathom:reached', { fathoms: d.fathoms, gained: deep });
+      return { levels: 0, fathoms: deep };
+    }
+
+    const from = d.level;
     d.xp += amount;
     let gained = 0;
     while (d.level < MAX_LEVEL && d.xp >= xpForLevel(d.level)) {
@@ -29,40 +53,27 @@
       d.level++;
       gained++;
     }
-    let rep = 0;
-    // the level that caps carries its remainder over rather than dropping it
-    if (d.level >= MAX_LEVEL && d.xp > 0) { rep = overflow(d.xp); d.xp = 0; }
+    // whatever is left over at the cap is the first of the deep water
+    if (d.level >= MAX_LEVEL && d.xp > 0) { d.fathomXp = (d.fathomXp | 0) + d.xp; d.xp = 0; }
     if (gained) {
-      const unlocked = checkUnlocks();
+      const unlocked = checkUnlocks(from);
       VF.bus.emit('level:up', { level: d.level, gained: gained, unlocked: unlocked });
     }
-    return { levels: gained, rep: rep };
+    return { levels: gained, fathoms: 0 };
   }
 
-  /* Fractional remainder is kept, so a small catch at the cap is never worth
-     exactly nothing — it is worth a fraction of a point that the next one
-     finishes off. */
-  function overflow(xp) {
-    const d = VF.state.data;
-    if (!(xp > 0)) return 0;
-    d.xpOverflow = (d.xpOverflow || 0) + xp;
-    const whole = Math.floor(d.xpOverflow / OVERFLOW_PER_REP);
-    if (whole <= 0) return 0;
-    d.xpOverflow -= whole * OVERFLOW_PER_REP;
-    d.reputation += whole;
-    VF.bus.emit('reputation:overflow', { rep: whole });
-    return whole;
-  }
+  /* Everything that came into reach between the level you were and the level
+     you are. A single catch can cross a dozen at once — the ? tier is 260,000
+     experience, which from a standing start is thirty-six levels — and asking
+     `level === rod.level` announced only whatever happened to sit on the exact
+     level you landed on. From level 1 that was none of the eight rods you had
+     just earned, and nothing said so.
 
-  /* How far through the current point the overflow sits, for the HUD. */
-  function overflowFrac() {
+     Called with no argument it reports nothing new, which is what the callers
+     that only want the side effect (unlocking locations on load) want. */
+  function checkUnlocks(fromLevel) {
     const d = VF.state.data;
-    return ((d.xpOverflow || 0) % OVERFLOW_PER_REP) / OVERFLOW_PER_REP;
-  }
-
-  /* Returns the list of things that became available at the new level. */
-  function checkUnlocks() {
-    const d = VF.state.data;
+    const from = fromLevel === undefined ? d.level : fromLevel;
     const out = { locations: [], rods: [], baits: [] };
     for (let i = 0; i < VF.locations.list.length; i++) {
       const l = VF.locations.list[i];
@@ -73,31 +84,36 @@
     }
     for (let i = 0; i < VF.rods.list.length; i++) {
       const r = VF.rods.list[i];
-      if (d.level === r.level) out.rods.push(r);
+      if (r.level > from && d.level >= r.level && !r.admin && !r.merchant) out.rods.push(r);
     }
     for (let i = 0; i < VF.bait.list.length; i++) {
       const b = VF.bait.list[i];
-      if (d.level === b.level) out.baits.push(b);
+      if (b.level > from && d.level >= b.level) out.baits.push(b);
     }
     return out;
   }
 
-  /* Aggregate luck from rod + bait + weather + reputation. Feeds size & mutation rolls. */
-  /* Reputation used to hit a wall at 480 and stop meaning anything, which
-     also meant capped-level overflow would have been paying into a dead
-     number. A saturating curve keeps the first few hundred points feeling the
-     same as they always did — 480 still lands near 1.2 — and then keeps
-     paying, slower and slower, without ever running away. */
-  function repLuck(rep) {
-    if (!(rep > 0)) return 0;
-    return 2.6 * (1 - Math.exp(-rep / 640));
+  /* What a run of clean catches is worth. It tops out at half again, which is
+     reached at twenty-five in a row — the same number the achievement asks
+     for — so the ceiling is somewhere a good session actually gets to rather
+     than a theoretical one. Losing a fish takes all of it. */
+  const STREAK_STEP = 0.02;
+  const STREAK_CAP = 0.50;
+
+  function streakMult() {
+    const n = VF.state.data.streak | 0;
+    return 1 + Math.min(STREAK_CAP, Math.max(0, n) * STREAK_STEP);
   }
 
+  /* Aggregate luck from rod + bait + weather + reputation. Feeds size & mutation rolls. */
   function luck() {
     const d = VF.state.data;
     const rod = VF.rods.get(d.rod);
     const bait = VF.bait.get(d.bait);
-    return rod.luck + bait.luck + VF.weather.luck() + repLuck(d.reputation);
+    const rep = Math.min(REP_LUCK_CAP, d.reputation * 0.0025);
+    const m = VF.mods ? VF.mods.stats() : { luck: 0 };
+    return rod.luck + bait.luck + m.luck + VF.weather.luck() + rep + fathomLuck(d.fathoms | 0) +
+           (VF.time.moonLuck ? VF.time.moonLuck() : 0);
   }
 
   /* Aggregate rare-tier multiplier. */
@@ -109,15 +125,20 @@
 
   VF.progression = {
     MAX_LEVEL: MAX_LEVEL,
-    OVERFLOW_PER_REP: OVERFLOW_PER_REP,
+    FATHOM_XP: FATHOM_XP,
+    REP_FULL: REP_FULL,
+    fathomLuck: fathomLuck,
+    streakMult: streakMult,
+    STREAK_CAP: STREAK_CAP,
+    /* How far into the deep water, as a fraction, for the bar to draw. */
+    fathomPct: function () {
+      return U.clamp((VF.state.data.fathomXp | 0) / FATHOM_XP, 0, 1);
+    },
     xpForLevel: xpForLevel,
     xpToNext: xpToNext,
     addXp: addXp,
     checkUnlocks: checkUnlocks,
     luck: luck,
-    repLuck: repLuck,
-    overflowFrac: overflowFrac,
-    atCap: function () { return VF.state.data.level >= MAX_LEVEL; },
     rareMult: rareMult
   };
 })(window.VF = window.VF || {});

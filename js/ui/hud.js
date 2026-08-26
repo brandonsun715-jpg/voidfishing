@@ -14,7 +14,7 @@
 
   function init() {
     [
-      'hud', 'moneyVal', 'levelVal', 'xpFill', 'xpText', 'locName', 'wxName', 'timeName',
+      'hud', 'moneyVal', 'levelVal', 'xpFill', 'xpText', 'streakVal', 'locName', 'wxName', 'timeName',
       'chipLoc', 'gearRod', 'gearBait', 'rodName', 'baitName', 'baitCount',
       'castMeter', 'castFill', 'actionBtn', 'actionLabel', 'actionHint',
       'fightUI', 'fightName', 'fightWarn', 'mgTrack', 'mgBar', 'mgFish',
@@ -118,6 +118,16 @@
         pressStart(e);
         return;
       }
+/* @admin-only */
+      /* The owner door, and the only thing left of it in a build that does
+         not have js/ui/console.js: there, this module is not defined and the
+         line does nothing. It is asked before the shortcuts below and before
+         the panel check, because the way in has to work with a panel already
+         open, and because the word it watches for has to eat its own letters
+         before `m` gets read as the map. */
+      if (VF.adminDoor && VF.adminDoor.key(e)) return;
+/* @end-admin */
+
       if (VF.state.rt.panelOpen) return;
       switch (e.code) {
         case 'KeyQ': e.preventDefault(); VF.panels.open('shop'); break;
@@ -131,8 +141,6 @@
           e.preventDefault();
           if (VF.fishing.reelIn()) VF.toast.plain('Line reeled in', null, 1600);
           break;
-        // everything in the game, grantable
-        case 'Backquote': e.preventDefault(); VF.panels.open('admin'); break;
       }
     });
 
@@ -184,6 +192,38 @@
         speedMin: 30, speedMax: 110 * (sc.shard ? 1.7 : 1), sizeMax: 2.2, grav: 240, lifeMax: 0.7
       });
     });
+    /* Something big enough to be seen coming. The cue is deliberately quiet —
+       the shadow is the announcement, this only makes you look up. */
+    VF.bus.on('fishing:approach', function (a) {
+      VF.audio.surge();
+      VF.audio.duck(0.6);
+      VF.fx.pulse(0.34);
+      VF.fx.shake(1.6);
+      showPrompt(a.rank >= 8 ? 'something is coming'
+               : a.rank >= 7 ? 'the water is wrong' : 'something is coming',
+                 VF.rarities.color(a.rarity), 1.1);
+    });
+
+    /* It is on its way. Quieter than an encounter and louder than a bite,
+       because it is neither — it is the same animal again. */
+    VF.bus.on('returning:coming', function (e) {
+      VF.audio.duck(0.75);
+      VF.fx.pulse(0.42);
+      setTimeout(function () {
+        VF.toast.plain(e.spec.lead, e.stage === 0 ? 'warn' : null, 4200);
+      }, 900);
+    });
+    VF.bus.on('returning:advanced', function (e) {
+      if (e.done) {
+        VF.fx.flash('rgba(255,232,176,0.20)', 0.6, 1.4);
+        VF.toast.show('<strong>that is the end of that</strong><br>' +
+                      '<span style="color:var(--ink-3)">journal · entries</span>', 'good', 6000);
+      } else if (e.stage === 1) {
+        VF.toast.show('<strong>it is still out there</strong><br>' +
+                      '<span style="color:var(--ink-3)">journal · entries</span>', null, 5200);
+      }
+    });
+
     VF.bus.on('fishing:nibble', function () {
       const b = VF.scene.L.bobber;
       VF.audio.nibble();
@@ -211,6 +251,29 @@
     // fish and the bar losing it, which is the thing the player needs to hear
     VF.bus.on('fishing:grip', function () { VF.audio.nibble(); });
     VF.bus.on('fishing:slip', function () { VF.audio.strain(0.9); });
+    /* Not a loss. It has to read as the rod doing something rather than as the
+       game failing to notice you lost, so it gets the snap's whole treatment
+       and then takes it back in gold. */
+    VF.bus.on('fishing:saved', function (e) {
+      VF.audio.snap();
+      VF.fx.shake(6, 4);
+      VF.fx.flash('rgba(255,214,130,0.34)', 0.42);
+      VF.toast.plain(e.reason === 'snap'
+        ? 'the line went — and then it had not gone'
+        : 'the hook came out — and then it was back in', 'good', 3000);
+      showPrompt('Second chance', '#ffd782', 1.35);
+    });
+
+    /* Past the cap, this is the only progression beat left, so it gets one. */
+    VF.bus.on('fathom:reached', function (e) {
+      VF.audio.stinger('grand', 3);
+      VF.fx.flash('rgba(180,138,255,0.22)', 0.36);
+      VF.fx.pulse(0.5);
+      showPrompt('fathom ' + e.fathoms, '#c9a8ff', 1.6);
+      VF.toast.plain('another fathom down. the water is still counting.', 'good', 3600);
+      refreshLevel();
+    });
+
     VF.bus.on('fishing:lost', function (e) {
       VF.audio.reelStop();
       if (e.reason === 'snap') {
@@ -222,6 +285,13 @@
       } else {
         VF.toast.plain('It shook the hook loose', 'warn', 2600);
         showPrompt('It got away', '#ffc36a', 1.0);
+      }
+      /* The run went with it. It is only worth saying when the run was long
+         enough to have been worth something, which is the same threshold the
+         tag itself appears at. */
+      if (e.streak >= 3 && e.bonus > 0) {
+        VF.toast.plain('the run ends at ' + e.streak + ' — that was +' + e.bonus + '% on every catch',
+                       'warn', 3200);
       }
       if (VF.quests.anyArmed()) {
         VF.toast.plain('it goes back up, and it waits. cast again.', null, 4200);
@@ -250,27 +320,6 @@
         U.esc(a.desc) + '</span>' + (a.reward ? '<br><span class="mono" style="color:var(--good)">+' +
         U.money(a.reward) + '</span>' : ''), 'good', 5200);
     });
-    /* ------------------------------------------------------------- the slate */
-
-    VF.bus.on('slate:done', function (e) {
-      VF.audio.achievement();
-      VF.toast.show('<strong>job done</strong> &mdash; ' + U.esc(e.text) +
-        '<br><span class="mono" style="color:var(--good)">+' + U.money(e.pay) + '</span>' +
-        (e.job.token ? '<span class="mono" style="color:var(--warn)"> · a key</span>' : ''),
-        'good', 5200);
-    });
-    VF.bus.on('slate:progress', function (e) {
-      // only speak on the last step, or the slate would narrate every catch
-      if (e.job.goal - e.job.at !== 1) return;
-      VF.toast.plain('one more — ' + VF.slate.describe(e.job), null, 2600);
-    });
-
-    /* Past the cap the bar has nowhere to go, so the overflow says where the
-       experience actually went instead of silently vanishing. */
-    VF.bus.on('reputation:overflow', function (e) {
-      VF.toast.plain('+' + e.rep + ' reputation', null, 2000);
-    });
-
     VF.bus.on('weather:changed', function (id) {
       const w = VF.weatherData.get(id);
       VF.toast.show('<strong>' + U.esc(w.name) + '</strong><br><span style="color:var(--ink-3)">' +
@@ -287,8 +336,15 @@
     VF.bus.on('quest:started', function (def) {
       VF.audio.discover();
       VF.fx.pulse(0.4);
+      /* Say who to go and see. A thread opening used to be a name and a line of
+         flavour, and the person carrying it was somewhere on a shore with no
+         indication that they were now the point. */
+      const who = def.giver ? VF.npcs.name(def.giver).toLowerCase() : null;
       VF.toast.show('<strong>' + U.esc(def.name) + '</strong><br><span style="color:var(--ink-3)">' +
-        U.esc(def.blurb) + '</span>', null, 7000);
+        U.esc(def.blurb) + '</span>' +
+        (who ? '<br><span style="color:var(--accent)">go and see ' + U.esc(who) + '</span>' : ''),
+        null, 8000);
+      showPrompt('a thread opens', '#9ec6ff', 1.3);
       flashMenu('journal');
     });
 
@@ -325,15 +381,32 @@
 
     /* Four phases, and each one announces itself before it starts hurting. */
     VF.bus.on('fishing:phase', function (e) {
-      VF.audio.surge();
-      VF.fx.shake(4.5 + e.index * 1.6, 4);
-      VF.fx.pulse(0.5 + e.index * 0.12);
-      VF.fx.flash(e.index >= 3 ? 'rgba(255,228,160,0.22)' : 'rgba(190,215,255,0.13)', 0.26, 1.6);
-      showPrompt(e.name, e.index >= 3 ? '#ffe6a8' : '#cfe0ff', 1.1);
+      const spec = e.fight && e.fight.trial ? e.fight.trial.spec : null;
+      /* A tier writes most of these now, so the announcement has to say what
+         is actually on the line rather than calling every phased fight the
+         heaven's trial. The two authored ones keep the gold. */
+      const written = !(spec && spec.generated);
+      const c = e.fight ? e.fight.c : null;
+      const col = written ? '#ffe6a8'
+                : (c ? VF.rarities.color(c.rarity) : '#cfe0ff');
+
+      /* The opening phase arrives in the same breath as the hookset, which
+         already has its own shake, flash and prompt. Doubling it on every
+         mythic reads as a bug rather than as an event. */
+      const opening = e.index === 0 && !written;
+      if (!opening) {
+        VF.audio.surge();
+        VF.fx.shake(4.5 + e.index * 1.6, 4);
+        VF.fx.pulse(0.5 + e.index * 0.12);
+        VF.fx.flash(written && e.index >= 3 ? 'rgba(255,228,160,0.22)' : 'rgba(190,215,255,0.13)', 0.26, 1.6);
+        showPrompt(e.name, col, 1.1);
+      }
       if (D.fightName) {
-        D.fightName.textContent = 'heaven’s trial · ' + e.name.toLowerCase() +
+        const who = written ? 'heaven’s trial'
+                  : (c && c.fish ? c.fish.name.toLowerCase() : 'something');
+        D.fightName.textContent = who + ' · ' + e.name.toLowerCase() +
                                   ' · ' + (e.index + 1) + ' of ' + e.of;
-        D.fightName.style.color = '#ffd88a';
+        D.fightName.style.color = col;
       }
     });
 
@@ -657,26 +730,10 @@
     D.baitCount.classList.toggle('low', n !== Infinity && n <= 3);
   }
 
-  function refreshChips() {
-    D.locName.textContent = VF.locations.current().name;
-    D.wxName.textContent = VF.weather.name();
-    D.timeName.textContent = VF.time.phaseName() + ' · ' + VF.time.clock();
-    const c = VF.conditions.current();
-    D.chipCond.classList.toggle('hidden', !c);
-    if (c) {
-      D.condName.textContent = c.name;
-      D.chipCond.style.borderColor = U.rgbToCss(U.hexToRgb(c.tint), 0.55);
-      D.condName.style.color = c.tint;
-      D.condFuse.style.background = c.tint;
-      D.chipCond.title = c.blurb;
-      tickCondition();
-    }
-  }
-
   /* A condition runs eighty to three hundred seconds and carries the largest
      multipliers in the game, so how long is left is the whole decision — stay,
-     re-bait, swap a charm, or travel. The chip used to show a name and nothing
-     else. The fuse drains along the bottom; the number is for when the answer
+     re-bait, swap a charm, or travel. The chip showed a name and nothing else.
+     The fuse drains along the bottom; the number is for when the answer
      matters to the minute. */
   function tickCondition() {
     const c = VF.conditions.current();
@@ -689,22 +746,62 @@
     D.condLeft.classList.toggle('urgent', left < 30);
   }
 
+  function refreshChips() {
+    D.locName.textContent = VF.locations.current().name;
+    D.wxName.textContent = VF.weather.name();
+    /* The moon only earns a place in the chip when it is up and doing
+       something. Naming a phase at midday is noise. */
+    let when = VF.time.phaseName() + ' · ' + VF.time.clock();
+    if (VF.time.moonName && VF.time.elevation() < 0.30) {
+      when += ' · ' + VF.time.moonName().toLowerCase();
+    }
+    D.timeName.textContent = when;
+    const c = VF.conditions.current();
+    D.chipCond.classList.toggle('hidden', !c);
+    if (c) {
+      D.condName.textContent = c.name;
+      D.chipCond.style.borderColor = U.rgbToCss(U.hexToRgb(c.tint), 0.55);
+      D.condName.style.color = c.tint;
+      D.chipCond.title = c.blurb;
+      D.condFuse.style.background = c.tint;
+      tickCondition();
+    }
+  }
+
   function refreshLevel() {
     const d = VF.state.data;
-    D.levelVal.textContent = 'LV ' + d.level + (d.streak >= 5 ? '  ×' + d.streak : '');
-    /* At the cap there is no next level to fill toward, so the bar tracks the
-       overflow into reputation instead of sitting frozen and full. */
-    if (VF.progression.atCap()) {
-      D.xpFill.style.width = (VF.progression.overflowFrac() * 100).toFixed(1) + '%';
-      D.xpText.textContent = Math.round(d.reputation) + ' rep';
-      D.xpFill.classList.add('overflow');
-      return;
+    const capped = d.level >= VF.progression.MAX_LEVEL;
+
+    /* At the cap the bar used to freeze part-filled and never move again,
+       because the experience was being thrown away. It counts fathoms now, so
+       there is still something arriving. */
+    if (capped) {
+      D.levelVal.textContent = 'LV 99';
+      D.levelVal.classList.add('deep');
+      D.xpFill.classList.add('deep');
+      D.xpFill.style.width = (VF.progression.fathomPct() * 100).toFixed(1) + '%';
+      D.xpText.textContent = (d.fathoms | 0) + ' fathoms · ' +
+        U.commas(d.fathomXp | 0) + ' / ' + U.commas(VF.progression.FATHOM_XP);
+    } else {
+      D.levelVal.textContent = 'LV ' + d.level;
+      D.levelVal.classList.remove('deep');
+      D.xpFill.classList.remove('deep');
+      const need = VF.progression.xpToNext();
+      D.xpFill.style.width = (U.clamp(d.xp / Math.max(1, need), 0, 1) * 100).toFixed(1) + '%';
+      D.xpText.textContent = U.commas(d.xp) + ' / ' + U.commas(need);
     }
-    D.xpFill.classList.remove('overflow');
-    const need = VF.progression.xpToNext();
-    const pctv = U.clamp(d.xp / Math.max(1, need), 0, 1);
-    D.xpFill.style.width = (pctv * 100).toFixed(1) + '%';
-    D.xpText.textContent = U.commas(d.xp) + ' / ' + U.commas(need);
+
+    /* And the run, saying what it is worth rather than sitting next to the
+       level looking like a multiplier on everything. */
+    const n = d.streak | 0;
+    const bonus = Math.round((VF.progression.streakMult() - 1) * 100);
+    if (n >= 3 && bonus > 0) {
+      D.streakVal.textContent = n + ' in a row · +' + bonus + '% value';
+      D.streakVal.classList.remove('hidden');
+      D.streakVal.classList.toggle('hot', bonus >= Math.round(VF.progression.STREAK_CAP * 100));
+    } else {
+      D.streakVal.classList.add('hidden');
+    }
   }
 
   /* --------------------------------------------------------------- tick */
@@ -712,12 +809,12 @@
   let chipTimer = 0;
 
   function tick(dt) {
+    if (VF.conditions.current()) tickCondition();
     const d = VF.state.data;
     const S = VF.fishing.S;
 
     tickCaption();
     watchForVisitors(dt);
-    if (VF.conditions.current()) tickCondition();
 
     /* money counts up rather than snapping */
     if (Math.abs(shownMoney - d.money) > 0.5) {

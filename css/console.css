@@ -1,0 +1,45 @@
+/* VOID FISHING — the admin console's look.
+   Owner build only: index.html loads this inside the owner block, and
+   `npm run build` drops the block and this file with it. */
+
+.con-out {
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.65;
+  height: 320px;
+  overflow-y: auto;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.28);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.con-line { margin: 0 0 2px; }
+.con-echo { color: var(--ink-3); }
+.con-good { color: var(--good); }
+.con-bad  { color: var(--bad); }
+.con-note { color: var(--ink-2); }
+
+.con-form { display: flex; margin-top: 10px; }
+.con-input {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--ink);
+  padding: 10px 12px;
+  border: 1px solid var(--line-2);
+  background: rgba(0, 0, 0, 0.28);
+}
+.con-input::placeholder { color: var(--ink-3); }
+.con-input:focus { outline: none; border-color: var(--line-3); }
+
+/* The one input has two jobs. Asking for four digits it is short, centred and
+   spaced out like a code, so it never looks like a line waiting for a
+   command. */
+.con-input.con-locked {
+  flex: 0 0 8em;
+  text-align: center;
+  letter-spacing: 0.5em;
+  text-indent: 0.5em;
+  font-size: 16px;
+}

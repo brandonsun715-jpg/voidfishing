@@ -14,14 +14,21 @@
       money: 0,
       level: 1,
       xp: 0,
-      xpOverflow: 0,          // experience earned past the level cap, banked toward reputation
-      reputation: 0,          // earned by releasing fish, and by fishing past the cap
+      /* Past the level cap the xp does not stop arriving, so it goes here
+         instead of into a bar that cannot move. A fathom is a long way down. */
+      fathoms: 0,
+      fathomXp: 0,
+      reputation: 0,          // earned by releasing fish
 
       /* --- equipment --- */
       rod: 'wood',
       ownedRods: ['wood'],
       bait: 'worm',
       baitCounts: {},         // id -> count. 'worm' is unlimited and not tracked here.
+      /* Line, reel and hook. See js/data/mods.js. */
+      ownedMods: [],
+      mods: { line: null, reel: null, hook: null },
+
       charms: [],             // owned charm and relic ids
       charmSlots: [null, null, null, null, null],
 
@@ -34,6 +41,7 @@
          fishdex[id] = { caught, record: {kg, m, pct, mutation}, firstSeen, mutations: {id:count} } */
       fishdex: {},
       kept: [],               // array of catch records the player chose to keep
+      wall: [],               // the handful of them that are up on the wall
       traitsSeen: {},         // trait id -> times landed
       treasures: {},          // treasure id -> times pulled up
       secrets: {},            // secret id -> discovery timestamp
@@ -47,14 +55,20 @@
         sold: [],             // ids already bought out of this visit
         visits: 0
       },
+      /* Where the rod was when the game was put down, so the line can still
+         be out when it is picked up. Null while playing. */
+      away: null,
+
+      /* The one that comes back. See js/systems/returning.js. */
+      returning: { stage: 0, lastCast: 0, done: false },
+
+      /* Standing requests. See js/systems/bounties.js. */
+      bounties: { list: [], at: 0 },
+
       cosmetics: [],          // owned cosmetic ids
       equipped: {},           // cosmetic slot -> id
       cases: {},              // case id -> times opened
       caseTokens: 0,          // spare keys found in the water
-
-      /* the slate: three small standing requests, rerolled as they are met */
-      slate: { jobs: [], rolled: 0, done: 0, seed: 0 },
-      charters: 0,            // times the water has been paid to change
 
       records: {
         biggestKg: 0, biggestId: null, biggestTraits: [],
@@ -64,6 +78,10 @@
         bestStreak: 0
       },
       streak: 0,              // consecutive catches without losing one
+
+      /* The rule this game is played under, chosen when the slot was started
+         and never changed after. See js/data/runs.js. */
+      run: 'none',
 
       /* --- meta --- */
       stats: {
@@ -88,13 +106,13 @@
         playSeconds: 0,
         perfectReels: 0,
         linesSnapped: 0,
+        secondChances: 0,
         treasuresFound: 0,
         casesOpened: 0,
         secretsFound: 0,
         multiTrait: 0,
         wrongEvents: 0,
-        chartered: 0,
-        slateDone: 0
+        bounties: 0
       },
       achievements: {},       // id -> unlock timestamp
       tutorial: { step: 0, done: false },

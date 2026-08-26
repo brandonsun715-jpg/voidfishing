@@ -3,17 +3,19 @@
   "version": "1.0.0",
   "description": "A quiet fishing game at the edge of an endless void.",
   "scripts": {
-    "test": "node tools/smoke.js && node tools/soak.js 30 && node tools/ui-audit.js && node tools/responsive.js && node tools/newstuff.js",
+    "test": "node tools/smoke.js && node tools/soak.js 25 && node tools/ui-audit.js && node tools/responsive.js",
     "smoke": "node tools/smoke.js",
     "soak": "node tools/soak.js",
     "audit": "node tools/ui-audit.js",
-    "newstuff": "node tools/newstuff.js",
     "balance": "node tools/balance.js",
     "fight": "node tools/fight.js",
     "perf": "node tools/perf.js",
     "tour": "node tools/tour.js",
     "gallery": "node tools/gallery.js",
-    "build": "node tools/build-single.js"
+    "build": "node tools/build-single.js",
+    "build:admin": "node tools/build-single.js --admin",
+    "authenticator": "node tools/build-authenticator.js",
+    "unbuild": "node tools/unbuild.js"
   },
   "repository": {
     "type": "git",

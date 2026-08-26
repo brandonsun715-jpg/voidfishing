@@ -1,11 +1,11 @@
 /* VOID FISHING — chartering the water.
-   Late on, Brophys stop having anywhere to go. Rods cap out, bait is loose
+   Late on, Jias stop having anywhere to go. Rods cap out, bait is loose
    change, the charms are a finite list, and cases are cosmetic by design — so
    selling, keeping and releasing collapse into the same shrug.
 
    This is where the money goes. Conditions are the strongest thing in the
    game and the only thing you cannot influence; paying to bring one on turns
-   a pile of Brophys into the one lever that was missing.
+   a pile of Jias into the one lever that was missing.
 
    The price does two things at once. It scales with level, so it is always a
    real fraction of what you earn rather than loose change at 80 and a wall at

@@ -1,5 +1,5 @@
 /* VOID FISHING — cosmetic cases.
-   Bought with Brophys, contain cosmetics and nothing else, and the odds are
+   Bought with Jias, contain cosmetics and nothing else, and the odds are
    printed on the front because hiding them would be the only dishonest part. */
 (function (VF) {
   'use strict';

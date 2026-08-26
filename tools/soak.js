@@ -127,11 +127,21 @@ const path = require('path');
   console.log('longest fight:', result.longestFight + 's',
               result.slow.length ? '| over 45s: ' + result.slow.join(', ') : '');
 
+  /* The catch card owns the modal host and panels.open refuses while it is up
+     — correctly, since a menu over a fish you have not dealt with is not a
+     state the game wants. Closing it once is not enough: the frame loop is
+     still running, so a fight left in flight lands part-way through the walk
+     and puts a new card up. Put the rod down first, then close before each
+     menu, or these read as render failures that are really the card doing its
+     job. */
+  await page.evaluate(() => { VF.fishing.hardReset(); VF.catchUI.close(); });
+  await page.waitForTimeout(300);
+
   // every menu, every tab
   const menus = [['shop','rods'],['shop','bait'],['fishdex',null],['bag','catches'],['bag','rods'],
                  ['bag','bait'],['stats','stats'],['stats','ach'],['settings',null],['map',null]];
   for (const [p, t] of menus) {
-    await page.evaluate(([p,t]) => { VF.panels.close(); VF.panels.open(p, t); }, [p,t]);
+    await page.evaluate(([p,t]) => { VF.catchUI.close(); VF.panels.close(); VF.panels.open(p, t); }, [p,t]);
     await page.waitForTimeout(150);
     const ok = await page.evaluate(() => !!document.querySelector('.panel'));
     if (!ok) errors.push('panel failed to render: ' + p + '/' + t);
