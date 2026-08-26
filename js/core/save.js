@@ -59,7 +59,8 @@
     if (!Array.isArray(d.seenLocations)) d.seenLocations = d.unlockedLocations.slice();
     if (!d.fishdex || typeof d.fishdex !== 'object') d.fishdex = {};
     if (!Array.isArray(d.kept)) d.kept = [];
-    if (d.kept.length > 400) d.kept = d.kept.slice(-400);
+    const keepCap = (VF.catches && VF.catches.KEEP_LIMIT) || 200;
+    if (d.kept.length > keepCap) d.kept = d.kept.slice(-keepCap);
     if (!d.baitCounts || typeof d.baitCounts !== 'object') d.baitCounts = {};
     if (!Array.isArray(d.charms)) d.charms = [];
     d.charms = d.charms.filter(function (id) { return !!VF.charms.get(id); });
@@ -91,6 +92,28 @@
     if (d.journal.length > 300) d.journal = d.journal.slice(-300);
     if (!d.equipped || typeof d.equipped !== 'object') d.equipped = {};
     d.caseTokens = Math.max(0, Math.floor(d.caseTokens) || 0);
+    d.xpOverflow = Math.max(0, +d.xpOverflow || 0);
+    d.reputation = Math.max(0, +d.reputation || 0);
+    d.charters = Math.max(0, Math.floor(d.charters) || 0);
+
+    /* The slate: drop any job whose template has gone, and any that has lost
+       the shape the tracker reads, rather than letting one throw every time a
+       fish is landed. slate.fill() tops the list back up on boot. */
+    if (!d.slate || typeof d.slate !== 'object' || Array.isArray(d.slate)) {
+      d.slate = { jobs: [], rolled: 0, done: 0, seed: 0 };
+    }
+    if (!Array.isArray(d.slate.jobs)) d.slate.jobs = [];
+    d.slate.jobs = d.slate.jobs.filter(function (j) {
+      if (!j || typeof j !== 'object') return false;
+      if (!VF.slateData || !VF.slateData.get(j.t)) return false;
+      j.goal = Math.max(1, Math.floor(j.goal) || 1);
+      j.at = U.clamp(Math.floor(j.at) || 0, 0, j.goal);
+      j.diff = U.clamp(+j.diff || 0.3, 0, 1);
+      delete j.pay;   // pay is worked out at read time now, not stored
+      return true;
+    }).slice(0, 3);
+    d.slate.done = Math.max(0, Math.floor(d.slate.done) || 0);
+    d.slate.rolled = Math.max(0, Math.floor(d.slate.rolled) || 0);
 
     /* Schema 1 stored one mutation per catch; traits are a list. */
     for (const id in d.fishdex) {
@@ -165,14 +188,58 @@
     if (sinceSave >= AUTOSAVE_INTERVAL) save();
   }
 
+  /* ------------------------------------------------------------ transfer
+     A single-file build gets moved around, and localStorage is scoped to an
+     origin that moves with it. These two are how a run survives that. The
+     string is base64 so it survives a copy-paste through anything, with a
+     short prefix so a wrong paste is rejected by shape rather than by throwing
+     somewhere deep in the merge. */
+
+  const TAG = 'VF1:';
+
   function exportString() {
-    try { return btoa(unescape(encodeURIComponent(JSON.stringify(VF.state.data)))); }
-    catch (e) { return null; }
+    try {
+      return TAG + btoa(unescape(encodeURIComponent(JSON.stringify(VF.state.data))));
+    } catch (e) { return null; }
+  }
+
+  /* Returns { ok } or { ok: false, why } — never throws, and never leaves the
+     game holding a half-applied save: the parse and the merge both happen on a
+     scratch object, and the live state is only replaced once it is whole. */
+  function importString(str) {
+    if (typeof str !== 'string') return { ok: false, why: 'empty' };
+    let body = str.trim().replace(/\s+/g, '');
+    if (!body) return { ok: false, why: 'empty' };
+    if (body.slice(0, TAG.length) === TAG) body = body.slice(TAG.length);
+
+    let json = null;
+    try { json = decodeURIComponent(escape(atob(body))); }
+    catch (e) { return { ok: false, why: 'notasave' }; }
+
+    let parsed = null;
+    try { parsed = JSON.parse(json); }
+    catch (e) { return { ok: false, why: 'notasave' }; }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { ok: false, why: 'notasave' };
+    }
+    // a save has these; a JSON blob that wandered in from somewhere else does not
+    if (!('fishdex' in parsed) || !('ownedRods' in parsed) || !('stats' in parsed)) {
+      return { ok: false, why: 'notasave' };
+    }
+
+    let merged = null;
+    try { merged = sanitise(merge(VF.state.defaults(), parsed)); }
+    catch (e) { return { ok: false, why: 'corrupt' }; }
+
+    VF.state.data = merged;
+    save();
+    VF.bus.emit('save:imported');
+    return { ok: true, data: merged };
   }
 
   VF.save = {
     save: save, load: load, reset: reset, tick: tick,
-    exportString: exportString,
+    exportString: exportString, importString: importString,
     isAvailable: function () { return available; }
   };
 

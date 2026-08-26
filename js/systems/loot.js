@@ -174,8 +174,20 @@
     // traits are rolled against the size percentile, then the size is nudged by
     // whichever of them changes how big the fish is
     let size = rollSize(f, luck);
+    /* `forceSize` and `forceTraits` exist for the admin console and for
+       anything scripted that needs a specific catch rather than a likely one.
+       They sit here rather than downstream so the value, the xp and the
+       fishdex record all come out of the same maths a rolled catch does. */
+    if (opts.forceSize !== undefined) {
+      const t = U.clamp(opts.forceSize, 0, 1);
+      const kMin = Math.max(f.kg[0], 1e-4), kMax = Math.max(f.kg[1], kMin * 1.0001);
+      const mMin = Math.max(f.m[0], 1e-4), mMax = Math.max(f.m[1], mMin * 1.0001);
+      size = { kg: kMin * Math.pow(kMax / kMin, t), m: mMin * Math.pow(mMax / mMin, t), pct: t, u: t };
+    }
     const traitBoost = (1 + (opts.traitBoost || 0)) * (build ? build.traitChance : 1);
-    const traits = VF.traits.roll(luck + (opts.mutBoost || 0), size.u, VF.rng.g, traitBoost);
+    const traits = opts.forceTraits
+      ? VF.traits.sort(opts.forceTraits.filter(function (id) { return !!VF.traits.get(id); }))
+      : VF.traits.roll(luck + (opts.mutBoost || 0), size.u, VF.rng.g, traitBoost);
     const scale = VF.traits.sizeScale(traits);
     if (scale !== 1) size = { kg: size.kg * scale, m: size.m * Math.pow(scale, 0.4), pct: size.pct, u: size.u };
 

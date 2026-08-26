@@ -14,7 +14,12 @@ Two ways to play, both offline, neither needs a server or an install.
 Saving
 ------
 Progress is stored in the browser's local storage, per file location.
-The two copies above therefore keep separate saves. Settings has a reset.
+The two copies above therefore keep separate saves.
+
+Because a save belongs to the address you opened the game from, moving the
+file means the save stays behind. Settings -> Save data exports the run as a
+string and imports one back, which is how you take it with you. There is a
+reset there too.
 
 Controls
 --------
@@ -22,7 +27,8 @@ Controls
   click / space        set the hook when something bites
   hold click / space   reel, while the line is on
   R                    reel in and start again
-  Q F B C J T M        shop, fishdex, bag, wardrobe, journal, stats, map
+  Q F B C J T M        shop, fishdex, bag, wardrobe, journal, stats, chart
+  `                    admin console - everything in the game, grantable
   Escape               close whatever is open
 
 Sound is worth turning on.

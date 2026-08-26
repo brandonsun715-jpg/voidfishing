@@ -323,22 +323,6 @@ input[type=range]::-moz-range-thumb {
 
 /* ------------------------------------------------------------ locations */
 
-.loc-list { display: flex; flex-direction: column; gap: 8px; }
-.loc {
-  display: grid; grid-template-columns: 4px 1fr auto; gap: 14px; align-items: center;
-  padding: 14px 16px;
-  border: 1px solid var(--line); border-radius: var(--r);
-  background: var(--fill);
-  transition: all var(--dur) var(--ease);
-}
-.loc:hover { border-color: var(--line-2); background: var(--fill-2); }
-.loc.current { border-color: var(--accent); background: rgba(127,168,200,0.07); }
-.loc.locked { opacity: 0.5; }
-.loc-mark { align-self: stretch; border-radius: 2px; min-height: 40px; }
-.loc-name { font-size: 14px; color: var(--ink); letter-spacing: 0.02em; }
-.loc-tag { font-size: 11px; color: var(--ink-3); font-style: italic; margin-top: 2px; }
-.loc-desc { font-size: 11.5px; color: var(--ink-3); margin-top: 6px; line-height: 1.55; }
-.loc-meta { display: flex; gap: 10px; margin-top: 7px; font-family: var(--mono); font-size: 10px; color: var(--ink-4); }
 
 @media (max-width: 780px) {
   .row-rod { grid-template-columns: auto 1fr auto; }
@@ -606,4 +590,220 @@ input[type=range]::-moz-range-thumb {
 @media (max-width: 760px) {
   .cut-bar { height: 8vh; }
   .cut-inner { bottom: 12vh; width: calc(100vw - 40px); }
+}
+
+/* ==================================================================== chart
+
+   The map is a sounding: a canvas column on the left with a plumb line
+   through the whole world, and the readout for whatever is selected beside
+   it. The panel goes wider and taller than the others because the column
+   needs the height to mean anything. */
+
+.panel-map {
+  width: min(940px, 95vw);
+  /* the column only means something with height behind it, so this panel is
+     sized rather than left to fit its contents like the others */
+  height: min(720px, 88vh);
+}
+.map-body { padding: 0; overflow: hidden; display: flex; }
+.map-wrap {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) 1fr;
+  width: 100%; height: 100%; min-height: 0;
+}
+.map-chart {
+  position: relative;
+  border-right: 1px solid var(--line);
+  background: #05070c;
+  min-height: 380px;
+}
+.map-canvas { display: block; width: 100%; height: 100%; }
+.map-canvas:focus-visible { outline: 1px solid var(--accent); outline-offset: -2px; }
+.map-side { padding: 18px 20px 22px; min-width: 0; overflow-y: auto; }
+
+.spot { display: flex; flex-direction: column; gap: 13px; }
+.spot-head { display: grid; grid-template-columns: 4px 1fr; gap: 13px; align-items: center; }
+.spot-mark { width: 4px; height: 34px; border-radius: 2px; }
+.spot-name { font-size: 16px; color: var(--ink); letter-spacing: 0.02em; }
+.spot-tag { font-size: 11.5px; color: var(--ink-3); font-style: italic; margin-top: 3px; }
+.spot-desc { font-size: 12.5px; line-height: 1.65; color: var(--ink-2); margin: 0; max-width: 54ch; }
+
+/* what actually lives here — the thing the old list never said */
+.spot-dex { display: flex; flex-direction: column; gap: 6px; }
+.spot-bar { height: 3px; background: rgba(255,255,255,0.09); border-radius: 2px; overflow: hidden; }
+.spot-bar-fill { height: 100%; border-radius: 2px; transition: width 420ms var(--ease); }
+.spot-dex-n { font-family: var(--mono); font-size: 10.5px; color: var(--ink-3); letter-spacing: 0.04em; }
+
+.spot-tiers { display: flex; flex-wrap: wrap; gap: 5px; }
+.spot-tier {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 8px 3px 6px;
+  border: 1px solid var(--line); border-radius: 100px;
+  font-family: var(--mono); font-size: 10px; color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.spot-dot { width: 5px; height: 5px; border-radius: 50%; }
+
+.spot-meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.spot-stat {
+  padding: 7px 9px;
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: rgba(0,0,0,0.22);
+}
+.spot-stat .k { display: block; font-size: 9px; letter-spacing: 0.14em; color: var(--ink-4); margin-bottom: 3px; }
+.spot-stat .v { font-family: var(--mono); font-size: 12px; color: var(--ink-2); }
+
+.spot-line { font-size: 11.5px; color: var(--ink-3); line-height: 1.6; }
+.spot-line .k { font-size: 9px; letter-spacing: 0.14em; color: var(--ink-4); }
+
+.spot-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
+.spot-here { font-family: var(--mono); font-size: 11px; color: var(--accent); letter-spacing: 0.06em; }
+
+/* ==================================================================== slate */
+
+.row.job { grid-template-columns: auto 1fr auto; }
+.job-track {
+  height: 3px; margin: 9px 0 6px;
+  background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden;
+}
+.job-fill {
+  height: 100%; border-radius: 2px;
+  background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+  transition: width 420ms var(--ease);
+}
+.job-foot { display: flex; align-items: center; gap: 9px; }
+.job-n {
+  font-family: var(--mono); font-size: 10.5px; color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.job-pay { font-family: var(--mono); font-size: 10.5px; color: var(--good); }
+
+/* ================================================================== charter */
+
+/* The condition rows are the widest in the game, and the shared stat grid
+   stretches to fill whatever it is given — four cells across a 1500px row is
+   a lot of nothing. Cap the columns so they stay readable chips. */
+.charter-list .stat-grid {
+  grid-template-columns: repeat(auto-fit, minmax(84px, 132px));
+  justify-content: start;
+}
+
+.charter-note, .charter-sur {
+  padding: 9px 12px; margin-bottom: 12px;
+  border: 1px solid var(--line); border-radius: var(--r);
+  background: rgba(0,0,0,0.24);
+  font-size: 11.5px; color: var(--ink-3); line-height: 1.55;
+}
+.charter-note.good { border-color: var(--accent-dim); color: var(--ink-2); }
+.charter-sur { color: var(--warn); border-color: rgba(255,195,106,0.24); }
+
+/* ================================================================ transfer */
+
+.transfer { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.transfer-box {
+  width: 100%; min-height: 62px; max-height: 130px;
+  padding: 9px 11px;
+  border: 1px solid var(--line); border-radius: var(--r);
+  background: rgba(0,0,0,0.30);
+  color: var(--ink-2);
+  font-family: var(--mono); font-size: 10.5px; line-height: 1.5;
+  resize: vertical;
+  text-transform: none;   /* a base64 save is case-sensitive */
+  word-break: break-all;
+}
+.transfer-box:focus { outline: none; border-color: var(--accent-dim); }
+.transfer-box::placeholder { color: var(--ink-4); }
+
+/* =================================================================== admin
+
+   A tool, not a screen anyone is meant to live in — so it is built for
+   finding one thing fast and looking obviously different from the game. */
+
+.panel-admin { width: min(940px, 95vw); }
+.panel-admin .panel-head { border-bottom-color: rgba(255,195,106,0.22); }
+.panel-admin .panel-title { color: var(--warn); }
+
+.admin-search {
+  position: sticky; top: -18px; z-index: 3;
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 0 12px;
+  margin: -18px 0 12px;
+  background: linear-gradient(180deg, rgba(10,13,20,0.99) 76%, rgba(10,13,20,0));
+}
+.admin-input {
+  flex: 1 1 auto; min-width: 0; max-width: 520px;
+  padding: 8px 12px;
+  border: 1px solid var(--line-2); border-radius: var(--r);
+  background: rgba(0,0,0,0.32);
+  color: var(--ink);
+  font-family: var(--font); font-size: 12px; letter-spacing: 0.03em;
+}
+.admin-input:focus { outline: none; border-color: var(--warn); }
+.admin-input::placeholder { color: var(--ink-4); }
+.admin-count {
+  font-family: var(--mono); font-size: 10px; color: var(--ink-4);
+  white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+
+.admin-group { margin-bottom: 18px; }
+.admin-group-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap;
+  padding-bottom: 8px; margin-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.admin-acts { display: flex; gap: 5px; align-items: center; }
+.admin-acts.wrap { flex-wrap: wrap; }
+
+.admin-hero {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 9px;
+  padding: 16px 18px; margin-bottom: 18px;
+  border: 1px solid rgba(255,195,106,0.26); border-radius: var(--r);
+  background: linear-gradient(150deg, rgba(255,195,106,0.075), rgba(0,0,0,0.28));
+}
+.admin-hero-t { font-size: 15px; color: var(--ink); letter-spacing: 0.03em; }
+.admin-hero-d { font-size: 11.5px; color: var(--ink-3); line-height: 1.6; max-width: 62ch; }
+.admin-hero .btn + .btn { margin-top: 2px; }
+
+.admin-row .row-desc { font-family: var(--mono); font-size: 10.5px; }
+.admin-rod { width: 116px; flex: 0 0 116px; }
+.admin-rod .rod-art { height: 50px; }
+.admin-fish-art {
+  width: 108px; height: 42px; flex: 0 0 108px;
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: rgba(0,0,0,0.26);
+}
+.admin-fish .row { grid-template-columns: auto auto 1fr auto; }
+
+.admin-cos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(126px, 1fr));
+  gap: 7px;
+}
+.admin-cos-cell { cursor: pointer; }
+.admin-cos-cell.owned { border-color: rgba(120, 200, 160, 0.26); }
+
+.admin-pick { transition: all var(--dur) var(--ease); }
+.admin-pick.on {
+  border-color: currentColor;
+  background: rgba(255,255,255,0.075);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);
+}
+.btn.is-open { border-color: rgba(120,200,160,0.32); }
+.btn.is-cur { border-color: var(--accent); color: var(--ink); }
+.btn.is-secret { border-color: rgba(255,195,106,0.30); color: var(--warn); }
+
+@media (max-width: 780px) {
+  /* Stacked, the chart loses its column and gets a squat box instead — and
+     fourteen places in three hundred pixels is a ladder nobody can read. Give
+     it real height and let the panel scroll past it. */
+  .panel-map { height: auto; max-height: min(760px, 90vh); }
+  .map-wrap { grid-template-columns: 1fr; height: auto; }
+  .map-body { overflow-y: auto; display: block; }
+  .map-chart {
+    height: 460px; min-height: 460px;
+    border-right: none; border-bottom: 1px solid var(--line);
+  }
+  .spot-meta { grid-template-columns: repeat(2, 1fr); }
+  .map-side { overflow: visible; }
 }

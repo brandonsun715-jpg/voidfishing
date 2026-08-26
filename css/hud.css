@@ -536,3 +536,31 @@ body.wrong .toasts { opacity: 0; transition: opacity 500ms var(--ease); }
   .caption { bottom: 34px; width: calc(100vw - 40px); }
   .caption-text { font-size: 14px; line-height: 1.68; }
 }
+
+/* ------------------------------------------------ the condition clock
+   A condition is a window with the biggest multipliers in the game behind it,
+   so the chip carries how much of it is left: a fuse draining along the
+   bottom edge, and a number for when the answer matters to the minute. */
+
+.cond-chip { position: relative; overflow: hidden; }
+.chip-left {
+  font-family: var(--mono); font-size: 9.5px;
+  color: var(--ink-3); letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  padding-left: 1px;
+}
+.chip-left.urgent { color: var(--warn); }
+.cond-fuse {
+  position: absolute; left: 0; bottom: 0;
+  width: 100%; height: 1.5px;
+  transform-origin: left center;
+  transform: scaleX(1);
+  opacity: 0.75;
+  transition: transform 320ms linear;
+}
+
+/* At the cap the bar tracks the overflow into reputation instead of sitting
+   frozen and full, so it reads as a different thing rather than a broken one. */
+.xp-fill.overflow {
+  background: linear-gradient(90deg, rgba(255,195,106,0.25), var(--warn));
+}

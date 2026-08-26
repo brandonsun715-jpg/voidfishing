@@ -24,6 +24,7 @@
     VF.weather.reconcile();
     VF.secrets.registerFound();
     VF.loot.invalidatePool();
+    VF.slate.init();
 
     window.addEventListener('resize', onResize, { passive: true });
     window.addEventListener('orientationchange', onResize, { passive: true });
@@ -150,6 +151,7 @@
         VF.encounters.tick(dt);
         VF.quests.tick(dt);
         VF.merchant.tick(dt);
+        VF.charter.tick(dt);
         VF.cutscene.tick(dt);
         VF.wrong.tick(dt);
         VF.achievements.tick(dt);

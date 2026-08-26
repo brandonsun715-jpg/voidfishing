@@ -27,12 +27,18 @@ them since about 2015.
 | Hold | Drive the white bar right; let go and it runs back left. Keep the fish inside the bar and the meter fills. |
 | **R** | Reel the line back in |
 | Any of them | Skip a sequence. The catch is already recorded either way. |
-| **Q F B T M** | Shop, Fishdex, Bag, Record, Map |
+| **Q F B T M** | Shop, Fishdex, Bag, Record, the Chart |
+| **J C** | Journal and the slate, Wardrobe |
+| **`** | Admin console — everything in the game, grantable |
 | **Esc** | Close a menu |
 
 Catches can be sold for Brophys, kept for the collection, or released for
 reputation — which quietly raises your luck, and occasionally earns you
 something back.
+
+Progress lives in this browser, under the address you opened the game from.
+**Settings → Save data** exports it as a string and imports one back, which is
+how a run moves between machines or follows a single-file build to a new folder.
 
 ## What is in it
 
@@ -106,6 +112,36 @@ something back.
   completely still, the audio drops away, and something very large is below you.
 - **63 achievements**, a full Fishdex with silhouettes for undiscovered species,
   per-species size records, and a statistics page.
+- **The chart.** The map is a sounding rather than a list: one plumb line
+  dropped through the whole world with every place hung off it at its own
+  depth. The ladder descends the spine, hidden water branches off it as
+  diamonds, THE HEAVENS floats above the waterline and THE LAST WATER sits
+  under the bottom. Locked water is a depth reading with nothing named against
+  it. Picking a place shows what actually lives there — how many of its species
+  are on your record, broken down by tier — which the old list never did.
+- **The slate.** Three small standing requests, chalked up near the counter.
+  Not a quest and not an achievement: the quest runs in chapters and the
+  achievements are a record of what you already did, and between the two there
+  was nothing to aim at inside one sitting. Finish one and another goes up in
+  its place; rub one out for a price. They pay what they are worth to you *now*
+  rather than what they were worth when they were chalked.
+- **Chartering the water.** Conditions are the strongest thing in the game and
+  the only one you could never influence. Late on, Brophys stop having anywhere
+  to go — so the shop will sell you one. The price scales with your level and
+  climbs each time you ask, falling back over about ten minutes, so the answer
+  to "can I just keep buying Thin Places" is yes, at a price that climbs faster
+  than you can fish.
+- **Experience past the cap.** The last gate in the game is a rod at level 84,
+  and a capped angler used to be pouring experience into a number that had
+  stopped reading it. Overflow becomes reputation instead, which is the same
+  quiet luck track the release button feeds — and reputation itself no longer
+  hits a wall at 480, it saturates slowly and keeps paying.
+- **An admin console** on the **`** key, or from Settings. Every rod, every
+  finish, every bobber and line and trail, every charm and relic, every spot
+  including the hidden ones, every object, every achievement — and a way to put
+  a named species, at a named size, carrying named traits, on the end of the
+  line. It only ever calls the same grant paths the game itself uses, and it
+  marks the save the first time you touch it, so a record that had help says so.
 
 ## Layout
 
@@ -114,11 +150,13 @@ index.html            script order and the DOM skeleton
 css/                  base tokens, HUD, panels
 js/core/              utils, seeded RNG, event bus, game state, save
 js/data/              fish, rods, merchant rods, bait, locations, weather,
-                      mutations, rarities, quests, achievements — all pure data
+                      mutations, rarities, quests, achievements, slate — all
+                      pure data
 js/systems/           time, weather, progression, economy, loot, fishing,
                       catches, quests, merchant, cutscenes, achievements,
-                      encounters
-js/render/            palette, particles, screen effects, fish art, scene
+                      encounters, slate, charter, admin
+js/render/            palette, particles, screen effects, fish art, the chart,
+                      scene
 js/audio/             procedural WebAudio engine
 js/ui/                toast, HUD and input, panels, catch card, tutorial
 js/main.js            boot and the frame loop
@@ -203,6 +241,7 @@ node tools/rodgates.js     every gated rod states the right reason it is out of 
 node tools/hooked.js       the shape coming up out of the dark, at several distances
 node tools/distcheck.js    the single file behaves exactly like the folder
 node tools/unknown.js      the ? tier: hidden until caught, the odds, both sequences
+node tools/newstuff.js     the chart, slate, charter, admin console, save transfer
 ```
 
 ## Building a single file

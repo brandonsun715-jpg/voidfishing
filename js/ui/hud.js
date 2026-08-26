@@ -20,7 +20,7 @@
       'fightUI', 'fightName', 'fightWarn', 'mgTrack', 'mgBar', 'mgFish',
       'mgProg', 'mgProgFill', 'fightHint', 'fightPct',
       'prompt', 'hintBox', 'edgeGlow', 'encounter', 'encText',
-      'chipCond', 'condName'
+      'chipCond', 'condName', 'condLeft', 'condFuse'
     ].forEach(function (id) { D[id] = document.getElementById(id); });
 
     shownMoney = VF.state.data.money;
@@ -131,6 +131,8 @@
           e.preventDefault();
           if (VF.fishing.reelIn()) VF.toast.plain('Line reeled in', null, 1600);
           break;
+        // everything in the game, grantable
+        case 'Backquote': e.preventDefault(); VF.panels.open('admin'); break;
       }
     });
 
@@ -248,6 +250,27 @@
         U.esc(a.desc) + '</span>' + (a.reward ? '<br><span class="mono" style="color:var(--good)">+' +
         U.money(a.reward) + '</span>' : ''), 'good', 5200);
     });
+    /* ------------------------------------------------------------- the slate */
+
+    VF.bus.on('slate:done', function (e) {
+      VF.audio.achievement();
+      VF.toast.show('<strong>job done</strong> &mdash; ' + U.esc(e.text) +
+        '<br><span class="mono" style="color:var(--good)">+' + U.money(e.pay) + '</span>' +
+        (e.job.token ? '<span class="mono" style="color:var(--warn)"> · a key</span>' : ''),
+        'good', 5200);
+    });
+    VF.bus.on('slate:progress', function (e) {
+      // only speak on the last step, or the slate would narrate every catch
+      if (e.job.goal - e.job.at !== 1) return;
+      VF.toast.plain('one more — ' + VF.slate.describe(e.job), null, 2600);
+    });
+
+    /* Past the cap the bar has nowhere to go, so the overflow says where the
+       experience actually went instead of silently vanishing. */
+    VF.bus.on('reputation:overflow', function (e) {
+      VF.toast.plain('+' + e.rep + ' reputation', null, 2000);
+    });
+
     VF.bus.on('weather:changed', function (id) {
       const w = VF.weatherData.get(id);
       VF.toast.show('<strong>' + U.esc(w.name) + '</strong><br><span style="color:var(--ink-3)">' +
@@ -644,13 +667,40 @@
       D.condName.textContent = c.name;
       D.chipCond.style.borderColor = U.rgbToCss(U.hexToRgb(c.tint), 0.55);
       D.condName.style.color = c.tint;
+      D.condFuse.style.background = c.tint;
       D.chipCond.title = c.blurb;
+      tickCondition();
     }
+  }
+
+  /* A condition runs eighty to three hundred seconds and carries the largest
+     multipliers in the game, so how long is left is the whole decision — stay,
+     re-bait, swap a charm, or travel. The chip used to show a name and nothing
+     else. The fuse drains along the bottom; the number is for when the answer
+     matters to the minute. */
+  function tickCondition() {
+    const c = VF.conditions.current();
+    if (!c) return;
+    const left = VF.conditions.remain();
+    D.condFuse.style.transform = 'scaleX(' + VF.conditions.fraction().toFixed(4) + ')';
+    D.condLeft.textContent = left >= 60
+      ? Math.ceil(left / 60) + 'm'
+      : Math.max(1, Math.ceil(left)) + 's';
+    D.condLeft.classList.toggle('urgent', left < 30);
   }
 
   function refreshLevel() {
     const d = VF.state.data;
     D.levelVal.textContent = 'LV ' + d.level + (d.streak >= 5 ? '  ×' + d.streak : '');
+    /* At the cap there is no next level to fill toward, so the bar tracks the
+       overflow into reputation instead of sitting frozen and full. */
+    if (VF.progression.atCap()) {
+      D.xpFill.style.width = (VF.progression.overflowFrac() * 100).toFixed(1) + '%';
+      D.xpText.textContent = Math.round(d.reputation) + ' rep';
+      D.xpFill.classList.add('overflow');
+      return;
+    }
+    D.xpFill.classList.remove('overflow');
     const need = VF.progression.xpToNext();
     const pctv = U.clamp(d.xp / Math.max(1, need), 0, 1);
     D.xpFill.style.width = (pctv * 100).toFixed(1) + '%';
@@ -667,6 +717,7 @@
 
     tickCaption();
     watchForVisitors(dt);
+    if (VF.conditions.current()) tickCondition();
 
     /* money counts up rather than snapping */
     if (Math.abs(shownMoney - d.money) > 0.5) {

@@ -144,7 +144,15 @@ button, input, select, textarea {
   background: none; border: none;
 }
 button { cursor: pointer; }
-button:focus-visible, [tabindex]:focus-visible { outline: 1px solid var(--line-3); outline-offset: 2px; }
+/* The focus ring was a hairline in the same grey as every border, which on a
+   dark interface is indistinguishable from a hover. It is the accent now, and
+   thick enough to find without hunting. */
+button:focus-visible, [tabindex]:focus-visible,
+input:focus-visible, textarea:focus-visible, select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
 
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;

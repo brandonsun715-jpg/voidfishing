@@ -12,6 +12,7 @@
 
   let active = null;      // condition def
   let remain = 0;
+  let total = 0;          // what remain started at, so the HUD can show a fraction
   let idle = 90;
   let blend = 0;          // 0..1 presence
 
@@ -38,6 +39,7 @@
     if (!c) return false;
     active = c;
     remain = VF.rng.g.range(c.dur[0], c.dur[1]);
+    total = remain;
     VF.bus.emit('condition:start', c);
     return true;
   }
@@ -80,7 +82,7 @@
     return out;
   }
 
-  function reset() { active = null; remain = 0; blend = 0; idle = 90; }
+  function reset() { active = null; remain = 0; total = 0; blend = 0; idle = 90; }
 
   /* Bring the next roll forward without forcing a particular condition — the
      sky still decides, it just decides sooner. */
@@ -94,6 +96,10 @@
     tick: tick, mods: mods, start: start, end: end, reset: reset, hasten: hasten,
     current: function () { return active; },
     name: function () { return active ? active.name : null; },
+    /* A condition is a window, and a window you cannot see the end of is not a
+       decision. These two are what put a clock on the HUD chip. */
+    remain: function () { return active ? Math.max(0, remain) : 0; },
+    fraction: function () { return active && total > 0 ? U.clamp(remain / total, 0, 1) : 0; },
     strength: function () { return active ? U.smoothstep(blend) : 0; },
     has: function (id) { return !!active && active.id === id; },
     flag: function (f) { return active && active[f] ? U.smoothstep(blend) : 0; }

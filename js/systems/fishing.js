@@ -33,7 +33,8 @@
     nibbleTimer: 0,
 
     pending: null,       // rolled catch waiting to be hooked
-    pendingOpts: null,   // forced roll options from an encounter
+    pendingOpts: null,   // forced roll options from an encounter, for this cast
+    forced: null,        // forced roll options that outlive a cast (the admin console)
     biteWindow: BITE_WINDOW,
     fight: null,
 
@@ -69,6 +70,8 @@
 
   function cast(power) {
     const d = VF.state.data;
+    // an encounter arms the cast that is already out; a forced roll is armed
+    // before the cast and has to survive being sent, so only the first is cleared
     S.pendingOpts = null;
     if (!VF.bait.consume(d.bait)) { d.bait = 'worm'; VF.bait.consume('worm'); }
 
@@ -555,8 +558,10 @@
         }
         S.nibble = Math.max(0, S.nibble - dt * 1.8);
         if (S.biteWait <= 0) {
-          const opts = S.pendingOpts;
+          const opts = S.pendingOpts || S.forced;
           S.pendingOpts = null;
+          // a forced roll is spent once it has been on the line
+          S.forced = null;
           triggerBite(opts);
         }
         break;
@@ -592,12 +597,24 @@
     return true;
   }
 
+  /* Arm the next bite with a specific roll, from any state — the admin
+     console's one hook into the loop. Unlike an encounter this does not have
+     to wait for the line to already be out: if it is, the bite is brought
+     forward; if it is not, the options sit until the next cast reaches the
+     water. Cleared by hardReset like everything else. */
+  function forceNext(opts) {
+    S.forced = opts || null;
+    if (S.state === 'waiting' && opts) S.biteWait = Math.min(S.biteWait, opts.delay || 1.2);
+    return true;
+  }
+
   /* Return the rod to a usable state from anywhere (used by save reset). */
   function hardReset() {
     S.charging = false;
     S.charge = 0;
     S.pending = null;
     S.pendingOpts = null;
+    S.forced = null;
     S.fight = null;
     S.lastResult = null;
     S.encounterActive = false;
@@ -616,6 +633,7 @@
     reelIn: reelIn,
     resolveCatch: resolveCatch,
     queueEncounter: queueEncounter,
+    forceNext: forceNext,
     state: function () { return S.state; },
     CAST_CHARGE_TIME: CAST_CHARGE_TIME,
     BITE_WINDOW: BITE_WINDOW,

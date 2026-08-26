@@ -10,6 +10,22 @@
   let current = null, artT = 0, lastFrame = 0, resolved = false;
   let revealT = 0;   // 0..1 silhouette-to-creature wipe for a new species
 
+  /* The card does not appear the instant a fish lands — it waits a beat for the
+     landing to read. That gap is a card that is going to open and has not
+     opened yet, which nothing could cancel: resetting or importing a save
+     while a catch was in flight left the pending open to fire afterwards and
+     put a card up for a fish out of a save that no longer exists.
+
+     Every deferred open now carries a token, and anything that invalidates it
+     bumps the token instead of trying to close a card that is not there. */
+  let pendGen = 0;
+
+  function later(fn, ms) {
+    const my = ++pendGen;
+    setTimeout(function () { if (my === pendGen) fn(); }, ms);
+  }
+  function cancelPending() { pendGen++; }
+
   function init() {
     host = document.getElementById('modal');
     VF.bus.on('fishing:landed', function (c) {
@@ -18,13 +34,16 @@
          whether the sequence is watched or skipped. */
       if (c.fish && c.fish.cutscene && VF.cutscene) {
         VF.cutscene.play(c.fish.cutscene, c, function () {
-          setTimeout(function () { show(c); }, 260);
+          later(function () { show(c); }, 260);
         });
         return;
       }
-      setTimeout(function () { show(c); }, 340);
+      later(function () { show(c); }, 340);
     });
-    VF.bus.on('fishing:treasure', function (c) { setTimeout(function () { showTreasure(c); }, 320); });
+    VF.bus.on('fishing:treasure', function (c) { later(function () { showTreasure(c); }, 320); });
+    // a save that has been wiped or replaced has no catch worth showing
+    VF.bus.on('save:reset', cancelPending);
+    VF.bus.on('save:imported', cancelPending);
   }
 
   function banner(c) {
@@ -391,7 +410,16 @@
   /* Dismissing the card must never strand the catch. If no choice was made the
      fish is sold, so the player cannot lose progress by closing the window. */
   function close() {
-    if (!open) return;
+    cancelPending();
+    if (!open) {
+      /* The card is already gone, but the panel flag may not be: anything that
+         tears the card down without coming through here leaves 'catch' sitting
+         in rt.panelOpen, and every menu key checks that flag before doing
+         anything. One stranded flag deadens the whole keyboard, so clear it
+         even on the way out. */
+      if (VF.state.rt.panelOpen === 'catch') VF.state.rt.panelOpen = null;
+      return;
+    }
     if (!resolved && VF.fishing.state() === 'landed') {
       resolved = true;
       if (current && current.treasure) VF.fishing.resolveCatch();
@@ -413,5 +441,6 @@
     VF.hud.pressEnd();
   }
 
-  VF.catchUI = { init: init, isOpen: function () { return open; }, defaultAction: defaultAction, close: close };
+  VF.catchUI = { init: init, isOpen: function () { return open; },
+                 defaultAction: defaultAction, close: close, cancelPending: cancelPending };
 })(window.VF = window.VF || {});

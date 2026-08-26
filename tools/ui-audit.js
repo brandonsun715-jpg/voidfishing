@@ -27,7 +27,7 @@ const path = require('path');
   });
 
   let clicked = 0, dead = 0;
-  const panels = ['shop','fishdex','bag','stats','settings','map'];
+  const panels = ['shop','fishdex','bag','stats','settings','map','journal','wardrobe','admin'];
   for (const p of panels) {
     await page.evaluate(p => { VF.panels.close(); VF.panels.open(p); }, p);
     await page.waitForTimeout(300);

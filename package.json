@@ -3,10 +3,11 @@
   "version": "1.0.0",
   "description": "A quiet fishing game at the edge of an endless void.",
   "scripts": {
-    "test": "node tools/smoke.js && node tools/soak.js 30 && node tools/ui-audit.js && node tools/responsive.js",
+    "test": "node tools/smoke.js && node tools/soak.js 30 && node tools/ui-audit.js && node tools/responsive.js && node tools/newstuff.js",
     "smoke": "node tools/smoke.js",
     "soak": "node tools/soak.js",
     "audit": "node tools/ui-audit.js",
+    "newstuff": "node tools/newstuff.js",
     "balance": "node tools/balance.js",
     "fight": "node tools/fight.js",
     "perf": "node tools/perf.js",
