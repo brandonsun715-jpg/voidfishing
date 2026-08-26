@@ -27,8 +27,18 @@
   max-height: min(760px, 90vh);
   border: 1px solid var(--line-2);
   border-radius: var(--r-lg);
-  background: linear-gradient(180deg, rgba(14,19,28,0.97), rgba(8,11,17,0.97));
-  box-shadow: 0 30px 90px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.045);
+  /* A panel is a lit object sitting in front of the water, not a dark
+     rectangle: the top edge catches the light, the body falls away from it,
+     and the accent of wherever you are standing bleeds faintly into the top
+     so the interface belongs to the place. */
+  background:
+    radial-gradient(120% 70% at 50% -12%, var(--accent-dim), rgba(0,0,0,0) 62%),
+    linear-gradient(180deg, rgba(18,24,34,0.975), rgba(7,10,16,0.985));
+  box-shadow:
+    0 40px 120px rgba(0,0,0,0.78),
+    0 8px 24px rgba(0,0,0,0.45),
+    inset 0 1px 0 rgba(255,255,255,0.075),
+    inset 0 -1px 0 rgba(0,0,0,0.5);
   overflow: hidden;
   animation: panelIn 300ms var(--ease) both;
 }
@@ -40,6 +50,7 @@
   display: flex; align-items: center; justify-content: space-between; gap: 16px;
   padding: 15px 20px 13px;
   border-bottom: 1px solid var(--line);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.03);
 }
 .panel-title { font-size: 13px; letter-spacing: 0.26em; text-transform: lowercase; color: var(--ink); }
 .panel-sub { font-size: 11px; color: var(--ink-3); letter-spacing: 0.04em; margin-top: 3px; }
@@ -76,10 +87,16 @@
   gap: 14px; align-items: center;
   padding: 12px 14px;
   border: 1px solid var(--line); border-radius: var(--r);
-  background: var(--fill);
-  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
+  background: linear-gradient(180deg, rgba(255,255,255,0.042), rgba(255,255,255,0.014));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.045);
+  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease),
+              transform 120ms var(--ease), box-shadow var(--dur) var(--ease);
 }
-.row:hover { border-color: var(--line-2); background: var(--fill-2); }
+.row:hover {
+  border-color: var(--line-2);
+  background: linear-gradient(180deg, rgba(255,255,255,0.085), rgba(255,255,255,0.03));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.09), 0 2px 12px rgba(0,0,0,0.3);
+}
 .row.owned { border-color: rgba(120, 200, 160, 0.24); }
 .row.locked { opacity: 0.45; }
 .row.equipped { border-color: var(--accent-dim); background: rgba(127,168,200,0.055); }

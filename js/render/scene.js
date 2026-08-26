@@ -66,7 +66,7 @@
 
   /* ------------------------------------------------------- backdrop cache */
   let backdrop = null, backdropKey = '';
-  let landPad = null;   // scratch for tinting one baked ridge at a time
+  let landPad = null, landOne = null, landKey = '';   // the tinted land, baked
 
   /* The land was three layers of flat black at different opacities, which is
      why it read as cardboard: distance does not make a hill more transparent,
@@ -79,6 +79,7 @@
     const key = loc.id + ':' + Math.round(W) + 'x' + Math.round(H) + ':' + VF.state.data.settings.quality;
     if (backdropKey === key && backdrop) return;
     backdropKey = key;
+    landKey = '';        // the tint is baked against the old ridges
 
     const hy = L.horizonY;
     backdrop = [];
@@ -94,49 +95,78 @@
   }
 
   /* Paint the three baked ridges, each mixed toward the haze by how far away
-     it is. `source-atop` keeps the tint inside the shape. */
+     it is.
+
+     This has to be CACHED, not composited per frame. Tinting three full-screen
+     layers with a source-atop fill and drawing them costs about 24ms — the
+     whole frame budget and half again — which is the exact trap the renderer
+     is otherwise built to avoid: full-screen translucent fills dominate 2D
+     canvas cost, so anything that covers the screen gets baked once and
+     blitted after.
+
+     The tint only depends on the haze colours, and those move slowly, so the
+     key is those colours quantised hard. In practice it rebakes a handful of
+     times over a day/night cycle and blits on every other frame. */
   function drawLand(P) {
     if (!backdrop || !backdrop.length) return;
-    if (!landPad) { landPad = document.createElement('canvas'); }
+    const q = function (c) { return (c[0] >> 3) + ',' + (c[1] >> 3) + ',' + (c[2] >> 3); };
+    const key = backdropKey + '|' + q(P.fog) + '|' + q(P.skyBot) + '|' + (P.fogAmt * 12 | 0) +
+                '|' + (P.bright * 10 | 0) + '|' + (q(P.glow));
+    if (key !== landKey || !landPad) {
+      landKey = key;
+      bakeLand(P);
+    }
+    if (landPad) ctx.drawImage(landPad, 0, 0);
+  }
+
+  function bakeLand(P) {
+    if (!landPad) landPad = document.createElement('canvas');
     if (landPad.width !== Math.round(W) || landPad.height !== Math.round(H)) {
       landPad.width = Math.max(1, Math.round(W)); landPad.height = Math.max(1, Math.round(H));
     }
     const pg = landPad.getContext('2d');
     const hy = L.horizonY;
+    pg.clearRect(0, 0, landPad.width, landPad.height);
+
+    if (!landOne) landOne = document.createElement('canvas');
+    if (landOne.width !== landPad.width || landOne.height !== landPad.height) {
+      landOne.width = landPad.width; landOne.height = landPad.height;
+    }
+    const og = landOne.getContext('2d');
 
     for (let l = 0; l < backdrop.length; l++) {
       // layer 0 is furthest: most air in front of it, and the least of it
       const far = 1 - l / Math.max(1, backdrop.length - 1);
-      pg.clearRect(0, 0, landPad.width, landPad.height);
-      pg.globalCompositeOperation = 'source-over';
-      pg.drawImage(backdrop[l], 0, 0);
+      og.globalCompositeOperation = 'source-over';
+      og.clearRect(0, 0, landOne.width, landOne.height);
+      og.drawImage(backdrop[l], 0, 0);
 
-      pg.globalCompositeOperation = 'source-atop';
+      og.globalCompositeOperation = 'source-atop';
       // the ground colour of the land, and the haze it recedes into
       const near = U.mixRgb([0, 0, 0], P.fog, 0.10 + P.fogAmt * 0.10);
       const air = U.mixRgb(P.skyBot, P.fog, 0.45);
-      const grad = pg.createLinearGradient(0, hy - H * 0.10, 0, hy + 2);
+      const grad = og.createLinearGradient(0, hy - H * 0.10, 0, hy + 2);
       grad.addColorStop(0, U.rgbToCss(U.mixRgb(near, air, far * (0.42 + P.fogAmt * 0.34))));
       grad.addColorStop(1, U.rgbToCss(U.mixRgb(near, air, far * (0.62 + P.fogAmt * 0.30))));
-      pg.fillStyle = grad;
-      pg.fillRect(0, 0, landPad.width, landPad.height);
-      pg.globalCompositeOperation = 'source-over';
+      og.fillStyle = grad;
+      og.fillRect(0, 0, landOne.width, landOne.height);
+      og.globalCompositeOperation = 'source-over';
 
-      ctx.globalAlpha = U.lerp(0.72, 1, 1 - far);
-      ctx.drawImage(landPad, 0, 0);
-      ctx.globalAlpha = 1;
+      pg.globalAlpha = U.lerp(0.72, 1, 1 - far);
+      pg.drawImage(landOne, 0, 0);
+      pg.globalAlpha = 1;
     }
 
     /* The haze band itself: the air at the waterline is thicker than the air
        above it, so the horizon is a soft seam rather than a cut edge. This is
-       what actually sells the distance. */
-    const band = ctx.createLinearGradient(0, hy - H * 0.075, 0, hy + H * 0.012);
+       what actually sells the distance, and it bakes in with the rest. */
+    const band = pg.createLinearGradient(0, hy - H * 0.075, 0, hy + H * 0.012);
     const hz = U.mixRgb(P.fog, P.glow, 0.20);
     band.addColorStop(0, U.rgbToCss(hz, 0));
     band.addColorStop(0.72, U.rgbToCss(hz, (0.10 + P.fogAmt * 0.16) * (0.35 + P.bright * 0.65)));
     band.addColorStop(1, U.rgbToCss(hz, (0.14 + P.fogAmt * 0.20) * (0.35 + P.bright * 0.65)));
-    ctx.fillStyle = band;
-    ctx.fillRect(0, hy - H * 0.075, W, H * 0.087);
+    pg.fillStyle = band;
+    pg.fillRect(0, hy - H * 0.075, W, H * 0.087);
   }
 
   /* Distant land: layered dark shapes sitting on the horizon line. */

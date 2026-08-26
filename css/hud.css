@@ -608,3 +608,53 @@ body.wrong .toasts { opacity: 0; transition: opacity 500ms var(--ease); }
   opacity: 0.75;
   transition: transform 320ms linear;
 }
+
+/* ---------------------------------------------------- the HUD, with weight
+
+   The chips and cards were flat panes of one colour. They are objects lit from
+   above now, the same as everything in the panels: a hairline of light along
+   the top edge, the body falling away from it, and a shadow underneath so they
+   sit in front of the water rather than on it. */
+
+.chip, .gear-card {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.008)),
+    var(--pane);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), 0 2px 10px rgba(0,0,0,0.34);
+}
+.chip-btn:hover, .gear-card:hover {
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 3px 14px rgba(0,0,0,0.42);
+}
+
+.mbtn {
+  background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.006));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.055);
+}
+.mbtn:hover { box-shadow: inset 0 1px 0 rgba(255,255,255,0.10), 0 2px 8px rgba(0,0,0,0.3); }
+/* the panel you have open is lit, not merely a different grey */
+.mbtn.active {
+  border-color: var(--accent-dim);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.13), 0 0 14px -2px var(--accent-dim);
+}
+
+/* The money is the number the whole game is about; give it a little light. */
+.money { text-shadow: 0 0 18px var(--accent-dim); }
+.coin  { text-shadow: 0 0 12px var(--accent-dim); }
+
+/* The XP bar reads as filled rather than merely coloured. */
+.xp-track { box-shadow: inset 0 1px 2px rgba(0,0,0,0.45); }
+.xp-fill  { box-shadow: 0 0 8px -1px var(--accent); }
+
+/* The stripe down the side of a toast says what kind of news it is, so let it
+   actually light — a good catch should feel like one from the corner of the
+   eye, without reading a word of it. */
+.toast {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.008)),
+    var(--pane-2);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), 0 14px 38px rgba(0,0,0,0.5);
+}
+.toast .t-mark { box-shadow: 0 0 10px -1px var(--accent); }
+.toast.good .t-mark { box-shadow: 0 0 12px -1px var(--good); }
+.toast.warn .t-mark { box-shadow: 0 0 12px -1px var(--warn); }
+.toast.bad  .t-mark { box-shadow: 0 0 12px -1px var(--bad); }
