@@ -66,31 +66,90 @@
 
   /* ------------------------------------------------------- backdrop cache */
   let backdrop = null, backdropKey = '';
+  let landPad = null;   // scratch for tinting one baked ridge at a time
 
+  /* The land was three layers of flat black at different opacities, which is
+     why it read as cardboard: distance does not make a hill more transparent,
+     it puts more air in front of it, and air has a colour. Each layer is baked
+     on its own now and tinted at draw time toward whatever the fog is doing,
+     so the far ridge sits back in the haze and the near one stands in front of
+     it. The bake is still cached — only the tint is per frame. */
   function buildBackdrop() {
     const loc = VF.locations.current();
     const key = loc.id + ':' + Math.round(W) + 'x' + Math.round(H) + ':' + VF.state.data.settings.quality;
     if (backdropKey === key && backdrop) return;
     backdropKey = key;
 
-    const c = document.createElement('canvas');
-    c.width = Math.max(1, Math.round(W)); c.height = Math.max(1, Math.round(H));
-    const g = c.getContext('2d');
-    const rnd = VF.rng.make(0xC0FFEE ^ VF.locations.index(loc.id) * 104729);
     const hy = L.horizonY;
-    drawSilhouette(g, loc.silhouette, rnd, hy);
-    backdrop = c;
+    backdrop = [];
+    for (let l = 0; l < 3; l++) {
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(W)); c.height = Math.max(1, Math.round(H));
+      const g = c.getContext('2d');
+      // the same seed for every layer, so the ridges stay the ridges
+      const rnd = VF.rng.make(0xC0FFEE ^ VF.locations.index(loc.id) * 104729);
+      drawSilhouette(g, loc.silhouette, rnd, hy, l);
+      backdrop.push(c);
+    }
+  }
+
+  /* Paint the three baked ridges, each mixed toward the haze by how far away
+     it is. `source-atop` keeps the tint inside the shape. */
+  function drawLand(P) {
+    if (!backdrop || !backdrop.length) return;
+    if (!landPad) { landPad = document.createElement('canvas'); }
+    if (landPad.width !== Math.round(W) || landPad.height !== Math.round(H)) {
+      landPad.width = Math.max(1, Math.round(W)); landPad.height = Math.max(1, Math.round(H));
+    }
+    const pg = landPad.getContext('2d');
+    const hy = L.horizonY;
+
+    for (let l = 0; l < backdrop.length; l++) {
+      // layer 0 is furthest: most air in front of it, and the least of it
+      const far = 1 - l / Math.max(1, backdrop.length - 1);
+      pg.clearRect(0, 0, landPad.width, landPad.height);
+      pg.globalCompositeOperation = 'source-over';
+      pg.drawImage(backdrop[l], 0, 0);
+
+      pg.globalCompositeOperation = 'source-atop';
+      // the ground colour of the land, and the haze it recedes into
+      const near = U.mixRgb([0, 0, 0], P.fog, 0.10 + P.fogAmt * 0.10);
+      const air = U.mixRgb(P.skyBot, P.fog, 0.45);
+      const grad = pg.createLinearGradient(0, hy - H * 0.10, 0, hy + 2);
+      grad.addColorStop(0, U.rgbToCss(U.mixRgb(near, air, far * (0.42 + P.fogAmt * 0.34))));
+      grad.addColorStop(1, U.rgbToCss(U.mixRgb(near, air, far * (0.62 + P.fogAmt * 0.30))));
+      pg.fillStyle = grad;
+      pg.fillRect(0, 0, landPad.width, landPad.height);
+      pg.globalCompositeOperation = 'source-over';
+
+      ctx.globalAlpha = U.lerp(0.72, 1, 1 - far);
+      ctx.drawImage(landPad, 0, 0);
+      ctx.globalAlpha = 1;
+    }
+
+    /* The haze band itself: the air at the waterline is thicker than the air
+       above it, so the horizon is a soft seam rather than a cut edge. This is
+       what actually sells the distance. */
+    const band = ctx.createLinearGradient(0, hy - H * 0.075, 0, hy + H * 0.012);
+    const hz = U.mixRgb(P.fog, P.glow, 0.20);
+    band.addColorStop(0, U.rgbToCss(hz, 0));
+    band.addColorStop(0.72, U.rgbToCss(hz, (0.10 + P.fogAmt * 0.16) * (0.35 + P.bright * 0.65)));
+    band.addColorStop(1, U.rgbToCss(hz, (0.14 + P.fogAmt * 0.20) * (0.35 + P.bright * 0.65)));
+    ctx.fillStyle = band;
+    ctx.fillRect(0, hy - H * 0.075, W, H * 0.087);
   }
 
   /* Distant land: layered dark shapes sitting on the horizon line. */
-  function drawSilhouette(g, style, rnd, hy) {
+  function drawSilhouette(g, style, rnd, hy, only) {
     if (style === 'none') return;
     const layers = 3;
     for (let l = 0; l < layers; l++) {
       const depth = l / (layers - 1 || 1);
-      const alpha = 0.30 + depth * 0.55;
       const maxH = H * (0.026 + depth * 0.052);
-      g.globalAlpha = alpha;
+      // every layer is generated so the seeded stream stays in step; only the
+      // one asked for is actually painted
+      const skip = only !== undefined && only !== l;
+      g.globalAlpha = 1;
       g.fillStyle = '#000';
       g.beginPath();
       g.moveTo(-4, hy + 2);
@@ -162,7 +221,7 @@
       }
       g.lineTo(W + 8, hy + 2);
       g.closePath();
-      g.fill();
+      if (!skip) g.fill();
     }
     g.globalAlpha = 1;
   }
@@ -579,15 +638,7 @@
     mark('sky', function () { drawSky(P); });
     mark('stars', function () { drawStars(P, q); });
     mark('horizon', function () { drawHorizonFeature(P); });
-    mark('land', function () {
-      if (!backdrop) return;
-      // the far shore is the first thing the void takes
-      const a = 1 - P.void;
-      if (a <= 0.01) return;
-      ctx.globalAlpha = a;
-      ctx.drawImage(backdrop, 0, 0, W, H);
-      ctx.globalAlpha = 1;
-    });
+    mark('land', function () { drawLand(P); });
     mark('aurora', function () { drawAurora(P); });
     mark('lightning', function () { drawLightning(P); });
     mark('fog', function () { drawFog(P, q); });
@@ -721,13 +772,56 @@
           ctx.closePath();
           ctx.fill();
         }
-        // craters, on the lit part only
-        ctx.globalAlpha = (0.12) * feat;
-        ctx.fillStyle = '#000';
-        ctx.beginPath(); ctx.arc(gx - R * 0.28, gy - R * 0.18, R * 0.22, 0, TAU); ctx.fill();
-        ctx.beginPath(); ctx.arc(gx + R * 0.30, gy + R * 0.22, R * 0.15, 0, TAU); ctx.fill();
-        ctx.beginPath(); ctx.arc(gx + R * 0.05, gy - R * 0.42, R * 0.10, 0, TAU); ctx.fill();
+        /* Maria: broad, soft, low-contrast darkenings rather than three hard
+           black dots. A moon is mostly featureless with a few large stains on
+           it, and the stains have no edges. */
+        const mr = VF.rng.make(0x3f00d);
+        for (let i = 0; i < 9; i++) {
+          const a2 = mr() * TAU, rad = Math.sqrt(mr()) * R * 0.82;
+          const cx2 = gx + Math.cos(a2) * rad, cy2 = gy + Math.sin(a2) * rad;
+          const rr2 = R * (0.10 + mr() * 0.26);
+          const mg = ctx.createRadialGradient(cx2, cy2, 0, cx2, cy2, rr2);
+          mg.addColorStop(0, 'rgba(0,0,0,' + (0.055 + mr() * 0.075).toFixed(3) + ')');
+          mg.addColorStop(0.6, 'rgba(0,0,0,' + (0.03 + mr() * 0.04).toFixed(3) + ')');
+          mg.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.globalAlpha = feat;
+          ctx.fillStyle = mg;
+          ctx.beginPath(); ctx.arc(cx2, cy2, rr2, 0, TAU); ctx.fill();
+        }
+
+        /* Limb darkening. A sphere lit from in front is not a flat disc: it
+           falls off toward the edge, and without this the moon reads as a
+           sticker cut out of paper — which is exactly what it was. */
+        const ld = ctx.createRadialGradient(gx - R * 0.12, gy - R * 0.12, R * 0.18, gx, gy, R);
+        /* The falloff has to start early and stay gentle. Stacked hard against
+           the edge it stops being a sphere and becomes a disc with a line
+           drawn round it, which is a different wrong answer to the one this
+           replaced. */
+        ld.addColorStop(0, 'rgba(255,255,255,0.11)');
+        ld.addColorStop(0.42, 'rgba(255,255,255,0)');
+        ld.addColorStop(0.70, U.rgbToCss(U.shade(P.glow, -0.5), 0.06));
+        ld.addColorStop(0.90, U.rgbToCss(U.shade(P.glow, -0.6), 0.15));
+        ld.addColorStop(1, U.rgbToCss(U.shade(P.glow, -0.62), 0.20));
+        ctx.globalAlpha = feat;
+        ctx.fillStyle = ld;
+        ctx.beginPath(); ctx.arc(gx, gy, R, 0, TAU); ctx.fill();
         ctx.restore();
+
+        /* The air immediately around it. The wide bloom is already down; this
+           is the tight ring of scattered light that a bright thing actually
+           has against a dark sky, and it is what makes it read as a source
+           rather than a shape. */
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = feat;
+        const hal = ctx.createRadialGradient(gx, gy, R * 0.92, gx, gy, R * 3.2);
+        hal.addColorStop(0, U.rgbToCss(P.glow, 0.22 * (0.4 + P.bright * 0.6)));
+        hal.addColorStop(0.35, U.rgbToCss(P.glow, 0.06 * (0.4 + P.bright * 0.6)));
+        hal.addColorStop(1, U.rgbToCss(P.glow, 0));
+        ctx.fillStyle = hal;
+        ctx.beginPath(); ctx.arc(gx, gy, R * 3.2, 0, TAU); ctx.fill();
+        ctx.restore();
+        ctx.globalAlpha = feat;
         break;
       }
       case 'ring': {
@@ -930,7 +1024,7 @@
   function buildReflection() {
     const key = backdropKey + ':' + Math.round(L.horizonY);
     if (reflectKey === key && reflect) return;
-    if (!backdrop) return;
+    if (!backdrop || !backdrop.length) return;
     reflectKey = key;
     const hy = L.horizonY;
     const depth = Math.max(2, Math.round(Math.min(L.waterH * 0.42, H * 0.20)));
@@ -943,7 +1037,9 @@
     g.globalAlpha = 0.32;
     g.translate(0, hy);
     g.scale(1, -1);
-    g.drawImage(backdrop, 0, 0, W, H);
+    // the reflection is of all three ridges together — a mirror does not care
+    // which one is further away
+    for (let l = 0; l < backdrop.length; l++) g.drawImage(backdrop[l], 0, 0, W, H);
     g.restore();
     // erase with a downward ramp so the mirror dissolves into the water
     g.globalCompositeOperation = 'destination-out';
