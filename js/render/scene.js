@@ -463,7 +463,7 @@
     ctx = cv.getContext('2d', { alpha: false });
     buildGrain();
     resize();
-    VF.bus.on('location:changed', function () { backdropKey = ''; buildStars(); seedAmbient(); departure = null; });
+    VF.bus.on('location:changed', function () { backdropKey = ''; buildStars(); seedAmbient(); departure = null; shoalKey = ''; });
     VF.bus.on('fishing:lost', function (e) { beginDeparture(e.catch); });
     VF.bus.on('settings:quality', function () { backdropKey = ''; buildStars(); VF.particles.clearAll(); seedAmbient(); });
   }
@@ -875,6 +875,7 @@
     mark('fog', function () { drawFog(P, q); });
     mark('water', function () { drawWater(P, q); });
     mark('under', function () { if (P.void < 0.9) drawUnderwater(P); });
+    mark('shoal', function () { seedShoal(); drawShoal(P, q); });
     mark('skyfall', function () { drawSkyfall(); });
     mark('ripples', function () { if (P.void < 0.9) VF.fx.drawRipples(ctx, 0.26); });
     mark('line', function () { drawLineAndBobber(P); drawDeparture(P); });
@@ -1595,6 +1596,140 @@
     g.addColorStop(1, U.rgbToCss(col, 0));
     ctx.fillStyle = g;
     ctx.fillRect(x - W * 0.20 * sc, y - W * 0.20 * sc, W * 0.40 * sc, W * 0.40 * sc);
+    ctx.restore();
+  }
+
+  /* ------------------------------------------------------------ the shoal
+
+     The water had nothing in it. It was a surface with lines on it, and
+     whatever you were fishing for existed only at the moment it took the hook.
+
+     These are the species that actually live at this spot, cruising below the
+     surface at depth. Which is the point of drawing them from the real pool
+     rather than inventing a generic fish shape: the water shows you what is in
+     it, so a strange silhouette going past at the Cradle is a real thing you
+     could catch, and the shoal at the shore is minnows because the shore has
+     minnows in it.
+
+     Perspective does the work. Depth 0 is up at the horizon — small, faint,
+     slow, barely a mark — and depth 1 is close to the near bank, large and
+     dark and quick. Nothing here is a particle system; it is a dozen shapes
+     with a sine on them, which is all a fish seen through water is. */
+
+  const shoal = [];
+  let shoalKey = '';
+
+  /* Every one of these is a full procedural species — scales, fins, gradients,
+     the lot — and drawing fourteen of them a frame cost seven milliseconds,
+     which is most of a frame for something nobody is looking straight at. They
+     are baked to small sprites instead, one per species per size bucket, and
+     blitted. Buckets are coarse because at this size and this alpha nobody can
+     tell the difference between a fish drawn at 19 pixels and one drawn at 20. */
+  const finCache = Object.create(null);
+  const FIN_PAD = 1.7;   // room for fins and tail beyond the nominal size
+
+  function finSprite(fish, size) {
+    const bucket = Math.max(3, Math.round(size / 3) * 3);
+    const key = fish.id + '@' + bucket;
+    const hit = finCache[key];
+    if (hit) return hit;
+    const S = Math.ceil(bucket * FIN_PAD * 2);
+    const c = document.createElement('canvas');
+    c.width = S; c.height = S;
+    const g = c.getContext('2d');
+    g.translate(S / 2, S / 2);
+    // baked at full strength; the alpha goes on at blit time
+    try { VF.fishArt.drawSilhouette(g, fish, bucket, 1); } catch (e) { /* leave it blank */ }
+    const sp = { canvas: c, half: S / 2, bucket: bucket };
+    finCache[key] = sp;
+    return sp;
+  }
+
+  function seedShoal() {
+    const loc = VF.locations.current();
+    const q = VF.state.data.settings.quality;
+    const key = loc.id + ':' + q;
+    if (shoalKey === key && shoal.length) return;
+    shoalKey = key;
+    shoal.length = 0;
+    for (const k in finCache) delete finCache[k];
+
+    /* The species that are native here, cheapest tiers first — a shoal is
+       made of common things, and a Void fish drifting past every ten seconds
+       would spend the mystery the game is built on. */
+    const pool = (VF.fish.knownList ? VF.fish.knownList() : VF.fish.list).filter(function (f) {
+      return f.locs && f.locs.indexOf(loc.id) >= 0 && VF.rarities.rank(f.rarity) <= 2;
+    });
+    if (!pool.length) return;
+
+    const n = q === 'low' ? 5 : q === 'medium' ? 9 : 14;
+    const rnd = VF.rng.make(0x5F0A1 ^ VF.locations.index(loc.id) * 5471);
+    for (let i = 0; i < n; i++) {
+      shoal.push({
+        f: pool[Math.floor(rnd() * pool.length)],
+        x: rnd(),
+        // biased shallow: most of what you can see is near the surface
+        depth: Math.pow(rnd(), 1.5),
+        dir: rnd() < 0.5 ? -1 : 1,
+        speed: 0.010 + rnd() * 0.030,
+        size: 0.7 + rnd() * 0.7,
+        wob: rnd() * TAU,
+        wobSp: 0.6 + rnd() * 1.1,
+        // one in a few drifts up toward the surface and back down again
+        rise: rnd() < 0.35 ? 0.25 + rnd() * 0.5 : 0,
+        riseSp: 0.05 + rnd() * 0.12,
+        risePh: rnd() * TAU
+      });
+    }
+  }
+
+  function drawShoal(P, q) {
+    if (!shoal.length) return;
+    /* They are the first thing to go when the water stops being water, and
+       they are not down there at all once the void has taken the place. */
+    const k = U.clamp((0.80 - P.void) / 0.40, 0, 1) *
+              (VF.encounters ? 1 - VF.encounters.calm() * 0.9 : 1);
+    if (k <= 0.02) return;
+
+    const hy = L.horizonY, wh = L.waterH;
+    ctx.save();
+    for (let i = 0; i < shoal.length; i++) {
+      const s = shoal[i];
+      s.x += s.speed * s.dir * VF.state.rt.dt;
+      if (s.x > 1.15) s.x = -0.15; else if (s.x < -0.15) s.x = 1.15;
+
+      // where it is, right now, including whatever rising it is doing
+      const rise = s.rise ? s.rise * (0.5 + 0.5 * Math.sin(t * s.riseSp + s.risePh)) : 0;
+      const d = U.clamp(s.depth - rise * s.depth, 0.02, 1);
+
+      /* Perspective. The near bank is the bottom of the frame, so depth maps
+         through a curve — the same one the water gradient uses — and size and
+         contrast follow it. */
+      const y = hy + Math.pow(d, 1.28) * wh;
+      const wobble = Math.sin(t * s.wobSp + s.wob) * wh * 0.006 * (0.3 + d);
+      const x = s.x * W;
+      const size = U.lerp(4, 26, Math.pow(d, 1.15)) * s.size *
+                   U.clamp(Math.min(W, H) / 760, 0.6, 1.5);
+
+      /* Deep water swallows contrast before it swallows anything else, so a
+         far fish is barely a smudge and a near one is a shape. Kept low on
+         purpose: at full strength these stop being things seen THROUGH water
+         and become black cut-outs sitting on top of it, which is worse than
+         having nothing down there at all. */
+      const a = k * U.lerp(0.085, 0.26, Math.pow(d, 0.85));
+      if (a <= 0.012 || size < 2) continue;
+
+      const sp = finSprite(s.f, size);
+      const k2 = size / sp.bucket;          // the bit the bucket rounded off
+      ctx.save();
+      ctx.globalAlpha = a;
+      ctx.translate(x, y + wobble);
+      if (s.dir < 0) ctx.scale(-1, 1);
+      // a fish seen from above and to the side is foreshortened
+      ctx.scale(k2, k2 * 0.82);
+      ctx.drawImage(sp.canvas, -sp.half, -sp.half);
+      ctx.restore();
+    }
     ctx.restore();
   }
 
