@@ -293,6 +293,589 @@
      beating faster rather than by jumping to a new place in its stroke. */
   let wingPhase = 0;
 
+  /* ---- the parts kit -------------------------------------------------------
+
+     Everything below is a piece of a rod that used to be the same piece on all
+     hundred and twenty-nine of them. rodSignature decides which version each
+     rod gets; these draw it. Guides are the big one — they are most of a rod's
+     silhouette, and there were seven identical ones on every rod in the game.
+
+     They all take the same shape: geometry from `g`, the rod's build from
+     `sig`, and colours already resolved by the caller. None of them know what
+     rod they are on. */
+
+  /* A guide, in six ways. The first three are wire and get less wire as they
+     improve; the last three have no wire in them at all, which is the point at
+     which a rod stops being tackle and starts being an artefact. */
+  function drawGuide(ctx, g, k, form, rr, scale, under, lit, dark, glowRgb, t, phase) {
+    const p = ptAt(g, k);
+    const m = Math.hypot(p.dx, p.dy) || 1;
+    const nx = -p.dy / m * under, ny = p.dx / m * under;
+    const ang = Math.atan2(p.dy, p.dx);
+    const foot = rr * 1.35;
+    const cx = p.x + nx * (foot + rr * 0.7), cy = p.y + ny * (foot + rr * 0.7);
+
+    function wireFoot(len, spread) {
+      ctx.lineCap = 'round';
+      for (let s = spread ? -1 : 0; s <= (spread ? 1 : 0); s += 2) {
+        const ox = spread ? -p.dy / m * 0 + p.dx / m * s * rr * 0.55 : 0;
+        const oy = spread ? p.dy / m * s * rr * 0.55 : 0;
+        ctx.strokeStyle = U.rgbToCss(dark, 0.9);
+        ctx.lineWidth = Math.max(0.5, 1.15 * scale);
+        ctx.beginPath();
+        ctx.moveTo(p.x + ox, p.y + oy);
+        ctx.lineTo(p.x + nx * len, p.y + ny * len);
+        ctx.stroke();
+        ctx.strokeStyle = U.rgbToCss(lit, 0.55);
+        ctx.lineWidth = Math.max(0.3, 0.5 * scale);
+        ctx.beginPath();
+        ctx.moveTo(p.x + ox, p.y + oy);
+        ctx.lineTo(p.x + nx * len * 0.9, p.y + ny * len * 0.9);
+        ctx.stroke();
+        if (!spread) break;
+      }
+    }
+
+    function ring(cx2, cy2, r2, squash) {
+      ctx.strokeStyle = U.rgbToCss(dark, 0.95);
+      ctx.lineWidth = Math.max(0.5, 1.25 * scale);
+      ctx.beginPath();
+      ctx.ellipse(cx2, cy2, r2, r2 * (squash || 0.72), ang, 0, TAU);
+      ctx.stroke();
+      ctx.strokeStyle = U.rgbToCss(lit, 0.85);
+      ctx.lineWidth = Math.max(0.3, 0.55 * scale);
+      ctx.beginPath();
+      ctx.ellipse(cx2, cy2, r2, r2 * (squash || 0.72), ang, Math.PI * 0.85, Math.PI * 1.95);
+      ctx.stroke();
+      if (scale > 0.9) {
+        ctx.fillStyle = U.rgbToCss([255, 255, 255], 0.7);
+        ctx.beginPath();
+        ctx.arc(cx2 - nx * r2 * 0.62, cy2 - ny * r2 * 0.62, Math.max(0.25, 0.34 * scale), 0, TAU);
+        ctx.fill();
+      }
+    }
+
+    if (form === 'ring') {
+      wireFoot(foot, false);
+      ring(cx, cy, rr);
+
+    } else if (form === 'double') {
+      /* Two feet, the way a real double-foot guide is built — it is the
+         cheapest visible upgrade there is and it reads instantly. */
+      wireFoot(foot, true);
+      ring(cx, cy, rr);
+
+    } else if (form === 'spiral') {
+      /* The wire wraps past the ring and comes back, so the guide has a
+         direction to it. */
+      wireFoot(foot, false);
+      ring(cx, cy, rr);
+      ctx.strokeStyle = U.rgbToCss(lit, 0.5);
+      ctx.lineWidth = Math.max(0.3, 0.6 * scale);
+      ctx.beginPath();
+      for (let i = 0; i <= 14; i++) {
+        const a = -0.6 + (i / 14) * 3.6;
+        const rad = rr * (1.05 + i / 14 * 0.42);
+        const px = cx + Math.cos(a + ang) * rad, py = cy + Math.sin(a + ang) * rad * 0.72;
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+
+    } else if (form === 'braced') {
+      /* A strut back to the blank on each side: the guide is now a structure
+         rather than a loop of wire. */
+      wireFoot(foot, true);
+      ring(cx, cy, rr);
+      ctx.strokeStyle = U.rgbToCss(dark, 0.8);
+      ctx.lineWidth = Math.max(0.4, 0.8 * scale);
+      for (let s = -1; s <= 1; s += 2) {
+        ctx.beginPath();
+        ctx.moveTo(p.x + p.dx / m * rr * 1.5 * s, p.y + p.dy / m * rr * 1.5 * s);
+        ctx.lineTo(cx + Math.cos(ang) * rr * 0.9 * s, cy + Math.sin(ang) * rr * 0.9 * s);
+        ctx.stroke();
+      }
+
+    } else if (form === 'float') {
+      /* Nothing holds it on. A gap where the foot should be, and the ring
+         hanging in it. */
+      const fc = cx + nx * rr * 0.35, fy = cy + ny * rr * 0.35;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      bloom(ctx, fc, fy, rr * 2.4, glowRgb, 0.30);
+      ctx.restore();
+      ring(fc, fy, rr);
+      // two sparks where the wire would have met the blank
+      ctx.fillStyle = U.rgbToCss(glowRgb, 0.75);
+      for (let s = -1; s <= 1; s += 2) {
+        ctx.beginPath();
+        ctx.arc(p.x + p.dx / m * rr * 0.8 * s, p.y + p.dy / m * rr * 0.8 * s,
+                Math.max(0.3, 0.45 * scale), 0, TAU);
+        ctx.fill();
+      }
+
+    } else if (form === 'halo') {
+      /* Not a ring at all: a turning arc of light with the line through the
+         middle of it. Reserved for the top of the ladder. */
+      const fc = cx + nx * rr * 0.5, fy = cy + ny * rr * 0.5;
+      const spin = t * 0.6 + phase + k * 5;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      bloom(ctx, fc, fy, rr * 3.2, glowRgb, 0.34);
+      ctx.strokeStyle = U.rgbToCss(U.mixRgb(glowRgb, [255, 255, 255], 0.4), 0.85);
+      ctx.lineWidth = Math.max(0.4, 0.8 * scale);
+      for (let arc = 0; arc < 2; arc++) {
+        const a0 = spin + arc * Math.PI;
+        ctx.beginPath();
+        ctx.ellipse(fc, fy, rr * 1.15, rr * 0.8, ang, a0, a0 + 1.5);
+        ctx.stroke();
+      }
+      ctx.fillStyle = U.rgbToCss([255, 255, 255], 0.9);
+      ctx.beginPath();
+      ctx.arc(fc, fy, Math.max(0.3, 0.5 * scale), 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
+    return { x: p.x, y: p.y, nx: nx, ny: ny, ang: ang, rr: rr };
+  }
+
+  /* Thread wraps: the silk at the foot of a guide. One band is a working rod,
+     three with a metallic edge is a rod somebody signed. */
+  function drawWrap(ctx, g, k, n, width, scale, blankRgb, accentRgb, metalRgb) {
+    if (n <= 0) return;
+    for (let i = 0; i < n; i++) {
+      // the innermost band is widest and sits against the foot
+      const off = -width * (i * 0.85 + 0.55);
+      const w = width * (1 - i * 0.22);
+      const k0 = U.clamp(k + off - w * 0.5, 0.02, 0.99);
+      const k1 = U.clamp(k + off + w * 0.5, 0.02, 0.995);
+      if (k1 <= k0) continue;
+      const p = nAt(g, (k0 + k1) * 0.5);
+      const wide = Math.max(1.2, U.lerp(4.4, 1.5, k) * scale);
+      const col = i === 0 ? accentRgb : (i === n - 1 && n > 2 ? metalRgb : U.mixRgb(accentRgb, blankRgb, 0.45));
+      const gr = ctx.createLinearGradient(p.x - p.nx * wide, p.y - p.ny * wide,
+                                          p.x + p.nx * wide, p.y + p.ny * wide);
+      gr.addColorStop(0, U.rgbToCss(U.shade(col, -0.6)));
+      gr.addColorStop(0.4, U.rgbToCss(U.mixRgb(col, [255, 255, 255], 0.32)));
+      gr.addColorStop(1, U.rgbToCss(U.shade(col, -0.68)));
+      ctx.fillStyle = gr;
+      taper(ctx, g, k0, k1, wide, wide * 0.94, 3);
+      ctx.fill();
+    }
+  }
+
+  /* Something running the length of the blank. This is what stops two rods of
+     the same colour reading as the same rod from a distance. */
+  function drawInlay(ctx, g, sig, scale, c1, accentRgb, metalRgb, t) {
+    const form = sig.inlay;
+    if (form === 'none') return;
+    const from = 0.26, to = 0.96;
+    const n = Math.round(U.lerp(9, 26, sig.inlayDensity - 0.55) * (form === 'constellation' ? 0.55 : 1));
+    const wAt = function (k) { return Math.max(0.8, U.lerp(4.6, 1.1, k) * scale); };
+
+    ctx.save();
+    if (form === 'dashes') {
+      ctx.strokeStyle = U.rgbToCss(accentRgb, 0.55);
+      ctx.lineCap = 'round';
+      for (let i = 0; i < n; i++) {
+        const k = from + (to - from) * (i / n);
+        const p = nAt(g, k);
+        ctx.lineWidth = Math.max(0.3, wAt(k) * 0.22);
+        ctx.beginPath();
+        ctx.moveTo(p.x + p.tx * wAt(k) * 0.6, p.y + p.ty * wAt(k) * 0.6);
+        ctx.lineTo(p.x - p.tx * wAt(k) * 0.6, p.y - p.ty * wAt(k) * 0.6);
+        ctx.stroke();
+      }
+
+    } else if (form === 'chevrons') {
+      ctx.strokeStyle = U.rgbToCss(accentRgb, 0.6);
+      ctx.lineJoin = 'round';
+      for (let i = 0; i < n; i++) {
+        const k = from + (to - from) * (i / n);
+        const w = wAt(k) * 0.46;
+        const a = nAt(g, k), b = nAt(g, Math.min(0.995, k + 0.022));
+        ctx.lineWidth = Math.max(0.28, w * 0.34);
+        ctx.beginPath();
+        ctx.moveTo(a.x + a.nx * w, a.y + a.ny * w);
+        ctx.lineTo(b.x, b.y);
+        ctx.lineTo(a.x - a.nx * w, a.y - a.ny * w);
+        ctx.stroke();
+      }
+
+    } else if (form === 'lattice') {
+      // two counter-wound threads, the way carbon is actually laid up
+      for (let s = -1; s <= 1; s += 2) {
+        ctx.strokeStyle = U.rgbToCss(s > 0 ? accentRgb : U.shade(accentRgb, -0.4), 0.42);
+        ctx.lineWidth = Math.max(0.25, 0.5 * scale);
+        ctx.beginPath();
+        for (let i = 0; i <= 60; i++) {
+          const k = from + (to - from) * (i / 60);
+          const p = nAt(g, k);
+          const off = Math.sin(i * 0.55 * s) * wAt(k) * 0.42;
+          const px = p.x + p.nx * off, py = p.y + p.ny * off;
+          if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+      }
+
+    } else if (form === 'runes') {
+      const rr = VF.rng.make(sig.seed ^ 0x51e1);
+      ctx.strokeStyle = U.rgbToCss(accentRgb, 0.72);
+      ctx.lineCap = 'round';
+      for (let i = 0; i < n; i++) {
+        const k = from + (to - from) * (i / n);
+        const p = nAt(g, k);
+        const w = wAt(k) * 0.5;
+        ctx.lineWidth = Math.max(0.25, w * 0.3);
+        // three strokes of a mark nobody can read
+        ctx.beginPath();
+        for (let s = 0; s < 3; s++) {
+          const o1 = (rr() * 2 - 1) * w, o2 = (rr() * 2 - 1) * w;
+          ctx.moveTo(p.x + p.nx * o1, p.y + p.ny * o1);
+          ctx.lineTo(p.x + p.nx * o2 + p.tx * w * 0.7, p.y + p.ny * o2 + p.ty * w * 0.7);
+        }
+        ctx.stroke();
+      }
+
+    } else if (form === 'filigree') {
+      // a vine of metal, with the light running along one side of it
+      for (let pass = 0; pass < 2; pass++) {
+        ctx.strokeStyle = pass === 0
+          ? U.rgbToCss(U.shade(metalRgb, -0.55), 0.8)
+          : U.rgbToCss(U.mixRgb(metalRgb, [255, 255, 255], 0.5), 0.7);
+        ctx.lineWidth = Math.max(0.25, (pass === 0 ? 0.9 : 0.42) * scale);
+        ctx.beginPath();
+        for (let i = 0; i <= 90; i++) {
+          const k = from + (to - from) * (i / 90);
+          const p = nAt(g, k);
+          const off = Math.sin(i * 0.34) * wAt(k) * 0.5 + (pass ? -0.3 * scale : 0);
+          const px = p.x + p.nx * off, py = p.y + p.ny * off;
+          if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+      }
+      // leaves where it turns
+      ctx.fillStyle = U.rgbToCss(U.mixRgb(metalRgb, [255, 255, 255], 0.3), 0.7);
+      for (let i = 0; i < 7; i++) {
+        const k = from + (to - from) * ((i + 0.5) / 7);
+        const p = nAt(g, k);
+        const s = Math.max(0.5, wAt(k) * 0.3);
+        ctx.beginPath();
+        ctx.ellipse(p.x, p.y, s, s * 0.45, Math.atan2(p.ty, p.tx) + 0.7, 0, TAU);
+        ctx.fill();
+      }
+
+    } else if (form === 'constellation') {
+      /* Points down the blank with lines between them, breathing slightly.
+         The rod is a small piece of sky. */
+      const rr = VF.rng.make(sig.seed ^ 0xc045);
+      const pts = [];
+      for (let i = 0; i < n; i++) {
+        const k = from + (to - from) * ((i + rr() * 0.6) / n);
+        const p = nAt(g, k);
+        const off = (rr() * 2 - 1) * wAt(k) * 0.55;
+        pts.push({ x: p.x + p.nx * off, y: p.y + p.ny * off, k: k, tw: rr() * TAU });
+      }
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = U.rgbToCss(accentRgb, 0.30);
+      ctx.lineWidth = Math.max(0.2, 0.35 * scale);
+      ctx.beginPath();
+      for (let i = 0; i < pts.length; i++) {
+        if (i === 0) ctx.moveTo(pts[i].x, pts[i].y); else ctx.lineTo(pts[i].x, pts[i].y);
+      }
+      ctx.stroke();
+      for (let i = 0; i < pts.length; i++) {
+        const q = pts[i];
+        const tw = 0.62 + 0.38 * Math.sin(t * 1.7 + q.tw);
+        bloom(ctx, q.x, q.y, Math.max(1.2, 2.4 * scale) * tw, accentRgb, 0.5);
+        ctx.fillStyle = U.rgbToCss([255, 255, 255], 0.85 * tw);
+        ctx.beginPath();
+        ctx.arc(q.x, q.y, Math.max(0.28, 0.42 * scale), 0, TAU);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  /* The joints. A rod that comes apart says so. */
+  function drawFerrules(ctx, g, sig, scale, metalRgb) {
+    for (let i = 0; i < sig.ferrules.length; i++) {
+      const k = sig.ferrules[i];
+      const w = Math.max(1.4, U.lerp(4.4, 1.6, k) * scale * 1.5);
+      collar(ctx, g, k, 0.010, w, metalRgb, 0.55);
+      // the hairline where the two sections meet
+      const p = nAt(g, k);
+      ctx.strokeStyle = U.rgbToCss(U.shade(metalRgb, -0.8), 0.75);
+      ctx.lineWidth = Math.max(0.25, 0.4 * scale);
+      ctx.beginPath();
+      ctx.moveTo(p.x + p.nx * w * 0.5, p.y + p.ny * w * 0.5);
+      ctx.lineTo(p.x - p.nx * w * 0.5, p.y - p.ny * w * 0.5);
+      ctx.stroke();
+    }
+  }
+
+  /* The grip: eight materials, and they are materials rather than colours —
+     what separates cork from bone is the marks on it, not the hue. */
+  function drawGrip(ctx, g, sig, scale, wButt, gripRgb, metalRgb, accentRgb, under, a) {
+    const form = sig.grip;
+    const end = sig.gripLen;
+    const cosA = Math.cos(a), sinA = Math.sin(a);
+
+    const gg = ctx.createLinearGradient(g.bx - sinA * wButt * under, g.by + cosA * wButt * under,
+                                        g.bx + sinA * wButt * under, g.by - cosA * wButt * under);
+    gg.addColorStop(0, U.rgbToCss(U.shade(gripRgb, -0.35)));
+    gg.addColorStop(0.55, U.rgbToCss(U.shade(gripRgb, form === 'quarried' ? 0.30 : 0.18)));
+    gg.addColorStop(1, U.rgbToCss(U.shade(gripRgb, -0.5)));
+    ctx.fillStyle = gg;
+
+    // the profile itself differs: a cork grip swells, a metal one does not
+    const swell = form === 'cork' ? 1.9 : form === 'rubber' ? 1.82 :
+                  form === 'bone' ? 1.72 : form === 'quarried' ? 2.02 : 1.86;
+    taper(ctx, g, 0, end * 0.55, wButt * 1.55, wButt * swell, 5);
+    ctx.fill();
+    taper(ctx, g, end * 0.55, end, wButt * swell, wButt * 1.25, 5);
+    ctx.fill();
+
+    ctx.save();
+    taper(ctx, g, 0, end, wButt * 1.55, wButt * 1.25, 6);
+    ctx.clip();
+    const fr = VF.rng.make(sig.seed ^ 0x9c0b);
+    const half = wButt * swell * 0.5;
+
+    if (form === 'cork' && scale > 0.7) {
+      const flecks = Math.round(46 * U.clamp(scale, 0.6, 2.2));
+      for (let i = 0; i < flecks; i++) {
+        const k = fr() * end;
+        const q = nAt(g, k);
+        const off = (fr() * 2 - 1);
+        ctx.fillStyle = U.rgbToCss(U.shade(gripRgb, off > 0 ? -0.62 : 0.22), 0.32 + fr() * 0.3);
+        ctx.beginPath();
+        ctx.ellipse(q.x + q.nx * off * half, q.y + q.ny * off * half,
+                    Math.max(0.3, 0.7 * scale * (0.5 + fr())),
+                    Math.max(0.2, 0.4 * scale * (0.5 + fr())),
+                    q.tx === 0 ? 0 : Math.atan2(q.ty, q.tx), 0, TAU);
+        ctx.fill();
+      }
+
+    } else if (form === 'rubber') {
+      // moulded ribs, straight across
+      ctx.strokeStyle = U.rgbToCss(U.shade(gripRgb, -0.5), 0.55);
+      ctx.lineWidth = Math.max(0.35, 0.8 * scale);
+      for (let i = 0; i < 16; i++) {
+        const q = nAt(g, end * (i + 0.5) / 16);
+        ctx.beginPath();
+        ctx.moveTo(q.x + q.nx * half, q.y + q.ny * half);
+        ctx.lineTo(q.x - q.nx * half, q.y - q.ny * half);
+        ctx.stroke();
+      }
+
+    } else if (form === 'cord') {
+      // whipped cord, wound at an angle so it reads as wrapped not ribbed
+      for (let i = 0; i < 30; i++) {
+        const k = end * (i + 0.5) / 30;
+        const q = nAt(g, k);
+        ctx.strokeStyle = U.rgbToCss(U.shade(gripRgb, i % 2 ? -0.3 : 0.16), 0.8);
+        ctx.lineWidth = Math.max(0.4, 1.1 * scale);
+        ctx.beginPath();
+        ctx.moveTo(q.x + q.nx * half + q.tx * half * 0.5, q.y + q.ny * half + q.ty * half * 0.5);
+        ctx.lineTo(q.x - q.nx * half - q.tx * half * 0.5, q.y - q.ny * half - q.ty * half * 0.5);
+        ctx.stroke();
+      }
+
+    } else if (form === 'scaled') {
+      // overlapping plates
+      ctx.strokeStyle = U.rgbToCss(U.shade(gripRgb, -0.55), 0.7);
+      ctx.lineWidth = Math.max(0.25, 0.5 * scale);
+      for (let i = 0; i < 22; i++) {
+        const k = end * (i + 0.5) / 22;
+        const q = nAt(g, k);
+        for (let s = -1; s <= 1; s += 2) {
+          ctx.beginPath();
+          ctx.ellipse(q.x + q.nx * half * 0.42 * s, q.y + q.ny * half * 0.42 * s,
+                      half * 0.42, half * 0.3, Math.atan2(q.ty, q.tx), 0, TAU);
+          ctx.stroke();
+        }
+      }
+
+    } else if (form === 'bone') {
+      // long grain, and a couple of hairline cracks
+      ctx.strokeStyle = U.rgbToCss(U.shade(gripRgb, -0.42), 0.5);
+      ctx.lineWidth = Math.max(0.22, 0.42 * scale);
+      for (let i = 0; i < 9; i++) {
+        const off = (i / 8 * 2 - 1) * 0.82;
+        ctx.beginPath();
+        for (let j = 0; j <= 12; j++) {
+          const q = nAt(g, end * j / 12);
+          const w = off * half + Math.sin(j * 0.9 + i) * half * 0.08;
+          const px = q.x + q.nx * w, py = q.y + q.ny * w;
+          if (j === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+      }
+
+    } else if (form === 'chased') {
+      // engraved metal: a repeating cut with a lit edge
+      for (let i = 0; i < 13; i++) {
+        const k = end * (i + 0.5) / 13;
+        const q = nAt(g, k);
+        ctx.strokeStyle = U.rgbToCss(U.shade(metalRgb, -0.6), 0.85);
+        ctx.lineWidth = Math.max(0.4, 0.9 * scale);
+        ctx.beginPath();
+        ctx.moveTo(q.x + q.nx * half, q.y + q.ny * half);
+        ctx.lineTo(q.x - q.nx * half, q.y - q.ny * half);
+        ctx.stroke();
+        ctx.strokeStyle = U.rgbToCss(U.mixRgb(metalRgb, [255, 255, 255], 0.55), 0.6);
+        ctx.lineWidth = Math.max(0.2, 0.35 * scale);
+        ctx.beginPath();
+        ctx.moveTo(q.x + q.nx * half - q.tx * 0.7 * scale, q.y + q.ny * half - q.ty * 0.7 * scale);
+        ctx.lineTo(q.x - q.nx * half - q.tx * 0.7 * scale, q.y - q.ny * half - q.ty * 0.7 * scale);
+        ctx.stroke();
+      }
+
+    } else if (form === 'quarried') {
+      /* Cut stone: facets rather than a surface, with the light catching one
+         side of each. Nothing else in the game looks like this. */
+      const facets = 7;
+      for (let i = 0; i < facets; i++) {
+        const k0 = end * i / facets, k1 = end * (i + 1) / facets;
+        const q = nAt(g, (k0 + k1) * 0.5);
+        const lit = (i % 2) === 0;
+        ctx.fillStyle = U.rgbToCss(U.shade(gripRgb, lit ? 0.28 : -0.42), 0.9);
+        taper(ctx, g, k0, k1, half * 2 * (lit ? 1 : 0.94), half * 2 * (lit ? 0.94 : 1), 2);
+        ctx.fill();
+        ctx.strokeStyle = U.rgbToCss(U.mixRgb(gripRgb, [255, 255, 255], 0.4), 0.35);
+        ctx.lineWidth = Math.max(0.2, 0.4 * scale);
+        ctx.beginPath();
+        ctx.moveTo(q.x + q.nx * half, q.y + q.ny * half);
+        ctx.lineTo(q.x - q.nx * half, q.y - q.ny * half);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+
+    /* Winding checks — the bands where the grip stops. How many is grade. */
+    ctx.strokeStyle = U.rgbToCss(U.mixRgb(accentRgb, [0, 0, 0], 0.35), 0.7);
+    ctx.lineWidth = Math.max(0.5, 1.0 * scale);
+    for (let i = 0; i < sig.checks; i++) {
+      const k = 0.055 + i * 0.085 * (0.22 / Math.max(0.12, end));
+      const p = ptAt(g, Math.min(k, end * 0.92));
+      const m = Math.hypot(p.dx, p.dy) || 1;
+      const w = wButt * 1.75;
+      ctx.beginPath();
+      ctx.moveTo(p.x - p.dy / m * w * 0.5, p.y + p.dx / m * w * 0.5);
+      ctx.lineTo(p.x + p.dy / m * w * 0.5, p.y - p.dx / m * w * 0.5);
+      ctx.stroke();
+    }
+  }
+
+  /* What the rod ends in, at the butt. */
+  function drawButt(ctx, g, sig, scale, wButt, gripRgb, metalRgb, stoneRgb, a) {
+    const form = sig.butt;
+    const r = wButt * 0.95;
+    if (form === 'flat') {
+      ctx.fillStyle = U.rgbToCss(U.shade(gripRgb, -0.55));
+      ctx.beginPath(); ctx.ellipse(g.bx, g.by, r, r, 0, 0, TAU); ctx.fill();
+
+    } else if (form === 'domed') {
+      const gr = ctx.createRadialGradient(g.bx - r * 0.35, g.by - r * 0.4, r * 0.1, g.bx, g.by, r);
+      gr.addColorStop(0, U.rgbToCss(U.shade(gripRgb, 0.3)));
+      gr.addColorStop(1, U.rgbToCss(U.shade(gripRgb, -0.62)));
+      ctx.fillStyle = gr;
+      ctx.beginPath(); ctx.ellipse(g.bx, g.by, r * 1.08, r * 1.08, 0, 0, TAU); ctx.fill();
+
+    } else if (form === 'ringed') {
+      ctx.fillStyle = U.rgbToCss(U.shade(gripRgb, -0.55));
+      ctx.beginPath(); ctx.ellipse(g.bx, g.by, r, r, 0, 0, TAU); ctx.fill();
+      ctx.strokeStyle = U.rgbToCss(U.mixRgb(metalRgb, [255, 255, 255], 0.4), 0.85);
+      ctx.lineWidth = Math.max(0.4, 0.9 * scale);
+      ctx.beginPath(); ctx.ellipse(g.bx, g.by, r * 0.72, r * 0.72, 0, 0, TAU); ctx.stroke();
+
+    } else if (form === 'faceted') {
+      ctx.save();
+      ctx.translate(g.bx, g.by); ctx.rotate(a);
+      const gr = ctx.createLinearGradient(-r, -r, r, r);
+      gr.addColorStop(0, U.rgbToCss(U.mixRgb(metalRgb, [255, 255, 255], 0.5)));
+      gr.addColorStop(1, U.rgbToCss(U.shade(metalRgb, -0.6)));
+      ctx.fillStyle = gr;
+      ctx.beginPath();
+      for (let i = 0; i < 8; i++) {
+        const ang = i / 8 * TAU;
+        const px = Math.cos(ang) * r * 1.05, py = Math.sin(ang) * r * 1.05;
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+
+    } else if (form === 'gemmed') {
+      ctx.fillStyle = U.rgbToCss(U.shade(metalRgb, -0.5));
+      ctx.beginPath(); ctx.ellipse(g.bx, g.by, r * 1.12, r * 1.12, 0, 0, TAU); ctx.fill();
+      gem(ctx, g.bx, g.by, r * 0.72, a, stoneRgb, 6);
+
+    } else if (form === 'crowned') {
+      /* Points around the cap. The end of the rod is doing something it does
+         not need to do, which is what expensive looks like. */
+      ctx.fillStyle = U.rgbToCss(U.shade(metalRgb, -0.45));
+      ctx.beginPath(); ctx.ellipse(g.bx, g.by, r * 1.0, r * 1.0, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = U.rgbToCss(U.mixRgb(metalRgb, [255, 255, 255], 0.45), 0.95);
+      for (let i = 0; i < 7; i++) {
+        const ang = a + Math.PI * 0.5 + (i / 7) * TAU;
+        ctx.beginPath();
+        ctx.moveTo(g.bx + Math.cos(ang) * r * 0.9, g.by + Math.sin(ang) * r * 0.9);
+        ctx.lineTo(g.bx + Math.cos(ang + 0.24) * r * 1.5, g.by + Math.sin(ang + 0.24) * r * 1.5);
+        ctx.lineTo(g.bx + Math.cos(ang + 0.48) * r * 0.9, g.by + Math.sin(ang + 0.48) * r * 0.9);
+        ctx.closePath(); ctx.fill();
+      }
+      gem(ctx, g.bx, g.by, r * 0.5, a, stoneRgb, 6);
+    }
+  }
+
+  /* And what it ends in at the other end. */
+  function drawTipTop(ctx, g, sig, scale, lit, dark, glowRgb, t) {
+    const p = ptAt(g, 1);
+    const m = Math.hypot(p.dx, p.dy) || 1;
+    const rr = Math.max(0.8, 1.5 * scale);
+    const cx = p.x + p.dx / m * rr * 0.8, cy = p.y + p.dy / m * rr * 0.8;
+    const ang = Math.atan2(p.dy, p.dx);
+
+    if (sig.tip === 'lit' || sig.tip === 'crowned') {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      bloom(ctx, cx, cy, rr * (sig.tip === 'lit' ? 5.5 : 3.4) *
+            (0.85 + 0.15 * Math.sin(t * 2 + sig.phase)), glowRgb, 0.5);
+      ctx.restore();
+    }
+    ctx.strokeStyle = U.rgbToCss(dark, 0.95);
+    ctx.lineWidth = Math.max(0.4, 0.7 * scale);
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rr, rr * 0.78, ang, 0, TAU);
+    ctx.stroke();
+    ctx.strokeStyle = U.rgbToCss(lit, 0.8);
+    ctx.lineWidth = Math.max(0.25, 0.45 * scale);
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rr, rr * 0.78, ang, Math.PI * 0.85, Math.PI * 1.95);
+    ctx.stroke();
+
+    if (sig.tip === 'lined') {
+      ctx.strokeStyle = U.rgbToCss(lit, 0.55);
+      ctx.lineWidth = Math.max(0.2, 0.35 * scale);
+      ctx.beginPath();
+      ctx.moveTo(p.x - p.dx / m * rr * 2.4, p.y - p.dy / m * rr * 2.4);
+      ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+    } else if (sig.tip === 'crowned') {
+      ctx.fillStyle = U.rgbToCss(U.mixRgb(glowRgb, [255, 255, 255], 0.4), 0.9);
+      for (let i = 0; i < 4; i++) {
+        const ang2 = ang + i / 4 * TAU;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(cx + Math.cos(ang2) * rr * 1.9, cy + Math.sin(ang2) * rr * 1.9);
+        ctx.lineTo(cx + Math.cos(ang2 + 0.5) * rr * 0.6, cy + Math.sin(ang2 + 0.5) * rr * 0.6);
+        ctx.closePath(); ctx.fill();
+      }
+    }
+  }
+
   function pull() {
     const S = VF.fishing && VF.fishing.S;
     if (!S) return 0;
@@ -317,12 +900,18 @@
   function draw(ctx, rod, g, t, opts) {
     opts = opts || {};
     const art = rod.art;
+    /* How this particular rod is built — guide count and form, grip material,
+       what is inlaid down the blank, how it ends at both ends. Everything that
+       used to be identical on all hundred and twenty-nine of them. */
+    const sig = VF.rodSig ? VF.rodSig.of(rod) : null;
     // stroke weight tracks rod length; `weight` compensates for canvases
     // drawn at a higher resolution than they are displayed
     const scale = U.clamp(g.len / 300, 0.55, 1.35) * (opts.weight || 1);
     const tipRgb = U.hexToRgb(art.tip);
     const c1 = U.hexToRgb(art.c1), c2 = U.hexToRgb(art.c2);
     const gripRgb = U.hexToRgb(art.grip);
+    const metalRgb = U.hexToRgb(art.metal || art.tip);
+    const stoneRgb = U.hexToRgb(art.stone || art.tip);
     const under = opts.under === undefined ? 1 : opts.under;   // which side the reel hangs
 
     if (art.apex) {
@@ -341,9 +930,13 @@
     }
 
     /* ---- the blank: one continuous taper from a thick butt to a hair tip ---- */
-    const wButt = Math.max(1.8, 5.0 * scale);
-    const wTip = Math.max(0.55, 0.85 * scale);
+    const wButt = Math.max(1.8, 5.0 * scale * (sig ? U.lerp(0.92, 1.10, sig.taper - 0.78) : 1));
+    const wTip = Math.max(0.55, 0.85 * scale * (sig ? U.lerp(1.15, 0.80, sig.taper - 0.78) : 1));
     drawBlank(ctx, g, wButt, wTip, c1, c2, tipRgb, scale);
+
+    // whatever is set into the blank goes on before the family flourish, so a
+    // style that lights the rod lights the inlay too
+    if (sig) drawInlay(ctx, g, sig, scale, c1, tipRgb, metalRgb, t);
 
     drawStyle(ctx, art, g, t, scale, tipRgb);
     if (art.apex) apexMotes(ctx, g, t, scale, tipRgb, true, art.glow);
@@ -354,51 +947,35 @@
        light. One thin ellipse is a drawing of a guide. */
     const ringLit = U.mixRgb(tipRgb, [235, 245, 255], 0.62);
     const ringDark = U.shade(U.mixRgb(tipRgb, [120, 140, 160], 0.5), -0.55);
-    for (let i = 0; i < GUIDES.length; i++) {
-      const k = GUIDES[i];
-      const p = ptAt(g, k);
-      const m = Math.hypot(p.dx, p.dy) || 1;
-      const nx = -p.dy / m * under, ny = p.dx / m * under;
-      const ang = Math.atan2(p.dy, p.dx);
-      const rr = Math.max(0.8, U.lerp(3.0, 1.1, k) * scale);
-      const foot = rr * 1.35;
-      const cx2 = p.x + nx * (foot + rr * 0.7), cy2 = p.y + ny * (foot + rr * 0.7);
 
-      // the wire foot, tapering out of the blank rather than a bare line
-      ctx.lineCap = 'round';
-      ctx.strokeStyle = U.rgbToCss(ringDark, 0.9);
-      ctx.lineWidth = Math.max(0.5, 1.15 * scale);
-      ctx.beginPath();
-      ctx.moveTo(p.x, p.y);
-      ctx.lineTo(p.x + nx * foot, p.y + ny * foot);
-      ctx.stroke();
-      ctx.strokeStyle = U.rgbToCss(ringLit, 0.55);
-      ctx.lineWidth = Math.max(0.3, 0.5 * scale);
-      ctx.beginPath();
-      ctx.moveTo(p.x, p.y);
-      ctx.lineTo(p.x + nx * foot * 0.9, p.y + ny * foot * 0.9);
-      ctx.stroke();
+    /* ---- guides ----
+       Most of a rod's silhouette is its guides, and every rod in the game used
+       to carry the same seven in the same seven places. Now the count, the
+       spacing, the size and the kind all come off the rod's own build: five
+       plain wire rings on a stick somebody left at the shore, ten turning arcs
+       of light with no wire in them at all on the thing at the end of the
+       quest. The wraps go down first so the feet sit on top of them. */
+    const guides = sig ? sig.guides : [0.30, 0.45, 0.58, 0.695, 0.795, 0.88, 0.95];
+    const gForm = sig ? sig.guideForm : 'ring';
+    const gScale = sig ? sig.guideScale : 1;
 
-      // the ring: body first, then the lit side over the top of it
-      ctx.strokeStyle = U.rgbToCss(ringDark, 0.95);
-      ctx.lineWidth = Math.max(0.5, 1.25 * scale);
-      ctx.beginPath();
-      ctx.ellipse(cx2, cy2, rr, rr * 0.72, ang, 0, TAU);
-      ctx.stroke();
-      ctx.strokeStyle = U.rgbToCss(ringLit, 0.85);
-      ctx.lineWidth = Math.max(0.3, 0.55 * scale);
-      ctx.beginPath();
-      ctx.ellipse(cx2, cy2, rr, rr * 0.72, ang, Math.PI * 0.85, Math.PI * 1.95);
-      ctx.stroke();
-      if (scale > 0.9) {
-        ctx.fillStyle = U.rgbToCss([255, 255, 255], 0.7);
-        ctx.beginPath();
-        ctx.arc(cx2 - nx * rr * 0.62, cy2 - ny * rr * 0.62, Math.max(0.25, 0.34 * scale), 0, TAU);
-        ctx.fill();
+    if (sig && sig.wraps > 0) {
+      for (let i = 0; i < guides.length; i++) {
+        drawWrap(ctx, g, guides[i], sig.wraps, sig.wrapWidth, scale, c1, tipRgb, metalRgb);
       }
     }
-    // tip-top ring
-    {
+    if (sig) drawFerrules(ctx, g, sig, scale, metalRgb);
+
+    for (let i = 0; i < guides.length; i++) {
+      const k = guides[i];
+      const rr = Math.max(0.8, U.lerp(3.0, 1.1, k) * scale * gScale);
+      drawGuide(ctx, g, k, gForm, rr, scale, under, ringLit, ringDark, tipRgb,
+                t, sig ? sig.phase : 0);
+    }
+
+    // the tip-top, in whichever way this rod ends
+    if (sig) drawTipTop(ctx, g, sig, scale, ringLit, ringDark, tipRgb, t);
+    else {
       const p = ptAt(g, 1);
       const m = Math.hypot(p.dx, p.dy) || 1;
       const rr = Math.max(0.8, 1.5 * scale);
@@ -409,69 +986,20 @@
       ctx.stroke();
     }
 
-    /* ---- grip, reel seat, reel ---- */
+    /* ---- grip, reel seat, butt, reel ----
+       Eight grip materials rather than one cork, and they differ by the marks
+       on them rather than by hue: cork has tooth, cord is wound, bone has
+       grain, stone has facets. The butt cap and the winding checks come off
+       the same build. */
     const a = g.angle;
-    const cosA = Math.cos(a), sinA = Math.sin(a);
-    const gripEnd = 0.20;
 
-    // cork, fattest in the middle where a hand closes on it
-    const gg = ctx.createLinearGradient(g.bx - sinA * wButt * under, g.by + cosA * wButt * under,
-                                        g.bx + sinA * wButt * under, g.by - cosA * wButt * under);
-    gg.addColorStop(0, U.rgbToCss(U.shade(gripRgb, -0.35)));
-    gg.addColorStop(0.55, U.rgbToCss(U.shade(gripRgb, 0.18)));
-    gg.addColorStop(1, U.rgbToCss(U.shade(gripRgb, -0.5)));
-    ctx.fillStyle = gg;
-    taper(ctx, g, 0, gripEnd * 0.55, wButt * 1.55, wButt * 1.9, 5);
-    ctx.fill();
-    taper(ctx, g, gripEnd * 0.55, gripEnd, wButt * 1.9, wButt * 1.25, 5);
-    ctx.fill();
-
-    /* cork tooth: flecks, denser where the grip turns away from the light, so
-       the grip reads as a material rather than as a shaded tube */
-    if (scale > 0.7) {
-      ctx.save();
-      taper(ctx, g, 0, gripEnd, wButt * 1.55, wButt * 1.25, 6);
-      ctx.clip();
-      const fr = VF.rng.make(0x9c0b);
-      const flecks = Math.round(46 * U.clamp(scale, 0.6, 2.2));
-      for (let i = 0; i < flecks; i++) {
-        const k = fr() * gripEnd;
-        const q = nAt(g, k);
-        const off = (fr() * 2 - 1);
-        const w2 = wButt * 1.8 * 0.5;
-        ctx.fillStyle = U.rgbToCss(U.shade(gripRgb, off > 0 ? -0.62 : 0.22), 0.32 + fr() * 0.3);
-        ctx.beginPath();
-        ctx.ellipse(q.x + q.nx * off * w2, q.y + q.ny * off * w2,
-                    Math.max(0.3, 0.7 * scale * (0.5 + fr())),
-                    Math.max(0.2, 0.4 * scale * (0.5 + fr())), q.tx === 0 ? 0 : Math.atan2(q.ty, q.tx),
-                    0, TAU);
-        ctx.fill();
-      }
-      ctx.restore();
+    if (sig) {
+      drawGrip(ctx, g, sig, scale, wButt, gripRgb, metalRgb, tipRgb, under, a);
+      drawButt(ctx, g, sig, scale, wButt, gripRgb, metalRgb, stoneRgb, a);
     }
 
-    // butt cap
-    ctx.fillStyle = U.rgbToCss(U.shade(gripRgb, -0.55));
-    ctx.beginPath();
-    ctx.ellipse(g.bx, g.by, wButt * 0.95, wButt * 0.95, 0, 0, TAU);
-    ctx.fill();
-
-    // binding bands
-    ctx.strokeStyle = U.rgbToCss(U.mixRgb(tipRgb, [0, 0, 0], 0.35), 0.7);
-    ctx.lineWidth = Math.max(0.5, 1.0 * scale);
-    for (let i = 0; i < 2; i++) {
-      const k = 0.055 + i * 0.085;
-      const p = ptAt(g, k);
-      const m = Math.hypot(p.dx, p.dy) || 1;
-      const w = wButt * 1.75;
-      ctx.beginPath();
-      ctx.moveTo(p.x - p.dy / m * w * 0.5, p.y + p.dx / m * w * 0.5);
-      ctx.lineTo(p.x + p.dy / m * w * 0.5, p.y - p.dx / m * w * 0.5);
-      ctx.stroke();
-    }
-
-    /* the hardware that says what it cost: a machined winding check either
-       side of the seat, and a stone set into the near face of the upper one */
+    /* The hardware that says what it cost: a machined winding check either
+       side of the seat, and a stone set into the near face of the upper one. */
     if (art.apex) {
       const metal = U.hexToRgb(art.metal || art.c1);
       collar(ctx, g, 0.170, 0.016, wButt * 1.5, metal);
@@ -481,31 +1009,86 @@
           U.hexToRgb(art.stone || art.tip), 6);
     }
 
-    drawReel(ctx, g, art, t, scale, opts, under, tipRgb, c1, c2);
+    drawReel(ctx, g, art, t, scale, opts, under, tipRgb, c1, c2, sig, metalRgb);
     drawReelStyle(ctx, art, g, t, scale, under, tipRgb, c1, c2);
   }
 
   /* A spinning reel: seat, stem, spool with a line wrap, bail and a crank
      that actually turns when the player is reeling. */
-  function drawReel(ctx, g, art, t, scale, opts, under, tipRgb, c1, c2) {
+  function drawReel(ctx, g, art, t, scale, opts, under, tipRgb, c1, c2, sig, metalRgb) {
     const a = g.angle;
     const cosA = Math.cos(a), sinA = Math.sin(a);
     const nx = -sinA * under, ny = cosA * under;
-    const rr = Math.max(2.8, 6.0 * scale);
-    const sx = g.bx + cosA * g.len * 0.215;
-    const sy = g.by + sinA * g.len * 0.215;
+    const rr = Math.max(2.8, 6.0 * scale * (sig ? sig.reelSize : 1));
+    const seatK = sig ? sig.reelAt : 0.215;
+    const sx = g.bx + cosA * g.len * seatK;
+    const sy = g.by + sinA * g.len * seatK;
     const cx = sx + nx * rr * 1.9, cy = sy + ny * rr * 1.9;
 
-    // reel seat: a short collar on the blank
-    ctx.fillStyle = U.rgbToCss(U.shade(c2, 0.25));
-    ctx.save();
-    ctx.translate(sx, sy);
-    ctx.rotate(a);
-    ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(-rr * 1.1, -rr * 0.55, rr * 2.2, rr * 1.1, rr * 0.3);
-    else ctx.rect(-rr * 1.1, -rr * 0.55, rr * 2.2, rr * 1.1);
-    ctx.fill();
-    ctx.restore();
+    /* The reel seat. It was a flat grey slab on every rod in the game, sitting
+       in the most looked-at place on the whole object. It is machined out of
+       the rod's own metal now, and how much of it there is depends on the
+       rod: a plain block low down, and at the top a pair of rings holding the
+       foot with a gap where the block used to be. */
+    {
+      const seatForm = sig ? sig.seat : 'plain';
+      const mRgb2 = metalRgb || U.shade(c2, 0.25);
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.rotate(a);
+      const hw = rr * 1.1, hh = rr * 0.55;
+
+      if (seatForm !== 'floating') {
+        const sg = ctx.createLinearGradient(0, -hh, 0, hh);
+        sg.addColorStop(0, U.rgbToCss(U.shade(mRgb2, -0.55)));
+        sg.addColorStop(0.34, U.rgbToCss(U.mixRgb(mRgb2, [255, 255, 255], 0.42)));
+        sg.addColorStop(1, U.rgbToCss(U.shade(mRgb2, -0.66)));
+        ctx.fillStyle = sg;
+        ctx.beginPath();
+        if (seatForm === 'skeleton') {
+          // cut away in the middle: two pads rather than one block
+          const pad = hw * 0.42;
+          if (ctx.roundRect) {
+            ctx.roundRect(-hw, -hh, pad, hh * 2, rr * 0.22);
+            ctx.roundRect(hw - pad, -hh, pad, hh * 2, rr * 0.22);
+          } else {
+            ctx.rect(-hw, -hh, pad, hh * 2);
+            ctx.rect(hw - pad, -hh, pad, hh * 2);
+          }
+        } else if (ctx.roundRect) {
+          ctx.roundRect(-hw, -hh, hw * 2, hh * 2, rr * 0.3);
+        } else {
+          ctx.rect(-hw, -hh, hw * 2, hh * 2);
+        }
+        ctx.fill();
+      }
+
+      if (seatForm === 'banded' || seatForm === 'chased') {
+        ctx.strokeStyle = U.rgbToCss(U.mixRgb(mRgb2, [255, 255, 255], 0.6), 0.8);
+        ctx.lineWidth = Math.max(0.35, 0.7 * scale);
+        const n = seatForm === 'chased' ? 5 : 2;
+        for (let i = 0; i < n; i++) {
+          const x = -hw + (hw * 2) * ((i + 1) / (n + 1));
+          ctx.beginPath(); ctx.moveTo(x, -hh); ctx.lineTo(x, hh); ctx.stroke();
+        }
+      }
+      if (seatForm === 'floating') {
+        // two rings, and light where the block is not
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = U.rgbToCss(tipRgb, 0.20);
+        ctx.beginPath(); ctx.ellipse(0, 0, hw, hh, 0, 0, TAU); ctx.fill();
+        ctx.restore();
+        ctx.strokeStyle = U.rgbToCss(U.mixRgb(mRgb2, [255, 255, 255], 0.5), 0.9);
+        ctx.lineWidth = Math.max(0.5, 1.0 * scale);
+        for (let s2 = -1; s2 <= 1; s2 += 2) {
+          ctx.beginPath();
+          ctx.ellipse(hw * 0.62 * s2, 0, hh * 0.5, hh * 1.02, 0, 0, TAU);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
 
     // stem down to the reel body
     ctx.strokeStyle = U.rgbToCss(U.shade(c2, 0.15));
@@ -525,11 +1108,66 @@
     ctx.ellipse(cx, cy, rr * 1.05, rr * 0.98, a, 0, TAU);
     ctx.fill();
 
+    /* The housing. A cheap reel is a closed shell with a hole in it; the ones
+       further up are cut away until there is more air than metal, and the last
+       one has nothing holding the spool at all. */
+    const form = sig ? sig.reel : 'open';
+    const mRgb = metalRgb || tipRgb;
+
+    if (form === 'ported' || form === 'caged' || form === 'spoked') {
+      // holes drilled through the housing, in a ring
+      const holes = form === 'ported' ? 5 : form === 'caged' ? 7 : 9;
+      ctx.fillStyle = U.rgbToCss(U.shade(c2, -0.62), 0.9);
+      for (let i = 0; i < holes; i++) {
+        const ang = a + (i / holes) * TAU;
+        ctx.beginPath();
+        ctx.ellipse(cx + Math.cos(ang) * rr * 0.86, cy + Math.sin(ang) * rr * 0.86,
+                    rr * (form === 'spoked' ? 0.13 : 0.17), rr * 0.15, ang, 0, TAU);
+        ctx.fill();
+      }
+    }
+
     // the spool sits inside the housing, dark and recessed
     ctx.fillStyle = U.rgbToCss(U.shade(c2, -0.55));
     ctx.beginPath();
     ctx.arc(cx, cy, rr * 0.66, 0, TAU);
     ctx.fill();
+
+    if (form === 'spoked') {
+      // struts from the rim to the spindle
+      ctx.strokeStyle = U.rgbToCss(U.mixRgb(mRgb, [255, 255, 255], 0.35), 0.75);
+      ctx.lineWidth = Math.max(0.35, 0.7 * scale);
+      for (let i = 0; i < 6; i++) {
+        const ang = a + (i / 6) * TAU + t * 0.25;
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(ang) * rr * 0.22, cy + Math.sin(ang) * rr * 0.22);
+        ctx.lineTo(cx + Math.cos(ang) * rr * 0.62, cy + Math.sin(ang) * rr * 0.62);
+        ctx.stroke();
+      }
+    } else if (form === 'orbital') {
+      /* Nothing holds it. Two rings turning around the spool at angles to one
+         another, and the spool sitting in the middle of them not touching. */
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      bloom(ctx, cx, cy, rr * 2.6, tipRgb, 0.34);
+      ctx.strokeStyle = U.rgbToCss(U.mixRgb(tipRgb, [255, 255, 255], 0.45), 0.8);
+      ctx.lineWidth = Math.max(0.4, 0.75 * scale);
+      for (let i = 0; i < 2; i++) {
+        const spin = t * (0.45 + i * 0.3) + (sig ? sig.phase : 0) + i * 1.1;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, rr * 1.06, rr * (0.30 + i * 0.34), a + spin, 0, TAU);
+        ctx.stroke();
+      }
+      ctx.restore();
+    } else if (form === 'caged') {
+      // a bar across the face, the way a cage reel is braced
+      ctx.strokeStyle = U.rgbToCss(U.mixRgb(mRgb, [255, 255, 255], 0.4), 0.8);
+      ctx.lineWidth = Math.max(0.4, 0.85 * scale);
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(a + 1.2) * rr, cy + Math.sin(a + 1.2) * rr);
+      ctx.lineTo(cx + Math.cos(a + 1.2 + Math.PI) * rr, cy + Math.sin(a + 1.2 + Math.PI) * rr);
+      ctx.stroke();
+    }
     // one bright rim is worth more than three faint ones at this size
     ctx.strokeStyle = U.rgbToCss(U.mixRgb(tipRgb, [255, 255, 255], 0.4), 0.85);
     ctx.lineWidth = Math.max(0.5, 0.9 * scale);

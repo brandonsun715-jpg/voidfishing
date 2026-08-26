@@ -448,7 +448,14 @@
     /* The wanderer's stock is appended to this list at load, so the index has
        to be rebuildable — everything that draws, prices, equips or compares a
        rod then handles those without knowing they came from anywhere else. */
-    reindex: function () { sortByPrice(); BY_ID = VF.util.byId(LIST); },
+    reindex: function () {
+      sortByPrice();
+      BY_ID = VF.util.byId(LIST);
+      // a rod's build is worked out from where it stands in the whole roster,
+      // so appending the wanderer's hundred moves everybody and the answers
+      // have to be thrown away
+      if (VF.rodSig) VF.rodSig.clear();
+    },
     get: function (id) { return BY_ID[id] || BY_ID.wood; },
     index: function (id) { for (let i = 0; i < LIST.length; i++) if (LIST[i].id === id) return i; return 0; },
     blocked: blocked,
