@@ -26,21 +26,84 @@
 
   /* ---------------------------------------------------------------- stars */
   let stars = null;
+  /* The field is baked: magnitudes on a power law, colour temperature, and the
+     galaxy lying across it. Only the two dozen brightest come back to be
+     animated, because a blit cannot twinkle and a sky where nothing moves is a
+     photograph. */
   function buildStars() {
     const q = VF.state.data.settings.quality;
-    const n = q === 'low' ? 80 : q === 'medium' ? 165 : 255;
-    stars = new Array(n);
-    const rnd = VF.rng.make(0xBEEF ^ VF.locations.index(VF.state.data.location) * 7919);
-    for (let i = 0; i < n; i++) {
-      stars[i] = {
-        x: rnd(), y: Math.pow(rnd(), 1.35),
-        s: 0.4 + Math.pow(rnd(), 2.6) * 2.1,
-        tw: rnd() * TAU,
-        sp: 0.4 + rnd() * 1.5,
-        bright: 0.35 + rnd() * 0.65,
-        big: rnd() < 0.05
-      };
+    const loc = VF.locations.current();
+    const key = loc.id + ':' + Math.round(W) + 'x' + Math.round(L.horizonY) + ':' + q;
+    if (starKey === key && starField) return;
+    starKey = key;
+    const built = VF.skyArt.buildField(W, Math.max(8, L.horizonY), 
+                                       0xBEEF ^ VF.locations.index(loc.id) * 7919,
+                                       q, U.hexToRgb(loc.starTint));
+    starField = built.canvas;
+    stars = built.bright;
+  }
+
+  /* --------------------------------------------------------------- clouds
+
+     Two layers at different scales drifting at different speeds. Baked at a
+     third resolution because a cloud has no edge worth resolving, and scrolled
+     by drawing each twice side by side so the wrap is seamless. */
+  function buildClouds() {
+    const q = VF.state.data.settings.quality;
+    if (q === 'low') { clouds = null; return; }
+    const loc = VF.locations.current();
+    const wx = VF.weather.id();
+    const key = loc.id + ':' + wx + ':' + Math.round(W) + 'x' + Math.round(L.horizonY) + ':' + q;
+    if (cloudKey === key && clouds) return;
+    cloudKey = key;
+
+    const P = VF.palette.P;
+    const bandH = Math.max(24, L.horizonY);
+    const seedBase = 0xC10D ^ VF.locations.index(loc.id) * 6151;
+    // how much sky the weather is covering
+    // clear weather means a few streaks, not an overcast lid
+    const cover = U.clamp(0.10 + VF.weather.fog() * 0.30 + VF.weather.rain() * 0.34, 0.06, 0.70);
+
+    clouds = [];
+    const layers = q === 'high' ? 2 : 1;
+    for (let i = 0; i < layers; i++) {
+      clouds.push({
+        canvas: VF.skyArt.buildCloudLayer(W, bandH, {
+          downscale: q === 'high' ? 3 : 4,
+          scale: i === 0 ? 2.4 : 4.6,
+          seed: seedBase + i * 977,
+          cover: cover * (i === 0 ? 1 : 0.78),
+          soft: i === 0 ? 0.34 : 0.26,
+          lit: U.mixRgb(U.hexToRgb(loc.glow), [255, 255, 255], 0.20),
+          dark: U.mixRgb(U.hexToRgb(loc.fog), [0, 0, 0], 0.62),
+          lightX: L.glowX / Math.max(1, W),
+          lightY: L.glowY / Math.max(1, bandH)
+        }),
+        // the high layer is further away, so it moves slower
+        speed: i === 0 ? 0.0042 : 0.0092,
+        alpha: i === 0 ? 0.13 : 0.085,
+        h: bandH
+      });
     }
+  }
+
+  function drawClouds(P) {
+    if (!clouds || !clouds.length) return;
+    // they are the first thing the void takes away
+    const k = U.clamp((0.85 - P.void) / 0.40, 0, 1);
+    if (k <= 0.01) return;
+    ctx.save();
+    for (let i = 0; i < clouds.length; i++) {
+      const c = clouds[i];
+      const off = ((t * c.speed) % 1) * W;
+      // and they are lit by the sky, so at night there is very little of them
+      ctx.globalAlpha = c.alpha * k * (0.18 + P.bright * 0.95);
+      // twice, side by side, so the drift never shows a seam
+      ctx.drawImage(c.canvas, -off, 0, W, c.h);
+      ctx.drawImage(c.canvas, W - off, 0, W, c.h);
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
   }
 
   /* --------------------------------------------------------------- grain
@@ -67,6 +130,8 @@
   /* ------------------------------------------------------- backdrop cache */
   let backdrop = null, backdropKey = '';
   let landPad = null, landOne = null, landKey = '';   // the tinted land, baked
+  let starField = null, starKey = '';                 // the baked field
+  let clouds = null, cloudKey = '';                   // the drifting layers
 
   /* The land was three layers of flat black at different opacities, which is
      why it read as cardboard: distance does not make a hill more transparent,
@@ -83,7 +148,7 @@
 
     const hy = L.horizonY;
     backdrop = [];
-    for (let l = 0; l < 3; l++) {
+    for (let l = 0; l < 5; l++) {
       const c = document.createElement('canvas');
       c.width = Math.max(1, Math.round(W)); c.height = Math.max(1, Math.round(H));
       const g = c.getContext('2d');
@@ -141,18 +206,50 @@
       og.clearRect(0, 0, landOne.width, landOne.height);
       og.drawImage(backdrop[l], 0, 0);
 
+      /* What is baked is the FORM in greys — where the light falls on the
+         range — so the colour arrives in two passes here rather than being
+         painted over the top of it.
+
+         MULTIPLY puts the rock and the snow in: grey times a colour is that
+         colour at that luminance, so the lit faces come out bright and the
+         shadowed ones stay dark instead of the whole shape becoming one flat
+         fill, which is what a source-atop pass would have done to it.
+
+         Then SOURCE-ATOP lifts it toward the haze, which is the half of
+         aerial perspective that a multiply cannot do: distance does not only
+         dim a thing, it washes it out toward the colour of the air. */
+      /* Near ranges are dark and far ones are pale — that is the whole of
+         aerial perspective, and getting it the wrong way round turns a
+         mountain into a fog bank. `far` runs 1 at the back to 0 at the front,
+         so the rock darkens hard as it comes toward you. */
+      const rock = U.shade(U.mixRgb(P.fog, [255, 255, 255], 0.26 + P.bright * 0.22),
+                           -0.62 * (1 - far));
+      og.globalCompositeOperation = 'multiply';
+      const mg = og.createLinearGradient(0, hy - H * 0.16, 0, hy + 2);
+      mg.addColorStop(0, U.rgbToCss(U.mixRgb(rock, [255, 255, 255], 0.14)));
+      mg.addColorStop(1, U.rgbToCss(U.shade(rock, -0.42)));
+      og.fillStyle = mg;
+      og.fillRect(0, 0, landOne.width, landOne.height);
+
+      /* A blend mode is not a mask. Canvas composites `multiply` as
+         source-over wherever the destination is empty, so filling the whole
+         canvas painted the colour across the entire sky as well as into the
+         range — which is exactly what it did, turning a night into an
+         overcast afternoon. Clip it back to the shape it was meant to tint. */
+      og.globalCompositeOperation = 'destination-in';
+      og.drawImage(backdrop[l], 0, 0);
+
       og.globalCompositeOperation = 'source-atop';
-      // the ground colour of the land, and the haze it recedes into
-      const near = U.mixRgb([0, 0, 0], P.fog, 0.10 + P.fogAmt * 0.10);
-      const air = U.mixRgb(P.skyBot, P.fog, 0.45);
-      const grad = og.createLinearGradient(0, hy - H * 0.10, 0, hy + 2);
-      grad.addColorStop(0, U.rgbToCss(U.mixRgb(near, air, far * (0.42 + P.fogAmt * 0.34))));
-      grad.addColorStop(1, U.rgbToCss(U.mixRgb(near, air, far * (0.62 + P.fogAmt * 0.30))));
-      og.fillStyle = grad;
+      const air = U.mixRgb(P.skyBot, P.fog, 0.42);
+      const hazeK = far * (0.46 + P.fogAmt * 0.34);
+      const ag = og.createLinearGradient(0, hy - H * 0.13, 0, hy + 2);
+      ag.addColorStop(0, U.rgbToCss(air, hazeK * 0.80));
+      ag.addColorStop(1, U.rgbToCss(air, hazeK));
+      og.fillStyle = ag;
       og.fillRect(0, 0, landOne.width, landOne.height);
       og.globalCompositeOperation = 'source-over';
 
-      pg.globalAlpha = U.lerp(0.72, 1, 1 - far);
+      pg.globalAlpha = U.lerp(0.86, 1, 1 - far);
       pg.drawImage(landOne, 0, 0);
       pg.globalAlpha = 1;
     }
@@ -163,98 +260,201 @@
     const band = pg.createLinearGradient(0, hy - H * 0.075, 0, hy + H * 0.012);
     const hz = U.mixRgb(P.fog, P.glow, 0.20);
     band.addColorStop(0, U.rgbToCss(hz, 0));
-    band.addColorStop(0.72, U.rgbToCss(hz, (0.10 + P.fogAmt * 0.16) * (0.35 + P.bright * 0.65)));
-    band.addColorStop(1, U.rgbToCss(hz, (0.14 + P.fogAmt * 0.20) * (0.35 + P.bright * 0.65)));
+    band.addColorStop(0.72, U.rgbToCss(hz, (0.045 + P.fogAmt * 0.10) * (0.28 + P.bright * 0.72)));
+    band.addColorStop(1, U.rgbToCss(hz, (0.065 + P.fogAmt * 0.13) * (0.28 + P.bright * 0.72)));
     pg.fillStyle = band;
     pg.fillRect(0, hy - H * 0.075, W, H * 0.087);
   }
 
   /* Distant land: layered dark shapes sitting on the horizon line. */
+  /* Distant land.
+
+     It used to be a run of rounded bumps or a row of triangles — a shape with
+     an outline and nothing inside it, which is why layering it still read as
+     cardboard. A mountain is not an outline. It is a ridgeline with faces
+     either side of it, and the faces are what you actually see: one turned
+     toward the light and one away, snow above the line where snow stays, and
+     rock showing wherever the slope is too steep to hold any.
+
+     The ridgeline is ridged fractal noise — fBm with each octave folded around
+     its midpoint, which is the fold that turns soft hills into crests. The
+     part that took a rebuild: the shading cannot key on the slope between one
+     column and the next. Noise that looks perfectly smooth still changes
+     direction about thirty times across a screen, and shading off that gives
+     you a barcode rather than a mountain. So the heights are built into an
+     array first, smoothed, and the slope is measured across a window wide
+     enough to mean "which face is this" rather than "which way is this one
+     pixel going". */
+
+  /* One range's heights, in pixels above the horizon. */
+  function ridgeline(style, W2, step, seed, freq, phase, maxH) {
+    const n = Math.ceil(W2 / step) + 3;
+    const h = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const u = (i * step - step) / Math.max(1, W2);
+      let v;
+      if (style === 'spires' || style === 'crystals') {
+        // sharper and taller at the peaks: these are not hills
+        v = Math.pow(VF.skyArt.fbm(u * freq * 1.7 + phase, 0.37, seed, 4, 1.92, 0.42, true), 0.62);
+      } else if (style === 'trees') {
+        v = VF.skyArt.fbm(u * freq * 2.2 + phase, 0.61, seed, 3, 1.9, 0.5, false) * 0.6 + 0.22;
+      } else if (style === 'bones' || style === 'ruins') {
+        v = VF.skyArt.fbm(u * freq * 1.4 + phase, 0.5, seed, 4, 2.0, 0.44, true);
+        // broken: stretches of the range are simply missing
+        if (VF.skyArt.noise2(u * 5 + phase, 3.3, seed) < 0.30) v *= 0.20;
+      } else {
+        v = VF.skyArt.fbm(u * freq + phase, 0.5, seed, 4, 1.95, 0.45, true);
+      }
+      h[i] = v;   // raw for now; the range is normalised once it is all known
+    }
+
+    /* Ridged fBm comes out bunched around the middle — measured, about 0.46 to
+       0.76 for the open styles — so used raw it gives gentle dunes rather than
+       a range. It has to be stretched to fill the height.
+
+       Stretching against FIXED bounds was the first attempt and it clipped:
+       every peak that ran past the top came out as a flat-topped mesa, which
+       is what the crystals at the abyss turned into. Normalising against what
+       this particular range actually produced cannot clip, and works for
+       whichever style asked. */
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 0; i < n; i++) { if (h[i] < lo) lo = h[i]; if (h[i] > hi) hi = h[i]; }
+    const span = Math.max(1e-4, hi - lo);
+    for (let i = 0; i < n; i++) {
+      // a curve on the normalised value: most of a range is low, peaks are rare
+      h[i] = Math.pow((h[i] - lo) / span, 1.30) * maxH;
+    }
+    /* Two passes of a small blur. The high octaves are what give a range its
+       texture, and they are also what makes the slope meaningless; blurring
+       the line keeps the shape and loses the jitter. */
+    for (let pass = 0; pass < 2; pass++) {
+      const c = h.slice();
+      for (let i = 1; i < n - 1; i++) h[i] = c[i - 1] * 0.26 + c[i] * 0.48 + c[i + 1] * 0.26;
+    }
+    return h;
+  }
+
+  /* The same line, blurred much harder. Shading has to be read off THIS, not
+     off the ridge: the ridge carries the texture that makes a range look like
+     rock, and that texture is exactly what makes a slope measured on it
+     meaningless. Two separate lines — one to draw, one to light by. */
+  function shadingLine(h) {
+    const n = h.length;
+    let a = Float32Array.from(h);
+    let b = new Float32Array(n);
+    for (let pass = 0; pass < 8; pass++) {
+      for (let i = 0; i < n; i++) {
+        const p0 = a[Math.max(0, i - 2)], p1 = a[Math.max(0, i - 1)];
+        const p2 = a[i];
+        const p3 = a[Math.min(n - 1, i + 1)], p4 = a[Math.min(n - 1, i + 2)];
+        b[i] = (p0 + p1 * 2 + p2 * 3 + p3 * 2 + p4) / 9;
+      }
+      const t2 = a; a = b; b = t2;
+    }
+    return a;
+  }
+
   function drawSilhouette(g, style, rnd, hy, only) {
     if (style === 'none') return;
-    const layers = 3;
-    for (let l = 0; l < layers; l++) {
-      const depth = l / (layers - 1 || 1);
-      const maxH = H * (0.026 + depth * 0.052);
-      // every layer is generated so the seeded stream stays in step; only the
-      // one asked for is actually painted
-      const skip = only !== undefined && only !== l;
-      g.globalAlpha = 1;
-      g.fillStyle = '#000';
+    const LAYERS = 5;
+    const lightX = L.glowX / Math.max(1, W);
+
+    for (let l = 0; l < LAYERS; l++) {
+      const depth = l / (LAYERS - 1 || 1);       // 0 furthest, 1 nearest
+      const seed = 7001 + l * 613 + Math.floor(rnd() * 4096);
+      const freq = 3.4 + depth * 3.6 + rnd() * 1.4;
+      const phase = rnd() * 40;
+      if (only !== undefined && only !== l) continue;   // stream stays in step above
+
+      const maxH = H * (0.052 + depth * 0.145);
+      const step = depth < 0.5 ? 3 : 2;
+      const h = ridgeline(style, W, step, seed, freq, phase, maxH);
+      const sh = shadingLine(h);      // the same range, smooth enough to light by
+
+      // the snow line, and the band it fades in over
+      const snowAt = maxH * (0.56 - depth * 0.12);
+      const snowFade = Math.max(1, maxH * 0.42);
+      const win = Math.max(3, Math.round(26 / step));   // the face window
+
+      /* Clip to the ridgeline before painting the strips. Without this a steep
+         face comes out as a staircase, because each column is a rectangle and
+         a rectangle has a flat top — on a gentle slope that is invisible and
+         on a peak it is all you can see. The path is the real line; the strips
+         only carry the shading. */
+      g.save();
       g.beginPath();
       g.moveTo(-4, hy + 2);
-
-      if (style === 'rocks') {
-        // eroded, rounded headlands rather than sharp peaks
-        let x = -4;
-        let prev = 0;
-        while (x < W + 8) {
-          const wid = W * (0.08 + rnd() * 0.16);
-          const ht = maxH * (0.30 + rnd() * 0.85);
-          g.quadraticCurveTo(x + wid * 0.18, hy - ht * 0.85, x + wid * 0.42, hy - ht);
-          g.quadraticCurveTo(x + wid * 0.70, hy - ht * (0.72 + rnd() * 0.28), x + wid, hy - prev);
-          prev = maxH * (0.10 + rnd() * 0.30);
-          x += wid;
-        }
-      } else if (style === 'trees') {
-        let x = -4;
-        while (x < W + 8) {
-          const wid = W * (0.010 + rnd() * 0.024);
-          const ht = maxH * (0.5 + rnd() * 1.3);
-          g.lineTo(x, hy - ht * 0.2);
-          g.lineTo(x + wid * 0.5, hy - ht);
-          g.lineTo(x + wid, hy - ht * 0.15);
-          x += wid * (1 + rnd() * 0.8);
-        }
-      } else if (style === 'spires') {
-        let x = -4;
-        while (x < W + 8) {
-          const wid = W * (0.02 + rnd() * 0.05);
-          const ht = maxH * (0.5 + rnd() * 1.6);
-          g.lineTo(x + wid * 0.5, hy - ht);
-          g.lineTo(x + wid, hy - ht * 0.08);
-          x += wid * (1.1 + rnd() * 1.6);
-        }
-      } else if (style === 'crystals') {
-        let x = -4;
-        while (x < W + 8) {
-          const wid = W * (0.03 + rnd() * 0.07);
-          const ht = maxH * (0.4 + rnd() * 1.5);
-          g.lineTo(x + wid * 0.2, hy - ht * 0.5);
-          g.lineTo(x + wid * 0.5, hy - ht);
-          g.lineTo(x + wid * 0.78, hy - ht * 0.42);
-          g.lineTo(x + wid, hy);
-          x += wid * (1 + rnd() * 1.1);
-        }
-      } else if (style === 'ruins') {
-        let x = -4;
-        while (x < W + 8) {
-          const wid = W * (0.03 + rnd() * 0.08);
-          const ht = maxH * (0.3 + rnd() * 1.2);
-          if (rnd() < 0.7) {
-            g.lineTo(x, hy - ht);
-            g.lineTo(x + wid, hy - ht * (0.6 + rnd() * 0.5));
-            g.lineTo(x + wid, hy);
-          }
-          x += wid * (1 + rnd() * 1.5);
-        }
-      } else if (style === 'bones') {
-        let x = -4;
-        while (x < W + 8) {
-          const wid = W * (0.02 + rnd() * 0.05);
-          const ht = maxH * (0.6 + rnd() * 1.5);
-          g.lineTo(x + wid * 0.5, hy - ht);
-          g.lineTo(x + wid * 0.5 + wid * 0.16, hy - ht * 0.86);
-          g.lineTo(x + wid, hy - ht * 0.1);
-          x += wid * (1.4 + rnd() * 2.4);
-        }
-      }
-      g.lineTo(W + 8, hy + 2);
+      for (let i = 1; i < h.length - 1; i++) g.lineTo(i * step - step, hy - h[i]);
+      g.lineTo(W + 4, hy + 2);
       g.closePath();
-      if (!skip) g.fill();
+      g.clip();
+
+      for (let i = 1; i < h.length - 1; i++) {
+        const x = i * step - step;
+        const ht = h[i];
+        const y = hy - ht;
+
+        /* Slope across a wide window on the SMOOTH line. Everything here is a
+           smoothstep rather than a threshold: a shading model that can flip
+           between two regimes on a small change in slope will find a way to do
+           it every few pixels, which is a barcode, which is what this was. */
+        const a2 = sh[Math.max(0, i - win)], b2 = sh[Math.min(sh.length - 1, i + win)];
+        const slope = (b2 - a2) / (win * 2 * step);
+        const u = x / Math.max(1, W);
+
+        /* Which way the light is coming from. This used to be a sign flip at
+           the moon's own x, which put a hard vertical seam down the middle of
+           every range — the two halves lit oppositely with nothing between
+           them. The moon is far away, so the direction barely changes across
+           the scene: a tanh over the whole width turns that seam into the
+           gentle sweep it should have been. */
+        const toward = -Math.tanh((lightX - u) * 2.6);
+        const facing = Math.tanh(slope * toward * 5.5);   // saturates, never clips
+
+        let v = 0.44 + facing * 0.26;
+        /* Snow on height alone, eased in over a band. Steepness used to gate
+           it, which is true of real mountains and was the whole problem: the
+           gate flipped. */
+        const snow = U.smoothstep(U.clamp((ht - snowAt) / snowFade, 0, 1));
+        v = U.clamp(U.lerp(v, 0.90 + facing * 0.09, snow * 0.85), 0.03, 1);
+
+        /* Baked in greys: what is baked is the FORM — where the light falls —
+           and the land pass multiplies the colour in afterwards. */
+        const c = Math.round(U.lerp(8, 236, v));
+        g.fillStyle = 'rgb(' + c + ',' + c + ',' + c + ')';
+        // the clip owns the top edge, so overshoot it and let the path cut
+        g.fillRect(x - 1, y - 3, step + 2, hy - y + 6);
+      }
+      g.restore();
+
+      /* A hairline along the crest. Real ridges are lit along their edge
+         because there is nothing behind them to block the sky, and this one
+         line does more for the silhouette than everything above it. */
+      g.strokeStyle = 'rgba(255,255,255,' + (0.16 + depth * 0.16).toFixed(2) + ')';
+      g.lineWidth = 1;
+      g.beginPath();
+      for (let i = 1; i < h.length - 1; i++) {
+        const x = i * step - step, y = hy - h[i];
+        if (i === 1) g.moveTo(x, y); else g.lineTo(x, y);
+      }
+      g.stroke();
     }
     g.globalAlpha = 1;
   }
+
+  /* Paint the three baked ridges, each mixed toward the haze by how far away
+     it is.
+
+     This has to be CACHED, not composited per frame. Tinting three full-screen
+     layers with a source-atop fill and drawing them costs about 24ms — the
+     whole frame budget and half again — which is the exact trap the renderer
+     is otherwise built to avoid: full-screen translucent fills dominate 2D
+     canvas cost, so anything that covers the screen gets baked once and
+     blitted after.
+
+     The tint only depends on the haze colours, and those move slowly, so the
+     key is those colours quantised hard. In practice it rebakes a handful of
+     times over a day/night cycle and blits on every other frame. */
 
   /* ---------------------------------------------------------------- setup */
 
@@ -666,7 +866,8 @@
 
     buildBackdrop();
     mark('sky', function () { drawSky(P); });
-    mark('stars', function () { drawStars(P, q); });
+    mark('stars', function () { buildStars(); drawStars(P, q); });
+    mark('clouds', function () { buildClouds(); drawClouds(P); });
     mark('horizon', function () { drawHorizonFeature(P); });
     mark('land', function () { drawLand(P); });
     mark('aurora', function () { drawAurora(P); });
@@ -707,24 +908,45 @@
   }
 
   function drawStars(P, q) {
-    if (P.starAlpha <= 0.01 || !stars) return;
+    if (P.starAlpha <= 0.01) return;
     const sky = L.horizonY;
-    const col = U.rgbToCss(P.star);
-    ctx.fillStyle = col;
+
+    // the baked field: one blit for two thousand stars and a galaxy
+    if (starField) {
+      ctx.globalAlpha = P.starAlpha;
+      ctx.drawImage(starField, 0, 0, W, sky);
+      ctx.globalAlpha = 1;
+    }
+    if (!stars) return;
+
+    /* The two dozen worth animating. The brightest carry diffraction spikes —
+       the cross an eye or a lens puts on a point source — which is the single
+       cheapest thing that makes a star read as bright rather than as big. */
     for (let i = 0; i < stars.length; i++) {
       const s = stars[i];
       const y = s.y * sky;
       if (y > sky - 2) continue;
-      const tw = 0.62 + 0.38 * Math.sin(t * s.sp + s.tw);
-      const a = P.starAlpha * s.bright * tw;
+      const tw = 0.55 + 0.45 * Math.sin(t * s.sp + s.tw);
+      const a = P.starAlpha * (0.45 + s.mag * 0.55) * tw;
       if (a <= 0.02) continue;
-      ctx.globalAlpha = a;
       const x = s.x * W;
-      if (s.big && q === 'high') {
-        ctx.globalAlpha = a * 0.22;
-        ctx.beginPath(); ctx.arc(x, y, s.s * 3.2, 0, TAU); ctx.fill();
-        ctx.globalAlpha = a;
+      const col = U.rgbToCss(s.col, a);
+
+      ctx.globalAlpha = 1;
+      // the halo
+      ctx.fillStyle = U.rgbToCss(s.col, a * 0.20);
+      ctx.beginPath(); ctx.arc(x, y, s.s * 3.4, 0, TAU); ctx.fill();
+
+      if (s.spikes && q === 'high') {
+        ctx.strokeStyle = U.rgbToCss(s.col, a * 0.55);
+        ctx.lineWidth = 0.7;
+        const len = s.s * (3.2 + tw * 1.8);
+        ctx.beginPath();
+        ctx.moveTo(x - len, y); ctx.lineTo(x + len, y);
+        ctx.moveTo(x, y - len); ctx.lineTo(x, y + len);
+        ctx.stroke();
       }
+      ctx.fillStyle = col;
       ctx.fillRect(x - s.s * 0.5, y - s.s * 0.5, s.s, s.s);
     }
     ctx.globalAlpha = 1;
@@ -2102,6 +2324,7 @@
     },
     spawnMeteor: spawnMeteor, seedAmbient: seedAmbient,
     rebuild: function () { backdropKey = ''; buildStars(); },
+    __backdrop: function () { return backdrop; },
     profile: function (on) {
       if (on) { prof = { acc: {}, frames: 0 }; return; }
       if (!prof) return null;
