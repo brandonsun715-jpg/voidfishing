@@ -1214,7 +1214,7 @@
         case 'crossbar': {
           const k = F.grip.len + 0.075;
           const p = nAt(g, k);
-          const arm = W(k) * 3.6;
+          const arm = W(k) * 3.1;
           ctx.strokeStyle = U.rgbToCss(U.shade(metalRgb, -0.22));
           ctx.lineWidth = Math.max(1.1, W(k) * 0.62);
           ctx.lineCap = 'round';
@@ -1239,7 +1239,7 @@
            needs balancing, which is what an oversized rod IS. */
         case 'counterweight': {
           const p = nAt(g, 0.008);
-          const r = Math.max(2.0, wButt * 1.55);
+          const r = Math.max(1.6, wButt * 1.05);
           const gr = ctx.createRadialGradient(p.x - r * 0.35, p.y - r * 0.4, r * 0.1, p.x, p.y, r);
           gr.addColorStop(0, U.rgbToCss(U.mixRgb(metalRgb, [255, 255, 255], 0.5)));
           gr.addColorStop(0.6, U.rgbToCss(metalRgb));
@@ -1373,7 +1373,7 @@
         case 'vertebrae': {
           for (let n = 0; n < 4; n++) {
             const k = 0.04 + n * 0.035;
-            collar(ctx, g, k, 0.012, wButt * U.lerp(2.1, 1.6, n / 3), U.shade(gripRgb, 0.25), 0.4);
+            collar(ctx, g, k, 0.012, wButt * U.lerp(1.62, 1.26, n / 3), U.shade(gripRgb, 0.25), 0.4);
           }
           break;
         }
@@ -1826,39 +1826,98 @@
 
     switch (F.reel.kind) {
 
-      /* A drum lying along the shaft, on top of it rather than under. */
+      /* A drum lying along the shaft, on top of it rather than under it — an
+         overhead reel, which is what a rod built to lift something heavy
+         actually carries.
+
+         Drawn as a spool between two plates rather than as a cylinder: the
+         line packed on it, the rim of the near plate, and a crank with a knob
+         on the end. A plain lit cylinder was the first attempt and it read as
+         a bottle cap stuck to the rod, because what says "reel" is the wound
+         line and the handle, not the barrel. */
       case 'drum': {
-        const L = rr * 2.1, R = rr * 0.95;
-        const cx = p.x + nx * R * 0.9, cy = p.y + ny * R * 0.9;
-        const ax = p.tx, ay = p.ty;
+        const L = rr * 2.5, R = rr * 1.18;
+        const cx = p.x + nx * R * 1.35, cy = p.y + ny * R * 1.35;
+
+        /* The foot. Without one this was a cylinder floating beside the rod
+           with nothing holding it there, which does not read as a reel however
+           well the reel itself is drawn — a reel is a thing bolted to a rod,
+           and the bolt is half of what says so. */
+        const seatL = L * 0.58, seatW = R * 1.05;
+        ctx.beginPath();
+        ctx.moveTo(p.x + p.tx * seatL * 0.5, p.y + p.ty * seatL * 0.5);
+        ctx.lineTo(p.x - p.tx * seatL * 0.5, p.y - p.ty * seatL * 0.5);
+        ctx.lineTo(cx - p.tx * seatL * 0.32, cy - p.ty * seatL * 0.32);
+        ctx.lineTo(cx + p.tx * seatL * 0.32, cy + p.ty * seatL * 0.32);
+        ctx.closePath();
+        const fg = ctx.createLinearGradient(p.x, p.y, cx, cy);
+        fg.addColorStop(0, U.rgbToCss(U.shade(metalRgb, -0.62)));
+        fg.addColorStop(0.55, U.rgbToCss(U.shade(metalRgb, -0.18)));
+        fg.addColorStop(1, U.rgbToCss(U.shade(metalRgb, -0.44)));
+        ctx.fillStyle = fg;
+        ctx.fill();
+        ctx.fillStyle = U.rgbToCss(U.shade(metalRgb, -0.10));
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(Math.atan2(p.ty, p.tx));
+        ctx.fillRect(-seatL * 0.58, -seatW * 0.30, seatL * 1.16, seatW * 0.60);
+        ctx.restore();
+
         ctx.save();
         ctx.translate(cx, cy);
-        ctx.rotate(Math.atan2(ay, ax));
-        const bg = ctx.createLinearGradient(0, -R, 0, R);
-        bg.addColorStop(0, U.rgbToCss(U.shade(metalRgb, -0.62)));
-        bg.addColorStop(0.34, U.rgbToCss(lit));
-        bg.addColorStop(1, U.rgbToCss(U.shade(metalRgb, -0.7)));
-        ctx.fillStyle = bg;
-        ctx.beginPath();
-        ctx.rect(-L / 2, -R, L, R * 2);
-        ctx.fill();
-        // the end plates, and the line packed on the drum between them
-        for (const sgn of [-1, 1]) {
-          ctx.fillStyle = U.rgbToCss(U.shade(metalRgb, sgn < 0 ? -0.2 : -0.45));
-          ctx.beginPath();
-          ctx.ellipse(sgn * L / 2, 0, R * 0.36, R * 1.06, 0, 0, TAU);
-          ctx.fill();
+        ctx.rotate(Math.atan2(p.ty, p.tx));
+
+        /* the spool: line packed between the plates, dark and wound */
+        const lineCol = U.shade(U.mixRgb(c1, [255, 255, 255], 0.25), -0.10);
+        const sg3 = ctx.createLinearGradient(0, -R * 0.82, 0, R * 0.82);
+        sg3.addColorStop(0, U.rgbToCss(U.shade(lineCol, -0.58)));
+        sg3.addColorStop(0.36, U.rgbToCss(lineCol));
+        sg3.addColorStop(1, U.rgbToCss(U.shade(lineCol, -0.66)));
+        ctx.fillStyle = sg3;
+        ctx.fillRect(-L * 0.34, -R * 0.82, L * 0.68, R * 1.64);
+        ctx.strokeStyle = U.rgbToCss(U.shade(lineCol, -0.4), 0.5);
+        ctx.lineWidth = Math.max(0.3, R * 0.07);
+        for (let i = 0; i < 7; i++) {
+          const x = -L * 0.32 + (L * 0.64) * (i / 6);
+          ctx.beginPath(); ctx.moveTo(x, -R * 0.80); ctx.lineTo(x, R * 0.80); ctx.stroke();
         }
-        ctx.fillStyle = U.rgbToCss(U.shade(c1, 0.2), 0.55);
-        ctx.fillRect(-L * 0.30, -R * 0.72, L * 0.60, R * 1.44);
-        // and a crank on the near plate
-        ctx.strokeStyle = U.rgbToCss(lit);
-        ctx.lineWidth = Math.max(0.5, R * 0.20);
+
+        /* the plates either end, the near one with a rim */
+        for (const sgn of [-1, 1]) {
+          const px2 = sgn * L * 0.40;
+          const pg = ctx.createLinearGradient(0, -R, 0, R);
+          pg.addColorStop(0, U.rgbToCss(U.shade(metalRgb, -0.52)));
+          pg.addColorStop(0.34, U.rgbToCss(lit));
+          pg.addColorStop(1, U.rgbToCss(U.shade(metalRgb, -0.62)));
+          ctx.fillStyle = pg;
+          ctx.beginPath();
+          ctx.ellipse(px2, 0, R * 0.30, R, 0, 0, TAU);
+          ctx.fill();
+          ctx.strokeStyle = U.rgbToCss(U.shade(metalRgb, -0.5), 0.85);
+          ctx.lineWidth = Math.max(0.35, R * 0.09);
+          ctx.stroke();
+          if (sgn > 0) {
+            ctx.strokeStyle = U.rgbToCss(U.mixRgb(metalRgb, [255, 255, 255], 0.55), 0.6);
+            ctx.lineWidth = Math.max(0.3, R * 0.07);
+            ctx.beginPath();
+            ctx.ellipse(px2, 0, R * 0.17, R * 0.58, 0, 0, TAU);
+            ctx.stroke();
+          }
+        }
+
+        /* and the crank, which is the other half of what says reel */
+        const ky = Math.sin(spin) * R * 1.15, kz = Math.cos(spin) * R * 0.22;
+        ctx.strokeStyle = U.rgbToCss(U.shade(metalRgb, -0.22));
+        ctx.lineWidth = Math.max(0.6, R * 0.19);
         ctx.lineCap = 'round';
         ctx.beginPath();
-        ctx.moveTo(L / 2, 0);
-        ctx.lineTo(L / 2 + Math.cos(spin) * R * 0.2, Math.sin(spin) * R * 1.25);
+        ctx.moveTo(L * 0.44, 0);
+        ctx.lineTo(L * 0.44 + kz, ky);
         ctx.stroke();
+        ctx.fillStyle = U.rgbToCss(U.mixRgb(metalRgb, [255, 255, 255], 0.3));
+        ctx.beginPath();
+        ctx.ellipse(L * 0.44 + kz, ky, R * 0.20, R * 0.26, 0, 0, TAU);
+        ctx.fill();
         ctx.restore();
         break;
       }

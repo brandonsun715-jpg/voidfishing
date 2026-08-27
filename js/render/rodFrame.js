@@ -49,6 +49,39 @@
 
   function even() { return 1; }
 
+  /* Every profile is normalised to an average of one before it is used, and
+     clamped so no point on it is more than half again the average.
+
+     Without that, the two knobs multiply. `wButt` says how thick this rod runs
+     overall and the profile says how the thickness is distributed along it —
+     so a titan frame at 1.9 carrying a club profile that returns 1.9 at the
+     butt came out four and a half times the old width, and the grip is drawn
+     at nearly twice the blank on top of THAT. The result was a rod with a
+     forearm on the end of it.
+
+     Normalised, the profile only describes shape and `wButt` alone decides
+     size, which is what each was supposed to mean. */
+  function fit(fn) {
+    /* The clamp below is as much of the point as the normalising is. Two knobs
+       that both scale thickness will always find a way to multiply into
+       something absurd at the ends of their ranges, so the shape is not
+       allowed to be more than a third again the average however extreme the
+       profile is. The heaviest rod in the game reads as heavy; none of them
+       reads as plumbing. */
+    const N = 33;
+    let sum = 0, n = 0;
+    for (let i = 0; i < N; i++) {
+      const v = fn(i / (N - 1));
+      if (v > 0.02) { sum += v; n++; }         // a real gap is not part of the average
+    }
+    const mean = n ? sum / n : 1;
+    return function (k) {
+      const v = fn(k);
+      if (v <= 0.02) return 0;
+      return U.clamp(v / mean, 0.30, 1.34);
+    };
+  }
+
   // a parallel shaft: no taper at all until the very end
   function shaft(k) { return k < 0.86 ? 1.55 : U.lerp(1.55, 0.7, (k - 0.86) / 0.14); }
 
@@ -77,8 +110,11 @@
   // heavy at the hand, then almost nothing for the last two thirds
   function whip(k) { return k < 0.28 ? U.lerp(1.5, 0.85, k / 0.28) : U.lerp(0.85, 0.24, Math.pow((k - 0.28) / 0.72, 0.65)); }
 
-  // thick and even, then a sudden shoulder — a club with a rod on the end
-  function club(k) { return k < 0.42 ? 1.9 : U.lerp(1.9, 0.55, Math.pow((k - 0.42) / 0.58, 0.8)); }
+  /* Heavy at the hand and heavy well up the blank, but tapering the whole way
+     — holding one thickness flat for the first forty per cent and then falling
+     off a cliff drew a pipe with a rod stuck in the end of it. */
+  function club(k) { return k < 0.30 ? U.lerp(1.78, 1.44, k / 0.30)
+                                     : U.lerp(1.44, 0.50, Math.pow((k - 0.30) / 0.70, 0.78)); }
 
   // a thin ribbon that swells once in the middle
   function spindle(k) { return 0.55 + Math.pow(Math.max(0, 1 - Math.abs(k - 0.42) * 2.6), 1.6) * 0.95; }
@@ -125,110 +161,110 @@
 
   const FRAMES = [
     { id: 'switch', name: 'traditional',
-      bend: 0.9, profile: even, wButt: 1.16, wTip: 1.1, blankAt: 0.16,
+      bend: 0.9, profile: even, wButt: 1.04, wTip: 1.02, blankAt: 0.16,
       guides: { n: 5, spread: 0.86, scale: 1.42, form: 'ring' },
       grip: { len: 0.155, kind: 'cork' }, reel: { at: 0.205, kind: 'spin', scale: 1.0 },
       tip: 'plain', extras: ['ferruleBrass'] },
 
     { id: 'bamboo', name: 'bamboo',
-      bend: 1.55, profile: noded(7), sections: [5, 10], mk: noded, wButt: 0.82, wTip: 0.72, blankAt: 0.09,
+      bend: 1.55, profile: noded(7), sections: [5, 10], mk: noded, wButt: 0.89, wTip: 0.86, blankAt: 0.09,
       guides: { n: 9, spread: 1.10, scale: 0.62, form: 'ring' },
       grip: { len: 0.095, kind: 'cord' }, reel: { at: 0.115, kind: 'pin', scale: 0.72 },
       tip: 'plain', extras: ['nodeRings', 'whipping'] },
 
     { id: 'industrial', name: 'industrial',
-      bend: 0.35, profile: stepped(4), sections: [3, 5], mk: stepped, wButt: 1.5, wTip: 1.35, blankAt: 0.20,
+      bend: 0.35, profile: stepped(4), sections: [3, 5], mk: stepped, wButt: 1.15, wTip: 1.10, blankAt: 0.20,
       guides: { n: 6, spread: 0.92, scale: 1.15, form: 'braced' },
-      grip: { len: 0.185, kind: 'rubber', fore: 1 }, reel: { at: 0.255, kind: 'drum', scale: 1.35 },
+      grip: { len: 0.185, kind: 'rubber', fore: 1 }, reel: { at: 0.255, kind: 'drum', scale: 1.12 },
       tip: 'plain', extras: ['bolts', 'sectionCollars', 'counterweight'] },
 
     { id: 'ornate', name: 'ornate',
-      bend: 1.2, scurve: 0.55, profile: spindle, wButt: 1.05, wTip: 0.95, blankAt: 0.14,
+      bend: 1.2, scurve: 0.55, profile: spindle, wButt: 0.99, wTip: 0.96, blankAt: 0.14,
       guides: { n: 7, spread: 1.0, scale: 1.05, form: 'double' },
       grip: { len: 0.135, kind: 'chased' }, reel: { at: 0.20, kind: 'spin', scale: 0.95 },
       tip: 'crowned', extras: ['scrollwork', 'flaredCollars', 'finial'] },
 
     { id: 'harpoon', name: 'harpoon',
-      bend: 0.10, profile: shaft, wButt: 1.7, wTip: 1.7, blankAt: 0.22,
+      bend: 0.10, profile: shaft, wButt: 1.19, wTip: 1.20, blankAt: 0.22,
       guides: { n: 3, spread: 1.4, scale: 1.5, form: 'braced' },
       grip: { len: 0.20, kind: 'cord' }, reel: { at: 0.42, kind: 'drum', scale: 1.1 },
       tip: 'spear', reach: 0.16, extras: ['crossbar', 'lashings'] },
 
     { id: 'scifi', name: 'sci-fi',
-      bend: 0.45, profile: segmented(5), sections: [4, 7], mk: segmented, wButt: 1.28, wTip: 1.2, blankAt: 0.17,
+      bend: 0.45, profile: segmented(5), sections: [4, 7], mk: segmented, wButt: 1.09, wTip: 1.06, blankAt: 0.17,
       guides: { n: 4, spread: 1.05, scale: 1.3, form: 'halo' },
       grip: { len: 0.145, kind: 'rubber' }, reel: { at: 0.215, kind: 'disc', scale: 1.05 },
       tip: 'emitter', reach: 0.07, extras: ['floatGaps', 'rail'] },
 
     { id: 'crystal', name: 'crystal',
-      bend: 0.30, profile: reverse, wButt: 0.95, wTip: 1.6, blankAt: 0.13,
+      bend: 0.30, profile: reverse, wButt: 0.95, wTip: 1.17, blankAt: 0.13,
       guides: { n: 5, spread: 1.0, scale: 1.25, form: 'float' },
       grip: { len: 0.125, kind: 'quarried' }, reel: { at: 0.19, kind: 'orb', scale: 0.9 },
       tip: 'shard', reach: 0.09, extras: ['facets'] },
 
     { id: 'voidbent', name: 'void-bent',
-      bend: -1.35, profile: whip, wButt: 1.1, wTip: 0.9, blankAt: 0.12,
+      bend: -1.35, profile: whip, wButt: 1.01, wTip: 0.94, blankAt: 0.12,
       guides: { n: 6, spread: 1.25, scale: 0.95, form: 'halo' },
       grip: { len: 0.13, kind: 'bone' }, reel: { at: 0.185, kind: 'orb', scale: 0.95 },
       tip: 'split', extras: ['strands', 'wrongShadow'] },
 
     { id: 'bone', name: 'bone',
-      bend: 1.35, profile: boned, wButt: 1.32, wTip: 1.0, blankAt: 0.15,
+      bend: 1.35, profile: boned, wButt: 1.09, wTip: 0.99, blankAt: 0.15,
       guides: { n: 6, spread: 0.88, scale: 1.1, form: 'spiral' },
       grip: { len: 0.15, kind: 'bone' }, reel: { at: 0.21, kind: 'spin', scale: 1.0 },
       tip: 'hook', reach: 0.05, extras: ['ribs', 'vertebrae'] },
 
     { id: 'regal', name: 'regal',
-      bend: 0.55, profile: even, wButt: 1.22, wTip: 1.05, blankAt: 0.20,
+      bend: 0.55, profile: even, wButt: 1.06, wTip: 1.00, blankAt: 0.20,
       guides: { n: 8, spread: 0.96, scale: 1.0, form: 'double' },
       grip: { len: 0.175, kind: 'chased', fore: 1 }, reel: { at: 0.33, kind: 'tall', scale: 1.15 },
       tip: 'crowned', extras: ['banner', 'flaredCollars', 'finial'] },
 
     { id: 'titan', name: 'titan',
-      bend: 0.70, profile: club, wButt: 1.9, wTip: 1.5, blankAt: 0.24,
+      bend: 0.70, profile: club, wButt: 1.26, wTip: 1.15, blankAt: 0.24,
       guides: { n: 5, spread: 0.80, scale: 1.6, form: 'braced' },
-      grip: { len: 0.215, kind: 'rubber', fore: 1 }, reel: { at: 0.29, kind: 'drum', scale: 1.55 },
+      grip: { len: 0.215, kind: 'rubber', fore: 1 }, reel: { at: 0.29, kind: 'drum', scale: 1.20 },
       tip: 'plain', extras: ['shoulderPlate', 'counterweight', 'bolts'] },
 
     { id: 'minimal', name: 'minimal',
-      bend: 0.22, profile: slight, wButt: 0.72, wTip: 0.6, blankAt: 0.10,
+      bend: 0.22, profile: slight, wButt: 0.84, wTip: 0.80, blankAt: 0.10,
       guides: { n: 3, spread: 1.15, scale: 0.72, form: 'ring' },
       grip: { len: 0.10, kind: 'cord' }, reel: { at: 0.145, kind: 'inline', scale: 0.66 },
       tip: 'plain', extras: [] },
 
     { id: 'telescopic', name: 'telescopic',
-      bend: 0.80, profile: stepped(6), sections: [4, 8], mk: stepped, wButt: 1.3, wTip: 1.25, blankAt: 0.11,
+      bend: 0.80, profile: stepped(6), sections: [4, 8], mk: stepped, wButt: 1.08, wTip: 1.07, blankAt: 0.11,
       guides: { n: 7, spread: 1.0, scale: 0.9, form: 'ring' },
       grip: { len: 0.105, kind: 'rubber' }, reel: { at: 0.155, kind: 'spin', scale: 0.85 },
       tip: 'plain', extras: ['sectionCollars'] },
 
     { id: 'centerpin', name: 'centrepin',
-      bend: 1.15, profile: even, wButt: 0.9, wTip: 0.85, blankAt: 0.21,
+      bend: 1.15, profile: even, wButt: 0.93, wTip: 0.91, blankAt: 0.21,
       guides: { n: 9, spread: 1.05, scale: 0.68, form: 'ring' },
       // the reel is at the very butt, behind the hand — a fly rod, not a spinner
-      grip: { len: 0.20, kind: 'cork', fore: 1 }, reel: { at: 0.045, kind: 'pin', scale: 1.25, side: -1 },
+      grip: { len: 0.20, kind: 'cork', fore: 1 }, reel: { at: 0.045, kind: 'pin', scale: 1.12, side: -1 },
       tip: 'plain', extras: ['whipping'] },
 
     { id: 'whip', name: 'whip',
-      bend: 1.85, profile: whip, wButt: 1.05, wTip: 0.8, blankAt: 0.08,
+      bend: 1.85, profile: whip, wButt: 0.99, wTip: 0.89, blankAt: 0.08,
       guides: { n: 10, spread: 1.30, scale: 0.60, form: 'ring' },
       grip: { len: 0.085, kind: 'cord' }, reel: { at: 0.125, kind: 'inline', scale: 0.72 },
       tip: 'plain', extras: [] },
 
     { id: 'trident', name: 'trident',
-      bend: 0.40, profile: shaft, wButt: 1.55, wTip: 1.5, blankAt: 0.19,
+      bend: 0.40, profile: shaft, wButt: 1.15, wTip: 1.14, blankAt: 0.19,
       guides: { n: 4, spread: 1.2, scale: 1.35, form: 'braced' },
       grip: { len: 0.17, kind: 'scaled' }, reel: { at: 0.235, kind: 'drum', scale: 1.05 },
       tip: 'prong', reach: 0.13, extras: ['lashings'] },
 
     { id: 'alien', name: 'alien',
-      bend: 1.6, scurve: 0.85, profile: grown, wButt: 1.15, wTip: 0.95, blankAt: 0.13,
+      bend: 1.6, scurve: 0.85, profile: grown, wButt: 1.03, wTip: 0.96, blankAt: 0.13,
       guides: { n: 5, spread: 0.75, scale: 1.2, form: 'float' },
       grip: { len: 0.13, kind: 'scaled' }, reel: { at: 0.31, kind: 'orb', scale: 1.1 },
       tip: 'curl', reach: 0.06, extras: ['growths', 'offSpine'] },
 
     { id: 'relic', name: 'relic',
-      bend: 1.0, profile: splinted, wButt: 1.25, wTip: 0.95, blankAt: 0.155,
+      bend: 1.0, profile: splinted, wButt: 1.07, wTip: 0.96, blankAt: 0.155,
       guides: { n: 6, spread: 0.92, scale: 1.08, form: 'ring' },
       grip: { len: 0.145, kind: 'cord' }, reel: { at: 0.225, kind: 'pin', scale: 0.95 },
       tip: 'chipped', extras: ['splint', 'mismatch', 'lashings'] }
@@ -439,10 +475,12 @@
     const wobF = 2 + Math.floor(r6 * 4);
     const wobA = U.lerp(0.02, 0.11, r6);
     const wobP = r1 * Math.PI * 2;
+    const shaped = fit(prof);
     const profile = function (k) {
-      const b = prof(k);
+      const b = shaped(k);
       if (b <= 0.02) return 0;                     // a gap the frame asked for stays a gap
-      return Math.max(0.06, (1 + (b - 1) * amt) * (1 + Math.sin(k * Math.PI * wobF + wobP) * wobA));
+      return U.clamp((1 + (b - 1) * amt) * (1 + Math.sin(k * Math.PI * wobF + wobP) * wobA),
+                     0.26, 1.36);
     };
 
     const f = {
@@ -450,8 +488,8 @@
       profile: profile,
       bend: base.bend * U.lerp(0.62, 1.44, r1),
       scurve: (base.scurve || 0) * U.lerp(0.7, 1.3, r3),
-      wButt: base.wButt * U.lerp(0.80, 1.22, r2),
-      wTip: base.wTip * U.lerp(0.78, 1.26, r5),
+      wButt: base.wButt * U.lerp(0.90, 1.12, r2),
+      wTip: base.wTip * U.lerp(0.86, 1.16, r5),
       blankAt: U.clamp(base.blankAt * U.lerp(0.74, 1.30, r3), 0.05, 0.30),
       guides: {
         n: U.clamp(base.guides.n + Math.round((r1 - 0.5) * 4), 3, 11),
@@ -462,7 +500,9 @@
       grip: { len: base.grip.len * U.lerp(0.74, 1.34, r2),
               kind: base.grip.kind, fore: base.grip.fore || 0 },
       reel: { at: base.reel.at + (r3 - 0.5) * 0.075, kind: base.reel.kind,
-              scale: base.reel.scale * U.lerp(0.82, 1.20, r1),
+              // a reel is the biggest thing bolted to a rod; capped, or the
+              // heavy frames carry one the size of the hand holding them
+              scale: U.clamp(base.reel.scale * U.lerp(0.86, 1.14, r1), 0.6, 1.25),
               side: base.reel.side || 1 },
       tip: base.tip,
       reach: (base.reach || 0) * U.lerp(0.75, 1.3, r4),
