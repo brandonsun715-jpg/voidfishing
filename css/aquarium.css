@@ -130,6 +130,10 @@
   color: var(--ink-4); margin: 14px 0 7px;
 }
 .aq-note { font-size: 11px; line-height: 1.6; color: var(--ink-3); padding: 6px 0; }
+.aq-empty {
+  font-size: 12.5px; letter-spacing: 0.02em; color: var(--ink-2);
+  padding: 4px 0 2px;
+}
 
 /* --------------------------------------------------------------- the grid */
 

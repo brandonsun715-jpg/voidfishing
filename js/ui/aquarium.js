@@ -270,6 +270,22 @@
 
     const row = U.el('div', 'aq-row');
 
+    /* Nothing housed and nothing to house: say what the room is for rather
+       than showing five empty boxes and a greyed-out button. */
+    if (!tk.fish.length && !VF.state.data.kept.length) {
+      drawer.appendChild(U.el('div', 'aq-empty',
+        'The tanks are empty and so is the bag.'));
+      drawer.appendChild(U.el('div', 'aq-note',
+        'Land something and choose KEEP rather than sell or release. Kept catches ' +
+        'can be housed here, where they pay a little toward their own glass and ' +
+        'slowly get studied \u2014 and two things studied to the end, in the same ' +
+        'tank, sometimes turn up a third.'));
+      const back = U.el('div', 'aq-acts');
+      back.appendChild(btn('go and catch something', 'primary', function () { close(); }));
+      drawer.appendChild(back);
+      return;
+    }
+
     /* the specimens */
     const grid = U.el('div', 'aq-grid');
     tk.fish.forEach(function (k, idx) {

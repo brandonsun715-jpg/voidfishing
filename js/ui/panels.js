@@ -138,10 +138,12 @@
        routes straight past all of this — see js/ui/aquarium.js. */
     if (id === 'aquarium') {
       if (current) close();
-      if (!VF.aquarium.unlocked()) {
-        VF.toast.plain('Keep a catch first — there is nothing to put in it', null, 3000);
-        return;
-      }
+      /* It opens whether or not there is anything to put in it. It used to
+         refuse below level six with nothing kept, and all a refusal can do is
+         throw a line of toast that scrolls past under whatever else is on
+         screen — from the player's side that is a menu button that does
+         nothing when pressed. An empty room explains itself; a dead button
+         does not. */
       VF.aquariumUI.show();
       return;
     }

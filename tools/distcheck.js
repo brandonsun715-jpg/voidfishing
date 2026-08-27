@@ -13,6 +13,40 @@ const path = require('path');
   await page.goto('file://' + path.join(__dirname, '..', 'dist', 'void-fishing.html'), { waitUntil: 'load' });
   await page.waitForTimeout(500);
   console.log('modules:', await page.evaluate(() => Object.keys(window.VF).length));
+
+  /* Every stylesheet has to have SURVIVED the concatenation. This is not
+     paranoia: a sheet that ends inside an unclosed block is invisible on its
+     own — the browser closes it at end-of-file — and silently swallows the
+     next sheet once they are joined. It happened, and the symptom was a whole
+     screen rendering with no styling and no error anywhere.
+
+     The check is to name one selector from each source file and ask the built
+     page whether a top-level rule for it exists. A swallowed sheet's rules are
+     nested inside somebody else's block, so they are not top-level and this
+     catches it. */
+  const SENTINELS = {
+    'base.css': '.btn',
+    'hud.css': '.mg-track',
+    'panels.css': '.panel',
+    'aquarium.css': '#aquariumScreen'
+  };
+  const css = await page.evaluate(sent => {
+    const top = [];
+    for (const sheet of document.styleSheets) {
+      let rules = null;
+      try { rules = sheet.cssRules; } catch (e) { continue; }
+      for (const r of rules) if (r.selectorText) top.push(r.selectorText);
+    }
+    const missing = [];
+    for (const f in sent) {
+      const sel = sent[f];
+      if (!top.some(t => t.split(',').some(x => x.trim() === sel))) missing.push(f + ' (' + sel + ')');
+    }
+    return { rules: top.length, missing: missing };
+  }, SENTINELS);
+  console.log('stylesheets: ' + css.rules + ' top-level rules' +
+              (css.missing.length ? ' — SWALLOWED: ' + css.missing.join(', ') : ' — all present'));
+  if (css.missing.length) errs.push('stylesheet swallowed: ' + css.missing.join(', '));
   await page.click('#bootStart');
   await page.waitForTimeout(400);
 

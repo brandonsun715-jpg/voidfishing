@@ -1201,3 +1201,4 @@ input[type=range]::-moz-range-thumb {
   }
   .spot-meta { grid-template-columns: repeat(2, 1fr); }
   .map-side { overflow: visible; }
+}

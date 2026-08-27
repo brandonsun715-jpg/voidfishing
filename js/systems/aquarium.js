@@ -354,18 +354,6 @@
     return half.length ? half[0] : null;
   }
 
-  /* Whether the room is open at all. It is not a menu that has always been
-     there — somebody hands you the key once you have kept something. */
-  function unlocked() {
-    const d = VF.state.data;
-    if (d.flags.aquarium) return true;
-    if (d.level >= 6 || d.kept.length || (d.aquarium && housed())) {
-      d.flags.aquarium = true;
-      return true;
-    }
-    return false;
-  }
-
   VF.aquarium = {
     state: st, tanks: tanks, tankCount: tankCount,
     nextTank: nextTank, addTank: addTank,
@@ -376,7 +364,6 @@
     research: research, counts: counts, tick: tick,
     findings: findings, pairState: pairState, nextHint: nextHint,
     checkFindings: checkFindings,
-    log: function () { return st().log; },
-    unlocked: unlocked
+    log: function () { return st().log; }
   };
 })(window.VF = window.VF || {});

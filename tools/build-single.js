@@ -59,7 +59,43 @@ function read(f) {
   return admin ? dropMarkers(text) : stripAdmin(text, f);
 }
 
-const styles = cssKeep.map(f => '/* ' + f + ' */\n' + read(f)).join('\n');
+/* Concatenating stylesheets makes one silent mistake fatal that was harmless
+   as separate files: a sheet that ends inside an unclosed block. On its own,
+   the browser closes it at end-of-file and nothing is wrong. Concatenated, the
+   NEXT sheet is swallowed into that block — and it fails quietly, with the
+   rules parsing fine and simply applying under some media query nobody meant.
+   That is exactly how the aquarium shipped with no styling at all: panels.css
+   ended inside `@media (max-width: 780px) {`.
+
+   Comments are blanked rather than removed so the line number is the real one. */
+function checkBalanced(text, file) {
+  const code = text.replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, ' '));
+  const stack = [];
+  let line = 1;
+  for (let i = 0; i < code.length; i++) {
+    const c = code[i];
+    if (c === '\n') line++;
+    else if (c === '{') stack.push(line);
+    else if (c === '}') {
+      if (!stack.length) {
+        throw new Error(file + ':' + line + ': a closing brace with nothing open — ' +
+                        'refusing to build a stylesheet that would swallow the next one');
+      }
+      stack.pop();
+    }
+  }
+  if (stack.length) {
+    throw new Error(file + ':' + stack[0] + ': this block is never closed — ' +
+                    'on its own that is invisible, concatenated it eats every ' +
+                    'stylesheet that follows. Refusing to build.');
+  }
+}
+
+const styles = cssKeep.map(f => {
+  const text = read(f);
+  checkBalanced(text, f);
+  return '/* ' + f + ' */\n' + text;
+}).join('\n');
 const scripts = jsKeep.map(f => '/* ' + f + ' */\n' + read(f)).join('\n');
 
 // drop the individual tags, then inject the combined blocks
