@@ -257,13 +257,21 @@
     /* The haze band itself: the air at the waterline is thicker than the air
        above it, so the horizon is a soft seam rather than a cut edge. This is
        what actually sells the distance, and it bakes in with the rest. */
-    const band = pg.createLinearGradient(0, hy - H * 0.075, 0, hy + H * 0.012);
+    /* The haze has to fade out at BOTH ends. Ramping up to full alpha and then
+       stopping at the rectangle's edge draws a pale bar across the horizon
+       with a hard bottom to it — which is worse than the clean seam it was
+       meant to soften. */
+    const top = hy - H * 0.085, bot = hy + H * 0.055;
+    const band = pg.createLinearGradient(0, top, 0, bot);
     const hz = U.mixRgb(P.fog, P.glow, 0.20);
+    const peak = (0.055 + P.fogAmt * 0.11) * (0.28 + P.bright * 0.72);
     band.addColorStop(0, U.rgbToCss(hz, 0));
-    band.addColorStop(0.72, U.rgbToCss(hz, (0.045 + P.fogAmt * 0.10) * (0.28 + P.bright * 0.72)));
-    band.addColorStop(1, U.rgbToCss(hz, (0.065 + P.fogAmt * 0.13) * (0.28 + P.bright * 0.72)));
+    band.addColorStop(0.55, U.rgbToCss(hz, peak * 0.72));
+    band.addColorStop(0.66, U.rgbToCss(hz, peak));
+    band.addColorStop(0.80, U.rgbToCss(hz, peak * 0.45));
+    band.addColorStop(1, U.rgbToCss(hz, 0));
     pg.fillStyle = band;
-    pg.fillRect(0, hy - H * 0.075, W, H * 0.087);
+    pg.fillRect(0, top, W, bot - top);
   }
 
   /* Distant land: layered dark shapes sitting on the horizon line. */
@@ -876,6 +884,7 @@
     mark('water', function () { drawWater(P, q); });
     mark('under', function () { if (P.void < 0.9) drawUnderwater(P); });
     mark('shoal', function () { seedShoal(); drawShoal(P, q); });
+    mark('surface', function () { seedGlints(); drawSurface(P, q); drawSurfaceMist(P, q); });
     mark('skyfall', function () { drawSkyfall(); });
     mark('ripples', function () { if (P.void < 0.9) VF.fx.drawRipples(ctx, 0.26); });
     mark('line', function () { drawLineAndBobber(P); drawDeparture(P); });
@@ -1274,10 +1283,17 @@
      baked into a cached strip, so each frame is a single sheared blit. */
   let reflect = null, reflectKey = '';
 
+  /* The mirror has to be of the land AS PAINTED, not of the shapes it was
+     built from. Those are baked in greys — the FORM, where the light falls —
+     and the colour only arrives when bakeLand multiplies it in. Mirroring the
+     raw layers put a pale grey band of upside-down mountains across the top of
+     the water with a hard edge under it, which is what a mirror of the wrong
+     thing looks like. So this keys off the tinted result and rebuilds whenever
+     that does. */
   function buildReflection() {
-    const key = backdropKey + ':' + Math.round(L.horizonY);
+    if (!landPad || !landKey) return;
+    const key = landKey + ':' + Math.round(L.horizonY);
     if (reflectKey === key && reflect) return;
-    if (!backdrop || !backdrop.length) return;
     reflectKey = key;
     const hy = L.horizonY;
     const depth = Math.max(2, Math.round(Math.min(L.waterH * 0.42, H * 0.20)));
@@ -1287,12 +1303,11 @@
     const g = c.getContext('2d');
     g.clearRect(0, 0, c.width, depth);
     g.save();
-    g.globalAlpha = 0.32;
+    g.globalAlpha = 0.30;
     g.translate(0, hy);
     g.scale(1, -1);
-    // the reflection is of all three ridges together — a mirror does not care
-    // which one is further away
-    for (let l = 0; l < backdrop.length; l++) g.drawImage(backdrop[l], 0, 0, W, H);
+    // one image: the whole range, already coloured and already hazed
+    g.drawImage(landPad, 0, 0, W, H);
     g.restore();
     // erase with a downward ramp so the mirror dissolves into the water
     g.globalCompositeOperation = 'destination-out';
@@ -1729,6 +1744,141 @@
       ctx.scale(k2, k2 * 0.82);
       ctx.drawImage(sp.canvas, -sp.half, -sp.half);
       ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  /* ---------------------------------------------------- light on the water
+
+     The surface had bands on it and nothing else. Bands say "there are waves";
+     they do not say "this is water", because what actually tells you a thing
+     is water at night is specular — individual facets catching the light and
+     losing it again, hard and quick, thousands of them, concentrated under
+     whatever is bright and thinning out to nothing away from it.
+
+     So: a field of points that flash rather than pulse. The flash is a sine
+     raised to a high power, which spends most of its time near zero and snaps
+     to full for an instant — a wave facet is either pointing at you or it is
+     not. Brightness falls off away from the light with distance, and the
+     points crowd toward the horizon because perspective crowds everything
+     toward the horizon.
+
+     Nothing here is baked. It is a few hundred small fills and it has to move
+     every frame, which is the whole point of it. */
+
+  const glints = [];
+  let glintKey = '';
+
+  function seedGlints() {
+    const q = VF.state.data.settings.quality;
+    const key = q + ':' + Math.round(W) + 'x' + Math.round(H);
+    if (glintKey === key && glints.length) return;
+    glintKey = key;
+    glints.length = 0;
+    const n = q === 'low' ? 70 : q === 'medium' ? 180 : 340;
+    const rnd = VF.rng.make(0x91177);
+    for (let i = 0; i < n; i++) {
+      glints.push({
+        u: rnd(),
+        // crowded toward the horizon, the way a receding plane is
+        d: Math.pow(rnd(), 2.1),
+        ph: rnd() * TAU,
+        sp: 0.7 + rnd() * 2.6,
+        // how sharp this facet is: some wink, some hold for a moment
+        sharp: 5 + rnd() * 16,
+        size: 0.6 + rnd() * 1.5,
+        drift: (rnd() * 2 - 1) * 0.006
+      });
+    }
+  }
+
+  function drawSurface(P, q) {
+    if (!glints.length) return;
+    const hy = L.horizonY, wh = L.waterH;
+    // dead calm means a mirror, and a mirror has no facets to catch anything
+    const calm = Math.max(VF.encounters ? VF.encounters.calm() : 0,
+                          VF.conditions ? VF.conditions.flag('calm') * 0.85 : 0);
+    const chop = U.clamp(0.30 + VF.weather.wind() * 0.9 + VF.weather.rain() * 0.6, 0, 1.6) *
+                 (1 - calm * 0.95);
+    // and the void takes the light long before it takes the water
+    const k = U.clamp((0.92 - P.void) / 0.35, 0, 1) * (0.15 + P.bright * 1.0) * chop;
+    if (k <= 0.02) return;
+
+    const gx = L.glowX;
+    const spread = W * 0.34;          // how far from the light the path reaches
+    const col = U.mixRgb(P.glow, [255, 255, 255], 0.55);
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < glints.length; i++) {
+      const s = glints[i];
+      s.u += s.drift * VF.state.rt.dt;
+      if (s.u > 1.05) s.u -= 1.1; else if (s.u < -0.05) s.u += 1.1;
+
+      const y = hy + Math.pow(s.d, 1.42) * wh;
+      if (y > H + 2) continue;
+      const x = s.u * W;
+
+      /* Away from the light there is nothing to catch. A gaussian rather than
+         a cutoff, so the glade has no edge — the moment it has an edge it
+         stops being light on water and becomes a shape drawn on water. */
+      const dx = (x - gx) / spread;
+      const near = Math.exp(-dx * dx * 0.9);
+      if (near < 0.012) continue;
+
+      /* The flash. sin^n spends almost all of its time dark and snaps to full
+         for an instant, which is what a facet turning through the light
+         actually does; a smooth pulse reads as a firefly. */
+      const w = Math.sin(t * s.sp + s.ph) * 0.5 + 0.5;
+      const flash = Math.pow(w, s.sharp);
+      if (flash < 0.02) continue;
+
+      const a = k * near * flash * U.lerp(0.5, 1, s.d);
+      const r = s.size * U.lerp(0.5, 2.3, s.d) * U.clamp(Math.min(W, H) / 800, 0.6, 1.5);
+
+      ctx.fillStyle = U.rgbToCss(col, a * 0.5);
+      ctx.beginPath(); ctx.arc(x, y, r * 2.6, 0, TAU); ctx.fill();
+      ctx.fillStyle = U.rgbToCss([255, 255, 255], a);
+      ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+
+      // the brightest ones streak along the wave they are sitting on
+      if (q === 'high' && a > 0.35) {
+        ctx.strokeStyle = U.rgbToCss(col, a * 0.5);
+        ctx.lineWidth = Math.max(0.4, r * 0.6);
+        ctx.beginPath();
+        ctx.moveTo(x - r * 3.4, y); ctx.lineTo(x + r * 3.4, y);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
+  /* Mist sitting on the water. Very little of it, very faint, moving slowly —
+     it is there to stop the surface meeting the air along a clean line, which
+     is the last thing on the horizon that still looked drawn. */
+  function drawSurfaceMist(P, q) {
+    if (q === 'low') return;
+    const amt = U.clamp(P.fogAmt * 0.8 + VF.weather.fog() * 0.7, 0, 1);
+    if (amt < 0.05) return;
+    const hy = L.horizonY, wh = L.waterH;
+    const col = U.mixRgb(P.fog, P.glow, 0.22);
+    ctx.save();
+    const n = q === 'high' ? 7 : 4;
+    for (let i = 0; i < n; i++) {
+      const ph = i * 2.399;
+      const d = 0.04 + (i / n) * 0.30;
+      const y = hy + Math.pow(d, 1.4) * wh;
+      const x = ((t * (0.008 + i * 0.004) + i * 0.37) % 1.3 - 0.15) * W;
+      const rw = W * (0.16 + (i % 3) * 0.09);
+      const rh = wh * 0.055 * (1 + d * 2);
+      const a = amt * 0.055 * (0.4 + P.bright * 0.8) * (0.6 + 0.4 * Math.sin(t * 0.2 + ph));
+      const gr = ctx.createRadialGradient(x, y, 0, x, y, rw);
+      gr.addColorStop(0, U.rgbToCss(col, a));
+      gr.addColorStop(1, U.rgbToCss(col, 0));
+      ctx.fillStyle = gr;
+      ctx.beginPath();
+      ctx.ellipse(x, y, rw, rh, 0, 0, TAU);
+      ctx.fill();
     }
     ctx.restore();
   }
