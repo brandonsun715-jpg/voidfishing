@@ -33,12 +33,15 @@
   function buildStars() {
     const q = VF.state.data.settings.quality;
     const loc = VF.locations.current();
-    const key = loc.id + ':' + Math.round(W) + 'x' + Math.round(L.horizonY) + ':' + q;
+    /* DPR is in the key because the field is baked at device resolution now —
+       a field baked for one ratio and blitted at another is exactly the soft,
+       doubled-up star it was built to stop being. */
+    const key = loc.id + ':' + Math.round(W) + 'x' + Math.round(L.horizonY) + ':' + q + ':' + DPR;
     if (starKey === key && starField) return;
     starKey = key;
-    const built = VF.skyArt.buildField(W, Math.max(8, L.horizonY), 
+    const built = VF.skyArt.buildField(W, Math.max(8, L.horizonY),
                                        0xBEEF ^ VF.locations.index(loc.id) * 7919,
-                                       q, U.hexToRgb(loc.starTint));
+                                       q, U.hexToRgb(loc.starTint), DPR);
     starField = built.canvas;
     stars = built.bright;
   }
@@ -929,9 +932,14 @@
     }
     if (!stars) return;
 
-    /* The two dozen worth animating. The brightest carry diffraction spikes —
-       the cross an eye or a lens puts on a point source — which is the single
-       cheapest thing that makes a star read as bright rather than as big. */
+    /* The ten worth animating — a blit cannot twinkle, and a sky where nothing
+       moves is a photograph. Two or three of them carry diffraction spikes: the
+       cross an eye or a lens puts on a point source, and the cheapest thing
+       there is for making a star read as BRIGHT rather than as big.
+
+       Everything here used to be about three times this size. A halo nine
+       pixels across on two dozen stars is not a sky, it is a scattering of
+       soft lamps, and it was the loudest thing above the horizon. */
     for (let i = 0; i < stars.length; i++) {
       const s = stars[i];
       const y = s.y * sky;
@@ -940,23 +948,22 @@
       const a = P.starAlpha * (0.45 + s.mag * 0.55) * tw;
       if (a <= 0.02) continue;
       const x = s.x * W;
-      const col = U.rgbToCss(s.col, a);
 
       ctx.globalAlpha = 1;
-      // the halo
-      ctx.fillStyle = U.rgbToCss(s.col, a * 0.20);
-      ctx.beginPath(); ctx.arc(x, y, s.s * 3.4, 0, TAU); ctx.fill();
+      // the halo, close in and barely there
+      ctx.fillStyle = U.rgbToCss(s.col, a * 0.10);
+      ctx.beginPath(); ctx.arc(x, y, s.s * 2.0, 0, TAU); ctx.fill();
 
       if (s.spikes && q === 'high') {
-        ctx.strokeStyle = U.rgbToCss(s.col, a * 0.55);
-        ctx.lineWidth = 0.7;
-        const len = s.s * (3.2 + tw * 1.8);
+        ctx.strokeStyle = U.rgbToCss(s.col, a * 0.34);
+        ctx.lineWidth = 0.5;
+        const len = s.s * (2.0 + tw * 1.1);
         ctx.beginPath();
         ctx.moveTo(x - len, y); ctx.lineTo(x + len, y);
         ctx.moveTo(x, y - len); ctx.lineTo(x, y + len);
         ctx.stroke();
       }
-      ctx.fillStyle = col;
+      ctx.fillStyle = U.rgbToCss(s.col, a);
       ctx.fillRect(x - s.s * 0.5, y - s.s * 0.5, s.s, s.s);
     }
     ctx.globalAlpha = 1;

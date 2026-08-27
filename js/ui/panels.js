@@ -95,8 +95,17 @@
     else if (!e.shiftKey && (at === last || !node.contains(at))) { e.preventDefault(); first.focus(); }
   }
 
+  /* Was the thing that opened this panel reached by keyboard? Only then is it
+     worth handing focus back when the panel closes. Returning focus to a button
+     somebody clicked with a mouse puts a ring on it that they did not ask for
+     and cannot get rid of — and leaves the space bar pointed at it. */
+  function reachedByKey(el) {
+    if (!el || !el.matches) return false;
+    try { return el.matches(':focus-visible'); } catch (e) { return false; }
+  }
+
   function takeFocus() {
-    lastFocus = document.activeElement;
+    lastFocus = reachedByKey(document.activeElement) ? document.activeElement : null;
     setTimeout(function () {
       if (!current || !node) return;
       // the close button is a poor first stop; the first real control is better

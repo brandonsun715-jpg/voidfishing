@@ -45,6 +45,30 @@
 
   /* ------------------------------------------------------------- input */
 
+  /* A control in the HUD that keeps focus after a mouse click keeps the space
+     bar with it, and the space bar is how you fish — so it lets go.
+
+     Only after a real pointer click: a click event raised by the keyboard
+     carries detail 0, and somebody who tabbed to a button and pressed it needs
+     the focus left where it is or they have nowhere to come back to. */
+  function dropFocus(e) {
+    if (e && e.detail > 0 && e.currentTarget && e.currentTarget.blur) e.currentTarget.blur();
+  }
+
+  /* What, if anything, currently owns the keyboard instead of the game. */
+  const CONTROLS = 'button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+  function focusedControl() {
+    const el = document.activeElement;
+    if (!el || el === document.body || !el.closest) return null;
+    if (!el.closest(CONTROLS)) return null;
+    /* Two things that report as focused without being on the screen: a control
+       inside a panel that has been torn down, and the Begin button, which is
+       still the focused element long after the veil over it has lifted. */
+    if (!el.isConnected || !el.getClientRects().length) return null;
+    if (el.closest('#boot')) return null;
+    return el;
+  }
+
   /* A click on the figure standing up the shore opens what he is carrying,
      rather than starting a cast into him. */
   function merchantPress(e, canvas) {
@@ -105,33 +129,63 @@
     window.addEventListener('blur', pressEnd);
 
     window.addEventListener('keydown', function (e) {
-      if (e.repeat) return;
       const tag = document.activeElement && document.activeElement.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
+      const fire = e.code === 'Space' || e.code === 'Enter';
+
       if (VF.cutscene && VF.cutscene.active()) {
-        if (e.code === 'Space' || e.code === 'Enter' || e.code === 'Escape') {
+        if (fire || e.code === 'Escape') {
           e.preventDefault();
-          VF.cutscene.skip();
+          if (!e.repeat) VF.cutscene.skip();
         }
         return;
       }
       if (e.code === 'Escape') {
+        if (e.repeat) return;
         if (VF.panels.isOpen()) { e.preventDefault(); VF.panels.close(); return; }
         if (VF.visit.talking()) { e.preventDefault(); VF.visit.leave(); }
         return;
       }
       if (VF.visit.active()) {
         // nothing else is reachable until the two of you are done
-        if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); VF.visit.advance(); }
+        if (fire) { e.preventDefault(); if (!e.repeat) VF.visit.advance(); }
         return;
       }
-      if (e.code === 'Space' || e.code === 'Enter') {
+      if (fire) {
+        if (VF.catchUI.isOpen()) {
+          e.preventDefault();
+          if (!e.repeat) VF.catchUI.defaultAction();
+          return;
+        }
+        /* A control somebody has deliberately put the focus on gets the press.
+           That is what pressing a focused button means, and without it no
+           button inside any panel could be reached from the keyboard at all —
+           this branch used to swallow both keys unconditionally. A control
+           focused by a mouse click is a different thing and does not reach
+           here: those let go of the focus as they are clicked, see dropFocus. */
+        /* ...but only while the rod is idle. Once a cast is in the air the
+           game takes both keys regardless of what has focus: you cannot be
+           halfway through a fight and also mean to press a menu button, and
+           the cost of guessing that wrong is a panel over the top of the fish
+           you are losing. */
+        const busy = VF.fishing.state() !== 'idle' || VF.fishing.S.charging;
+        if (!busy && focusedControl()) return;
+
+        /* Otherwise the game owns these two, and it owns them on EVERY keydown
+           — including the auto-repeats a held key sends, which is most of them,
+           because holding space is how you fight a fish. The repeat guard used
+           to come first, so only the opening keydown of a press was ever
+           default-prevented and every repeat after it went through to the
+           browser, which then does what a browser is supposed to do with a
+           space bar: it presses whatever has focus. Prevent first, bail after. */
         e.preventDefault();
-        if (VF.catchUI.isOpen()) { VF.catchUI.defaultAction(); return; }
+        if (e.repeat) return;
         pressStart(e);
         return;
       }
+
+      if (e.repeat) return;
 /* @admin-only */
       /* The owner door, and the only thing left of it in a build that does
          not have js/ui/console.js: there, this module is not defined and the
@@ -162,12 +216,14 @@
       if (e.code === 'Space' || e.code === 'Enter') pressEnd();
     });
 
-    D.chipLoc.addEventListener('click', function () { VF.audio.click(); VF.panels.open('map'); });
-    D.gearRod.addEventListener('click', function () { VF.audio.click(); VF.panels.open('shop', 'rods'); });
-    D.gearBait.addEventListener('click', function () { VF.audio.click(); VF.panels.open('shop', 'bait'); });
+    D.chipLoc.addEventListener('click', function (e) { dropFocus(e); VF.audio.click(); VF.panels.open('map'); });
+    D.gearRod.addEventListener('click', function (e) { dropFocus(e); VF.audio.click(); VF.panels.open('shop', 'rods'); });
+    D.gearBait.addEventListener('click', function (e) { dropFocus(e); VF.audio.click(); VF.panels.open('shop', 'bait'); });
 
     U.qsa('.mbtn').forEach(function (b) {
-      b.addEventListener('click', function () { VF.audio.click(); VF.panels.open(b.dataset.panel); });
+      b.addEventListener('click', function (e) {
+        dropFocus(e); VF.audio.click(); VF.panels.open(b.dataset.panel);
+      });
       b.addEventListener('pointerenter', function () { VF.audio.hover(); });
     });
   }

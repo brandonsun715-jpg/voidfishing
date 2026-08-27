@@ -93,15 +93,33 @@
   }
 
   /* Returns { canvas, bright } — the baked field, and the handful worth
-     twinkling live on top of it. */
-  function buildField(w, h, seed, quality, tint) {
+     twinkling live on top of it.
+
+     `scale` is the device pixel ratio. It matters more than anything else here:
+     the field used to be baked at CSS resolution and then blitted into a
+     context carrying a 2x transform, so every star was resampled to twice its
+     size and came out as a soft grey blob. Baked at device resolution it lands
+     one device pixel to one device pixel, and a star can be genuinely small —
+     which is the whole difference between a sky and a scattering of dots.
+
+     Sizes below are therefore given in CSS pixels and multiplied by `scale`. */
+  function buildField(w, h, seed, quality, tint, scale) {
+    const S = Math.max(1, scale || 1);
     const c = document.createElement('canvas');
-    c.width = Math.max(1, Math.round(w));
-    c.height = Math.max(1, Math.round(h));
+    c.width = Math.max(1, Math.round(w * S));
+    c.height = Math.max(1, Math.round(h * S));
     const g = c.getContext('2d');
     const rnd = VF.rng.make(seed);
 
-    const n = quality === 'low' ? 420 : quality === 'medium' ? 1100 : 2400;
+    /* Counted per unit of sky rather than fixed, so a wide window is not
+       sparse and a small one is not packed — and thinned a long way down from
+       what was here, which read as confetti. One star per nine hundred square
+       pixels is roughly one per thirty-pixel square: sparse enough that the
+       eye picks out individual stars instead of a texture — less than half
+       what was here, and every one of them small enough to be a point. */
+    const area = w * h;
+    const dens = quality === 'low' ? 1 / 2100 : quality === 'medium' ? 1 / 1200 : 1 / 700;
+    const n = Math.round(U.clamp(area * dens, 60, 1500));
 
     /* --- the galaxy ---
        A band of stars too far away to resolve, lying across the sky at an
@@ -111,7 +129,10 @@
     const bandA = -0.34 + rnd() * 0.16;          // its tilt
     const bandY = 0.30 + rnd() * 0.26;           // where it crosses
     const dust = 0.13 + rnd() * 0.06;            // the lane down the spine
-    const bandN = quality === 'low' ? 700 : quality === 'medium' ? 2200 : 5200;
+    /* These are deliberately sub-pixel and very faint. They are not stars you
+       are meant to see; they are the milk the band is made of, and the moment
+       any of them is big enough to read on its own the whole sky looks busy. */
+    const bandN = Math.round(n * (quality === 'low' ? 1.0 : 2.0));
 
     for (let i = 0; i < bandN; i++) {
       const u = rnd();
@@ -122,10 +143,10 @@
       if (by < 0 || by > 1) continue;
       // the dust lane: a gap along the spine where the light is blocked
       if (Math.abs(off) < dust && rnd() < 0.80) continue;
-      const a = (0.05 + Math.pow(rnd(), 2.2) * 0.30) * (1 - Math.abs(off) * 0.7);
+      const a = (0.035 + Math.pow(rnd(), 2.6) * 0.20) * (1 - Math.abs(off) * 0.7);
       const col = starColour(rnd());
       g.fillStyle = U.rgbToCss(U.mixRgb(col, tint, 0.35), a);
-      const s = 0.5 + rnd() * 0.7;
+      const s = (0.34 + rnd() * 0.40) * S;
       g.fillRect(bx * c.width, by * c.height, s, s);
     }
 
@@ -135,25 +156,31 @@
       const x = rnd(), y = Math.pow(rnd(), 1.22);
       /* Magnitude on a power law. A high exponent means almost everything is
          faint, which is the whole trick: the eye reads the few bright ones as
-         stars and the rest as depth behind them. */
-      const mag = Math.pow(rnd(), 3.1);
+         stars and the rest as depth behind them. The exponent was 3.1, which
+         still left a third of the field bright enough to carry a halo — so
+         they all read as the same middling dot and the sky had no order in it.
+         At 4.4 a star has to be genuinely rare to be more than a point. */
+      const mag = Math.pow(rnd(), 4.4);
       const col = U.mixRgb(starColour(rnd()), tint, 0.28);
-      const a = 0.10 + mag * 0.9;
-      const s = 0.45 + mag * 1.9;
+      const a = 0.13 + mag * 0.74;
+      // in CSS pixels: half a pixel for the faintest, a pixel and a half for
+      // the brightest baked one. Anything larger stops looking like a star.
+      const sCss = 0.55 + mag * 1.00;
+      const s = sCss * S;
 
-      if (mag > 0.72 && bright.length < 26) {
+      if (mag > 0.90 && bright.length < 11) {
         // handed back for live twinkling rather than baked flat
-        bright.push({ x: x, y: y, s: s * 1.15, col: col, mag: mag,
+        bright.push({ x: x, y: y, s: sCss * 1.10, col: col, mag: mag,
                       tw: rnd() * TAU, sp: 0.35 + rnd() * 1.3,
-                      spikes: mag > 0.88 });
+                      spikes: mag > 0.965 });
         continue;
       }
 
       g.fillStyle = U.rgbToCss(col, a);
-      if (s > 1.5) {
-        // the faint halo a bright star has, at almost no cost
-        g.globalAlpha = a * 0.16;
-        g.beginPath(); g.arc(x * c.width, y * c.height, s * 2.4, 0, TAU); g.fill();
+      if (mag > 0.86) {
+        // the faint halo only the genuinely bright ones have
+        g.globalAlpha = a * 0.09;
+        g.beginPath(); g.arc(x * c.width, y * c.height, s * 2.0, 0, TAU); g.fill();
         g.globalAlpha = 1;
         g.fillStyle = U.rgbToCss(col, a);
       }
