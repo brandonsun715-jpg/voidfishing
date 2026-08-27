@@ -223,6 +223,30 @@
       count: [function (d) { return VF.cosmetics.completion().pct; }, 1],
       test: function (d) { return VF.cosmetics.completion().pct >= 1; } },
 
+    /* --- the aquarium --- */
+    { id: 'aq_first', name: 'Somewhere To Put It', desc: 'House a catch in the aquarium.', reward: 1200,
+      test: function (d) { return !!(d.aquarium && d.aquarium.tanks.some(function (t) { return t.fish.length; })); } },
+    { id: 'aq_full', name: 'Standing Room Only', desc: 'House twenty specimens at once.', reward: 90000,
+      count: [function (d) {
+        if (!d.aquarium) return 0;
+        return d.aquarium.tanks.reduce(function (n, t) { return n + t.fish.length; }, 0);
+      }, 20],
+      test: function (d) {
+        if (!d.aquarium) return false;
+        return d.aquarium.tanks.reduce(function (n, t) { return n + t.fish.length; }, 0) >= 20;
+      } },
+    { id: 'aq_study', name: 'Research Complete', desc: 'Study one species to the end.', reward: 24000,
+      test: function (d) {
+        const r = (d.aquarium && d.aquarium.research) || {};
+        for (const k in r) if (r[k] >= 1) return true;
+        return false;
+      } },
+    { id: 'aq_find', name: 'Not In The Catalogue', desc: 'Turn up something the aquarium was not looking for.', hidden: true, reward: 400000,
+      test: function (d) { return (d.stats.discoveries | 0) >= 1; } },
+    { id: 'aq_all', name: 'Every Line Of Enquiry', desc: 'Confirm every finding.', hidden: true, reward: 90000000,
+      count: [function (d) { return d.stats.discoveries | 0; }, VF.aquariumData.DISCOVERIES.length],
+      test: function (d) { return (d.stats.discoveries | 0) >= VF.aquariumData.DISCOVERIES.length; } },
+
     /* --- the end --- */
     { id: 'the_last', name: '??????????', desc: 'Reach the last water.', hidden: true, reward: 250000000,
       test: function (d) { return VF.secrets.found('the_last_water'); } }

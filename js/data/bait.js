@@ -62,7 +62,17 @@
 
     { id: 'null', name: 'Null Bait', cost: 420000, pack: 5, level: 56,
       bite: 1.10, rare: 14.0, luck: 2.80, color: '#e8e8ff',
-      desc: 'An absence, tied to a hook. Everything down there notices an absence.' }
+      desc: 'An absence, tied to a hook. Everything down there notices an absence.' },
+
+    /* Nobody sells this and nobody made it on purpose. Two specimens in a tank
+       agreed on a colour, and the aquarium bottled some. `discover` keeps it
+       off the shelf entirely until that has happened — see
+       js/data/aquariumData.js, and VF.bait.available() below. */
+    { id: 'lure_pale', name: 'Pale Lure', cost: 120000, pack: 8, level: 20,
+      discover: 'deeplure',
+      bite: 0.68, rare: 9.40, luck: 1.90, color: '#dff6ff',
+      desc: 'A colour two lanterns settled on between them, which is not a colour either of ' +
+            'them was carrying. Things come a long way to look at it.' }
   ];
 
   const BY_ID = VF.util.byId(LIST);
@@ -89,8 +99,16 @@
     VF.state.data.baitCounts[id] = Math.min(99999, (VF.state.data.baitCounts[id] | 0) + n);
   }
 
+  /* Bait that exists as far as this save is concerned. A lure the aquarium has
+     not found yet is not stock the shop is out of — it is not a thing. */
+  function available() {
+    const found = VF.state.data.discovered || {};
+    return LIST.filter(function (b) { return !b.discover || !!found[b.discover]; });
+  }
+
   VF.bait = {
     list: LIST,
+    available: available,
     get: function (id) { return BY_ID[id] || BY_ID.worm; },
     count: count, has: has, consume: consume, add: add
   };

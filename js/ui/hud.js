@@ -205,6 +205,7 @@
         case 'KeyM': e.preventDefault(); VF.panels.open('map'); break;
         case 'KeyJ': e.preventDefault(); VF.panels.open('journal'); break;
         case 'KeyC': e.preventDefault(); VF.panels.open('wardrobe'); break;
+        case 'KeyA': e.preventDefault(); VF.panels.open('aquarium'); break;
         case 'KeyR':
           e.preventDefault();
           if (VF.fishing.reelIn()) VF.toast.plain('Line reeled in', null, 1600);
@@ -677,6 +678,14 @@
     VF.achievements.check();
     refreshAll();
   }
+
+  /* The aquarium is the one menu that can have news in it while you are
+     standing somewhere else — a species finishing its research, or the desk
+     working something out. */
+  VF.bus.on('aquarium:discovery', function () { flashMenu('aquarium'); });
+  VF.bus.on('aquarium:research', function (e) {
+    if (e && e.milestone && e.milestone.at >= 1) flashMenu('aquarium');
+  });
 
   function flashMenu(panel) {
     const b = U.qs('.mbtn[data-panel="' + panel + '"]');

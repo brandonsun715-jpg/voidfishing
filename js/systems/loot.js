@@ -84,6 +84,13 @@
   /* Pool for a location: every species with a non-zero presence, plus the
      summed presence per rarity so tier probability stays independent of how
      many species happen to sit in that tier. */
+  /* A species the aquarium has not turned up yet is not in any pool. This is
+     the only gate on it: once the finding fires the pool cache is thrown away,
+     and after that it is simply a fish that lives where its `locs` say. */
+  function exists(f) {
+    return !f.discover || !!(VF.state.data.discovered || {})[f.discover];
+  }
+
   function buildPool(locId) {
     const locRank = VF.locations.rank(locId);
     const pool = [];
@@ -91,6 +98,7 @@
     const prefTotal = Object.create(null);
     for (let i = 0; i < VF.fish.list.length; i++) {
       const f = VF.fish.list[i];
+      if (!exists(f)) continue;
       const s = strayFactor(f, locId, locRank);
       if (s <= 0) continue;
       pool.push({ f: f, stray: s });
@@ -244,7 +252,12 @@
       kg: size.kg, m: size.m, pct: size.pct,
       value: value, xp: xp,
       isNew: isNew, isRecord: isRecord, isGiant: isGiant,
+      /* Where, when, and what with. The first three were already here; the
+         rod and the bait were not, and they are half of what makes a specimen
+         in the aquarium a story rather than a row — "Astral Rod, Star Bait,
+         overcast" is a memory of an evening, and `Moonfish x1` is not. */
       location: loc.id, time: VF.time.phase(), weather: VF.weather.id(),
+      bait: d.bait, rod: d.rod,
       at: Date.now()
     };
   }

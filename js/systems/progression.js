@@ -86,8 +86,8 @@
       const r = VF.rods.list[i];
       if (r.level > from && d.level >= r.level && !r.admin && !r.merchant) out.rods.push(r);
     }
-    for (let i = 0; i < VF.bait.list.length; i++) {
-      const b = VF.bait.list[i];
+    for (let i = 0; i < VF.bait.available().length; i++) {
+      const b = VF.bait.available()[i];
       if (b.level > from && d.level >= b.level) out.baits.push(b);
     }
     return out;

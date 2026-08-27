@@ -1,0 +1,347 @@
+/* VOID FISHING — the aquarium screen.
+
+   The rule this stylesheet follows is that nothing here should look like a
+   panel. A panel is a floating rectangle with a border; this is a room you are
+   standing in, so the chrome sits ON the room rather than in front of it — a
+   line of text at the top, a line at the bottom, and a drawer that slides up
+   from the floor when you walk up to something. */
+
+#aquariumScreen {
+  position: absolute; inset: 0; z-index: 60;
+  overflow: hidden;
+  background: #05080d;
+  animation: aqIn var(--t-pane) var(--e-out) both;
+}
+@keyframes aqIn { from { opacity: 0; } to { opacity: 1; } }
+#aquariumScreen.leaving { animation: aqOut var(--t-exit) var(--e-in) both; }
+@keyframes aqOut { to { opacity: 0; } }
+
+.aq-room { position: absolute; inset: 0; display: block; }
+
+/* Arriving somewhere is a push forward, not a fade. The room comes toward you
+   once, on the way in, and never again. */
+#aquariumScreen.arriving .aq-room { animation: aqWalk 620ms var(--e-out) both; }
+@keyframes aqWalk {
+  from { transform: scale(1.075); filter: brightness(0.35) blur(6px); }
+  to   { transform: none;         filter: none; }
+}
+#aquariumScreen.arriving .aq-top,
+#aquariumScreen.arriving .aq-hint,
+#aquariumScreen.arriving .aq-drawer { animation: aqChrome 620ms var(--e-out) both; }
+@keyframes aqChrome { 0%, 40% { opacity: 0; } to { opacity: 1; } }
+
+/* ------------------------------------------------------------------- top */
+
+.aq-top {
+  position: absolute; top: 0; left: 0; right: 0; z-index: 2;
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 16px;
+  padding: clamp(14px, 2vw, 24px);
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(3,5,9,0.72), rgba(3,5,9,0));
+}
+.aq-top > * { pointer-events: auto; }
+.aq-title-main {
+  display: block;
+  font-size: clamp(13px, 1.5vw, 16px); letter-spacing: 0.34em;
+  text-transform: lowercase; color: var(--ink);
+  text-shadow: 0 2px 18px rgba(0,0,0,0.9);
+}
+.aq-title-sub {
+  display: block; margin-top: 5px;
+  font-size: 10.5px; letter-spacing: 0.10em; color: var(--ink-3);
+}
+
+.aq-top-right { display: flex; align-items: center; gap: 10px; }
+
+.aq-bank {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 7px 13px;
+  border: 1px solid var(--line); border-radius: 100px;
+  background: rgba(10,14,21,0.62);
+  backdrop-filter: blur(9px); -webkit-backdrop-filter: blur(9px);
+  transition: border-color var(--t-tint) var(--e-move),
+              background var(--t-tint) var(--e-move);
+}
+.aq-bank:hover:not(:disabled) { border-color: var(--line-3); background: rgba(16,22,32,0.75); }
+.aq-bank:disabled { opacity: 0.5; cursor: default; }
+.aq-bank-k { font-size: 9px; letter-spacing: 0.20em; color: var(--ink-3); }
+.aq-bank-v {
+  font-family: var(--mono); font-variant-numeric: tabular-nums;
+  font-size: 13px; color: var(--accent);
+}
+.aq-bank-rate { font-size: 9.5px; letter-spacing: 0.06em; color: var(--ink-4); }
+
+.aq-close {
+  width: 32px; height: 32px; display: grid; place-items: center;
+  border: 1px solid var(--line); border-radius: var(--r);
+  background: rgba(10,14,21,0.62);
+  color: var(--ink-3); font-size: 17px; line-height: 1;
+  transition: color var(--t-tint) var(--e-move),
+              border-color var(--t-tint) var(--e-move),
+              background var(--t-tint) var(--e-move);
+}
+.aq-close:hover { color: var(--ink); border-color: var(--line-3); background: var(--fill); }
+
+/* ------------------------------------------------------------------ hint */
+
+.aq-hint {
+  position: absolute; left: 0; right: var(--rail, 380px);
+  margin: 0 auto; width: fit-content;
+  top: clamp(58px, 7vh, 84px);
+  display: flex; align-items: baseline; gap: 10px;
+  max-width: min(680px, 84vw);
+  padding: 7px 15px;
+  border: 1px solid var(--line); border-left: 2px solid var(--accent-dim);
+  border-radius: var(--r);
+  background: rgba(8,12,18,0.66);
+  backdrop-filter: blur(9px); -webkit-backdrop-filter: blur(9px);
+  transition: opacity var(--t-item) var(--e-move);
+}
+.aq-hint.empty { opacity: 0; pointer-events: none; }
+.aq-hint-k { font-size: 9px; letter-spacing: 0.20em; color: var(--ink-4); white-space: nowrap; }
+.aq-hint-v { font-size: 11.5px; line-height: 1.5; color: var(--ink-2); }
+
+/* ---------------------------------------------------------------- drawer */
+
+/* On anything wide it is a rail down the right-hand side rather than a drawer
+   across the bottom. A drawer takes half the picture and the two things
+   standing on the floor — the desk and the plinth — end up underneath it, so
+   the room loses exactly the part that makes it a room. */
+.aq-drawer {
+  position: absolute; top: 0; right: 0; bottom: 0;
+  width: var(--rail, 380px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 88px 22px 24px;
+  border-left: 1px solid var(--line);
+  background: linear-gradient(90deg, rgba(4,7,12,0.55), rgba(4,7,12,0.94) 22%, rgba(4,7,12,0.97));
+  backdrop-filter: blur(13px); -webkit-backdrop-filter: blur(13px);
+  scrollbar-width: thin; scrollbar-color: var(--line-2) transparent;
+}
+.aq-drawer::-webkit-scrollbar { width: 8px; }
+.aq-drawer::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 4px; }
+
+.aq-head { margin-bottom: 12px; }
+.aq-head-t { font-size: 12px; letter-spacing: 0.24em; text-transform: lowercase; color: var(--ink); }
+.aq-head-s { font-size: 10.5px; letter-spacing: 0.05em; color: var(--ink-3); margin-top: 3px; }
+.aq-sub {
+  font-size: 9px; letter-spacing: 0.22em; text-transform: lowercase;
+  color: var(--ink-4); margin: 14px 0 7px;
+}
+.aq-note { font-size: 11px; line-height: 1.6; color: var(--ink-3); padding: 6px 0; }
+
+/* --------------------------------------------------------------- the grid */
+
+.aq-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 7px;
+}
+.aq-grid.tall { max-height: 34vh; overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; }
+
+.aq-chip {
+  position: relative;
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center;
+  gap: 8px;
+  padding: 9px 11px 11px;
+  border: 1px solid var(--line); border-radius: var(--r);
+  background: var(--fill);
+  text-align: left;
+  transition: border-color var(--t-tint) var(--e-move),
+              background var(--t-tint) var(--e-move),
+              transform var(--t-tap) var(--e-out);
+}
+.aq-chip:hover { border-color: var(--line-3); background: var(--fill-2); transform: translateY(-1px); }
+.aq-chip.on { border-color: var(--accent); background: rgba(127,168,200,0.09); }
+.aq-chip.empty {
+  display: grid; place-items: center;
+  border-style: dashed; opacity: 0.32; cursor: default;
+  font-size: 9px; letter-spacing: 0.18em; color: var(--ink-4);
+  grid-template-columns: 1fr;
+}
+.aq-chip.empty:hover { transform: none; border-color: var(--line); background: var(--fill); }
+.aq-pip { width: 6px; height: 6px; border-radius: 50%; }
+.aq-chip-n { font-size: 11.5px; color: var(--ink-2); letter-spacing: 0.01em; }
+.aq-chip-w {
+  font-family: var(--mono); font-variant-numeric: tabular-nums;
+  font-size: 10px; color: var(--ink-3);
+}
+.aq-chip-bar {
+  position: absolute; left: 1px; right: 1px; bottom: 1px; height: 2px;
+  border-radius: 2px; overflow: hidden;
+  background: rgba(255,255,255,0.07);
+}
+.aq-chip-bar > span {
+  display: block; height: 100%; width: 100%;
+  transform-origin: left center;
+  transition: transform 600ms var(--e-move);
+}
+
+/* -------------------------------------------------------------- the plate */
+
+.aq-plate {
+  margin-top: 14px; padding: 15px 17px 13px;
+  border: 1px solid var(--line-2);
+  border-left: 2px solid var(--rar, var(--accent));
+  border-radius: var(--r-lg);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.004)),
+    rgba(10,14,21,0.7);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 10px 30px rgba(0,0,0,0.45);
+  animation: aqPlate var(--t-item) var(--e-out) both;
+}
+@keyframes aqPlate { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+.aq-plate-head { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; }
+.aq-plate-name {
+  font-size: clamp(15px, 1.8vw, 20px); font-weight: 300;
+  letter-spacing: 0.14em; color: var(--ink);
+  text-transform: none;
+}
+.aq-plate-kg {
+  font-family: var(--mono); font-variant-numeric: tabular-nums;
+  font-size: clamp(13px, 1.5vw, 16px); color: var(--ink-2);
+}
+
+.aq-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
+.aq-tag {
+  font-size: 9px; letter-spacing: 0.14em; text-transform: lowercase;
+  padding: 2px 8px; border: 1px solid var(--line); border-radius: 100px;
+}
+
+.aq-facts {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+  gap: 4px 22px; margin-top: 13px;
+  padding-top: 12px; border-top: 1px solid var(--line);
+}
+.aq-fact { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.aq-fact-k {
+  font-size: 9px; letter-spacing: 0.18em; text-transform: lowercase;
+  color: var(--ink-4); white-space: nowrap;
+}
+.aq-fact-v { font-size: 11px; color: var(--ink-2); text-align: right; }
+
+.aq-research { margin-top: 13px; padding-top: 12px; border-top: 1px solid var(--line); }
+.aq-research-l {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 9px; letter-spacing: 0.18em; text-transform: lowercase; color: var(--ink-4);
+}
+.aq-research-p { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--ink-2); }
+.aq-research-m { margin-top: 6px; font-size: 10.5px; color: var(--ink-3); }
+
+.aq-bar {
+  height: 3px; margin-top: 6px; border-radius: 2px; overflow: hidden;
+  background: rgba(255,255,255,0.08);
+}
+.aq-bar > div {
+  height: 100%; width: 100%;
+  background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+  transform-origin: left center;
+  transition: transform 600ms var(--e-move);
+}
+
+/* ------------------------------------------------------------- the actions */
+
+.aq-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+.aq-acts.tight { margin-top: 12px; }
+.aq-btn {
+  padding: 8px 14px;
+  font-size: 10.5px; letter-spacing: 0.10em; text-transform: lowercase;
+  color: var(--ink-2);
+  border: 1px solid var(--line); border-radius: var(--r);
+  background: var(--fill);
+  transition: color var(--t-tint) var(--e-move),
+              background var(--t-tint) var(--e-move),
+              border-color var(--t-tint) var(--e-move),
+              transform var(--t-tap) var(--e-out);
+}
+.aq-btn:hover:not(:disabled) { color: var(--ink); border-color: var(--line-3); background: var(--fill-2); }
+.aq-btn:active:not(:disabled) { transform: translateY(1px); }
+.aq-btn:disabled { opacity: 0.38; cursor: default; }
+.aq-btn.primary { border-color: var(--accent-dim); color: var(--ink); }
+.aq-btn.primary:hover:not(:disabled) { border-color: var(--accent); background: rgba(127,168,200,0.12); }
+.aq-btn.danger { color: rgba(255,150,140,0.85); }
+.aq-btn.danger:hover:not(:disabled) { color: #ffb0a4; border-color: rgba(210,69,63,0.55); }
+
+/* ------------------------------------------------------------- the studies */
+
+.aq-studies { display: flex; flex-direction: column; gap: 7px; }
+.aq-study {
+  display: grid; grid-template-columns: minmax(120px, 1fr) 2fr auto;
+  align-items: center; gap: 12px;
+}
+.aq-study-n { font-size: 11px; color: var(--ink-2); }
+.aq-study-p {
+  font-family: var(--mono); font-variant-numeric: tabular-nums;
+  font-size: 10px; color: var(--ink-3); min-width: 34px; text-align: right;
+}
+.aq-study .aq-bar { margin-top: 0; }
+
+/* ------------------------------------------------------------ the findings */
+
+.aq-findings { display: flex; flex-direction: column; gap: 8px; margin-bottom: 6px; }
+.aq-finding {
+  padding: 13px 15px;
+  border: 1px solid rgba(180,140,255,0.28); border-left: 2px solid #b48aff;
+  border-radius: var(--r);
+  background: linear-gradient(180deg, rgba(120,80,200,0.10), rgba(0,0,0,0));
+}
+.aq-finding-t { font-size: 11px; letter-spacing: 0.22em; color: #d8c0ff; }
+.aq-finding-x { font-size: 11.5px; line-height: 1.65; color: var(--ink-2); margin-top: 7px; }
+.aq-finding-k {
+  font-size: 9px; letter-spacing: 0.16em; color: var(--ink-4); margin-top: 8px;
+  text-transform: lowercase;
+}
+
+.aq-pairs { display: flex; flex-direction: column; gap: 6px; }
+.aq-pair {
+  padding: 10px 13px;
+  border: 1px solid var(--line); border-radius: var(--r);
+  background: var(--fill);
+}
+.aq-pair.done { opacity: 0.55; border-color: rgba(95,214,153,0.30); }
+.aq-pair-t { font-size: 11px; color: var(--ink-2); letter-spacing: 0.03em; }
+.aq-pair-x { font-size: 10.5px; line-height: 1.6; color: var(--ink-3); margin-top: 5px; }
+
+/* ------------------------------------------------------------ the cabinet */
+
+.aq-slot { margin-bottom: 4px; }
+.aq-swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.aq-sw {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 12px 6px 7px;
+  border: 1px solid var(--line); border-radius: 100px;
+  background: var(--fill);
+  transition: border-color var(--t-tint) var(--e-move),
+              background var(--t-tint) var(--e-move);
+}
+.aq-sw:hover { border-color: var(--line-3); background: var(--fill-2); }
+.aq-sw.on { border-color: var(--accent); background: rgba(127,168,200,0.10); }
+.aq-sw-c { width: 18px; height: 18px; border-radius: 50%; display: block; }
+.aq-sw-n { font-size: 10.5px; color: var(--ink-2); letter-spacing: 0.02em; }
+
+/* ------------------------------------------------------------------ small */
+
+/* Narrow: the rail cannot be a rail, so it goes back to being a drawer across
+   the bottom and the room gives up its floor band. Below this width there is
+   no room for both. */
+@media (max-width: 900px) {
+  /* A FIXED height, not a max — the room has to know exactly how much of the
+     screen it has left, or the desk and the plinth end up behind the drawer,
+     which is the one thing this layout exists to prevent. js/ui/aquarium.js
+     computes the same number; the two must agree. */
+  .aq-drawer {
+    top: auto; left: 0; right: 0; bottom: 0;
+    width: auto; height: min(46vh, 320px); max-height: none;
+    padding: 16px clamp(14px, 2.4vw, 26px) clamp(16px, 2.4vw, 22px);
+    border-left: none; border-top: 1px solid var(--line);
+    background: linear-gradient(180deg, rgba(4,7,12,0.72), rgba(4,7,12,0.96) 12%, rgba(4,7,12,0.98));
+  }
+  .aq-hint { right: 0; top: auto; bottom: calc(min(46vh, 320px) + 10px); }
+  .aq-grid.tall { max-height: 20vh; }
+}
+@media (max-width: 720px) {
+  .aq-title-sub { display: none; }
+  .aq-bank-rate { display: none; }
+  .aq-grid { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); }
+}

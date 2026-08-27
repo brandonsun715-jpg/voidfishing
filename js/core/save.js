@@ -44,7 +44,7 @@
         if (k === 'fishdex' || k === 'baitCounts' || k === 'achievements' || k === 'flags' ||
             k === 'mutations' || k === 'traits' || k === 'traitsSeen' || k === 'treasures' ||
             k === 'secrets' || k === 'npcs' || k === 'equipped' || k === 'cases' ||
-            k === 'quests') {
+            k === 'quests' || k === 'discovered' || k === 'research' || k === 'seen') {
           target[k] = sv;
         } else {
           merge(tv, sv);
@@ -121,6 +121,42 @@
     if (!Array.isArray(d.seenLocations)) d.seenLocations = d.unlockedLocations.slice();
     if (!d.fishdex || typeof d.fishdex !== 'object') d.fishdex = {};
     if (!Array.isArray(d.kept)) d.kept = [];
+
+    /* The aquarium. An edited or half-written one must not be able to take the
+       room down, so anything that is not the shape this build expects is
+       thrown away and the room is built again from nothing — the specimens in
+       it are the only irreplaceable part, and they are what is checked. */
+    if (d.aquarium && typeof d.aquarium === 'object' && !Array.isArray(d.aquarium)) {
+      const a = d.aquarium;
+      if (!Array.isArray(a.tanks) || !a.tanks.length) d.aquarium = null;
+      else {
+        a.tanks = a.tanks.slice(0, 8).map(function (t) {
+          const slots = U.clamp(Math.round((t && t.slots) || 5), 5, 30);
+          const fish = Array.isArray(t && t.fish) ? t.fish : [];
+          return {
+            slots: slots,
+            fish: fish.filter(function (k) {
+              return k && typeof k === 'object' && k.id && VF.fish.byId(k.id);
+            }).slice(0, slots)
+          };
+        });
+        if (!a.research || typeof a.research !== 'object') a.research = {};
+        if (!a.seen || typeof a.seen !== 'object') a.seen = {};
+        if (!Array.isArray(a.log)) a.log = [];
+        a.log = a.log.slice(0, 40);
+        a.bank = Math.max(0, isFinite(a.bank) ? a.bank : 0);
+        a.at = isFinite(a.at) && a.at > 0 ? a.at : Date.now();
+        if (a.showpiece && !(a.tanks[a.showpiece.tank] &&
+                             a.tanks[a.showpiece.tank].fish[a.showpiece.i])) {
+          a.showpiece = null;
+        }
+      }
+    } else if (d.aquarium !== null) {
+      d.aquarium = null;
+    }
+    if (!d.discovered || typeof d.discovered !== 'object' || Array.isArray(d.discovered)) {
+      d.discovered = {};
+    }
     if (!Array.isArray(d.wall)) d.wall = [];
     d.wall = d.wall.filter(function (k) { return k && typeof k === 'object' && k.id; }).slice(0, 12);
     if (d.kept.length > 400) d.kept = d.kept.slice(-400);

@@ -35,7 +35,13 @@
          an inexplicable amount. */
       traits: (c.traits || []).slice(),
       mutation: c.mutation, value: c.value, at: c.at, location: c.location,
-      rarity: c.rarity
+      rarity: c.rarity,
+      /* The rest of the evening. A kept fish is the only thing in the game
+         that survives as an object rather than a tally, and the aquarium reads
+         every one of these off the plate under the glass — so a catch that
+         does not carry them is a specimen with no provenance. Old saves have
+         none of it and the aquarium says "unrecorded" rather than guessing. */
+      weather: c.weather, time: c.time, bait: c.bait, rod: c.rod
     });
     if (d.kept.length > KEEP_LIMIT) d.kept.shift();
     VF.audio.click();
@@ -61,7 +67,7 @@
     const roll = VF.rng.g();
     if (roll < 0.07) {
       // a handful of whatever bait the player can currently use
-      const usable = VF.bait.list.filter(function (b) { return !b.unlimited && d.level >= b.level; });
+      const usable = VF.bait.available().filter(function (b) { return !b.unlimited && d.level >= b.level; });
       if (usable.length) {
         const b = usable[Math.min(usable.length - 1, VF.rng.g.int(Math.max(0, usable.length - 3), usable.length - 1))];
         const n = b.pack;

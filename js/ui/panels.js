@@ -133,6 +133,18 @@
 
   function open(id, tab) {
     if (VF.catchUI.isOpen()) return;
+    /* The aquarium is not a panel. It is the one thing on the menu bar that
+       takes the whole screen instead of floating over the water, so the button
+       routes straight past all of this — see js/ui/aquarium.js. */
+    if (id === 'aquarium') {
+      if (current) close();
+      if (!VF.aquarium.unlocked()) {
+        VF.toast.plain('Keep a catch first — there is nothing to put in it', null, 3000);
+        return;
+      }
+      VF.aquariumUI.show();
+      return;
+    }
     if (current === id) { close(); return; }
     if (current) closeNow();
     stopRodLoop();
@@ -536,7 +548,7 @@
       b.appendChild(list);
     } else {
       const list = U.el('div', 'list');
-      VF.bait.list.forEach(function (bt) {
+      VF.bait.available().forEach(function (bt) {
         const levelOk = d.level >= bt.level;
         const have = VF.bait.count(bt.id);
         const row = U.el('div', 'row' + (levelOk ? '' : ' locked') + (d.bait === bt.id ? ' equipped' : ''));
@@ -1082,12 +1094,15 @@
       main.appendChild(U.el('div', 'case-blurb', levelOk ? c.blurb : 'requires level ' + c.level));
 
       const odds = U.el('div', 'odds');
+      /* Every tier the case can actually pay, including the two the old list
+         stopped short of — a case that promises two in a hundred thousand of
+         something has to say so, or the tier is a rumour. */
       const eff = VF.cases.effectiveOdds(c);
-      ['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic'].forEach(function (r) {
+      VF.cases.TIERS.forEach(function (r) {
         const pc = eff[r] * 100;
         if (pc <= 0) return;
         const sp = U.el('span', null, VF.rarities.get(r).name + ' ' +
-          (pc >= 1 ? pc.toFixed(1) : pc.toFixed(2)) + '%');
+          (pc >= 1 ? pc.toFixed(1) : pc >= 0.01 ? pc.toFixed(2) : pc.toFixed(4)) + '%');
         sp.style.color = VF.rarities.color(r);
         odds.appendChild(sp);
       });
@@ -1137,7 +1152,7 @@
 
   function buildWardrobe(tab) {
     const d = VF.state.data;
-    const comp = VF.cosmetics.completion();
+    const comp = VF.cosmetics.gearCompletion();
     const p = shell('Wardrobe', comp.have + ' of ' + comp.total + ' owned · ' +
                     Math.round(comp.pct * 100) + '% complete');
     const items = [{ id: 'all', label: 'all' }].concat(
@@ -1154,7 +1169,12 @@
     spacer.style.height = '14px';
     b.appendChild(spacer);
 
-    const list = VF.cosmetics.list.filter(function (c) { return tab === 'all' || c.slot === tab; });
+    /* Gear only. The room's backdrops and plinths are cosmetics in every
+       other respect — same cases, same ownership, same rarity — but they are
+       fitted in the aquarium's own cabinet, because filing a tank backdrop in
+       a tab next to a rod finish files it by what it is made of rather than by
+       what it is for. */
+    const list = VF.cosmetics.gear.filter(function (c) { return tab === 'all' || c.slot === tab; });
     list.sort(function (a, c) {
       const ra = VF.rarities.rank(a.rarity), rc = VF.rarities.rank(c.rarity);
       if (ra !== rc) return rc - ra;
@@ -2236,7 +2256,7 @@
       b.appendChild(list);
     } else {
       const list = U.el('div', 'list');
-      VF.bait.list.forEach(function (bt) {
+      VF.bait.available().forEach(function (bt) {
         const have = VF.bait.count(bt.id);
         if (!bt.unlimited && have <= 0) return;
         const row = U.el('div', 'row' + (d.bait === bt.id ? ' equipped' : ''));

@@ -45,11 +45,53 @@ const SIZES = [[1920,1080,'desktop-hd'],[1440,900,'laptop'],[1280,720,'laptop-sm
                w: Math.round(r.width), h: Math.round(r.height) };
     });
     await page.screenshot({ path: 'tools/rs-' + name + '-panel.png' });
+
+    /* And the aquarium, which lays out completely differently either side of
+       900px — a rail down the right on a wide screen, a drawer across the
+       bottom on a narrow one. Whichever it is, nothing standing on the floor
+       of the room may end up underneath it. */
+    await page.evaluate(() => {
+      VF.panels.close();
+      const d = VF.state.data;
+      d.kept = VF.fish.list.slice(0, 4).map(f => ({
+        id: f.id, kg: 4, m: 1, pct: 0.5, traits: [], mutation: null,
+        value: f.value, at: Date.now(), location: 'shore', rarity: f.rarity
+      }));
+      VF.aquariumUI.show();
+      for (let i = 0; i < 3; i++) VF.aquarium.house(0, 0);
+    });
+    await page.waitForTimeout(500);
+    const room = await page.evaluate(() => {
+      const rail = document.querySelector('.aq-drawer').getBoundingClientRect();
+      const wide = innerWidth >= 900;
+      const roomW = wide ? innerWidth - rail.width : innerWidth;
+      const roomH = wide ? innerHeight : rail.top;
+      const L = VF.aquariumArt.layout(Math.max(360, roomW), Math.max(250, roomH), VF.aquarium.tankCount());
+      const parts = { desk: L.desk, plinth: L.pedestal, cabinet: L.cabinet, tank: L.tanks[0] };
+      const covered = [];
+      for (const k in parts) {
+        const r = parts[k];
+        if (!r) continue;
+        // more than a third of it behind the drawer is "underneath it"
+        const over = Math.max(0, (r.y + r.h) - roomH);
+        if (over > r.h * 0.34) covered.push(k);
+        if (r.x + r.w > roomW + 1) covered.push(k + '(right)');
+      }
+      return { rail: Math.round(rail.width), roomW: Math.round(roomW),
+               window: !!L.window, covered: covered };
+    });
+    await page.screenshot({ path: 'tools/rs-' + name + '-aquarium.png' });
+    await page.evaluate(() => VF.aquariumUI.close());
+    await page.waitForTimeout(300);
+    if (room.covered.length) errors.push(name + ': aquarium hides ' + room.covered.join(', '));
+
     console.log(name.padEnd(12), w + 'x' + h,
       '| hscroll:', overflow.docScrollW > overflow.docW ? 'YES' : 'no',
       '| vscroll:', overflow.docScrollH > overflow.docH ? 'YES' : 'no',
       '| offscreen HUD:', overflow.offscreen.length ? overflow.offscreen.join(', ') : 'none',
-      '| panel:', JSON.stringify(panelFit));
+      '| panel:', JSON.stringify(panelFit),
+      '| room:', 'rail ' + room.rail + ' window ' + (room.window ? 'yes' : 'no') +
+                 (room.covered.length ? ' HIDES ' + room.covered.join('/') : ' clear'));
     await page.close();
   }
   console.log('\nerrors:', errors.length);

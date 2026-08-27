@@ -1218,7 +1218,43 @@
           barW: 0.088, barSpeed: 1.70, fishSpeed: 1.25, fishTurn: 0.14, dart: 0.88,
           evade: 0.55, fill: 0.210, drain: 0.440 }
       ]
-    } }
+    } },
+
+  /* ================== FOUND IN A TANK, NOT IN THE WATER ==================
+
+     These three do not exist until the aquarium works out that they should.
+     `discover` names the finding in js/data/aquariumData.js that puts them in
+     the world; until that has happened js/systems/loot.js refuses to put them
+     in any pool, and the Fishdex does not count them toward the total. They
+     are not secrets to be stumbled on — the researchers tell you what to try,
+     and then you try it, and then there is a new fish. */
+
+  { id: 'nullfish', name: 'The Nullfish', rarity: 'void', value: 2400000, kg: [40, 900], m: [1.2, 7.0], diff: 0.94,
+    discover: 'nullfish',
+    desc: 'The shape a Moonfish makes in water that has had something taken out of it. It ' +
+          'holds the outline and none of the contents. Handled carefully it weighs what it ' +
+          'looks like it should; handled carelessly it does not weigh anything.',
+    locs: ['nowhere', 'cradle'], baits: ['star', 'void'], time: ['night'], weather: [],
+    art: { body: 'anomaly', fin: 'veil', eyes: 2, glow: 0.9,
+           c1: '#170f2e', c2: '#050310', c3: '#c9a8ff', ex: ['halo', 'fracture', 'runes'] } },
+
+  { id: 'mirrorfry', name: 'The Mirrorfry', rarity: 'legendary', value: 340000, kg: [0.4, 6.0], m: [0.2, 0.9], diff: 0.72,
+    discover: 'mirrorfry',
+    desc: 'Small, quick, and the only thing down here that does not come back off the surface ' +
+          'of the water when you look at it from underneath. Two much larger things made it ' +
+          'and neither of them has been seen since.',
+    locs: ['abyss', 'flats'], baits: ['glowworm', 'star'], time: [], weather: ['clear'],
+    art: { body: 'ribbon', fin: 'veil', eyes: 2, glow: 0.7,
+           c1: '#cfe0f0', c2: '#6a7f96', c3: '#ffffff', ex: ['threads', 'stars'] } },
+
+  { id: 'tidewright', name: 'The Tidewright', rarity: 'mythic', value: 4800000, kg: [400, 9000], m: [6, 26], diff: 0.97,
+    discover: 'tidewright',
+    desc: 'Not a fish that swims in a current. A fish that is where the current comes from. ' +
+          'The trench has run differently since the night two specimens in a tank agreed on ' +
+          'how it ought to run, and this is what they agreed to build.',
+    locs: ['trench', 'abyss'], baits: ['deep', 'star'], time: [], weather: [],
+    art: { body: 'whale', fin: 'wing', eyes: 3, glow: 0.85,
+           c1: '#1d5a6e', c2: '#07202c', c3: '#a8f0ff', ex: ['rings', 'threads', 'crystals'] } }
   ];
 
   const BY_ID = VF.util.byId(F);
@@ -1234,6 +1270,10 @@
      and the completion achievement all read these rather than the raw list,
      so a player who has never landed one has no way to notice the gap. */
   function known(f) {
+    /* A species the aquarium has not turned up yet is not in the world at all,
+       so it is not a gap in the collection either. */
+    if (f.discover && !(VF.state.data.discovered || {})[f.discover] &&
+        !VF.state.data.fishdex[f.id]) return false;
     return !VF.rarities.hidden(f.rarity) || !!VF.state.data.fishdex[f.id];
   }
   function knownList() { return F.filter(known); }

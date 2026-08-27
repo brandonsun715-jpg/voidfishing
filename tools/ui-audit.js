@@ -83,6 +83,82 @@ const path = require('path');
 
   console.log('controls clicked:', clicked, '| broken:', dead);
 
+  /* ------------------------------------------------------------ the room
+
+     The aquarium is not a panel, so the walk above never reaches it. It is
+     also the largest interactive surface added since that walk was written, so
+     it gets its own: stand in front of each of the four things in the room,
+     click every control the drawer puts up, and check nothing throws and the
+     door still closes. */
+  await page.evaluate(() => {
+    const d = VF.state.data;
+    d.level = 99; d.money = 1e12;
+    VF.progression.checkUnlocks();
+    d.kept = VF.fish.list.slice(0, 10).map(f => ({
+      id: f.id, kg: f.kg[1] * 0.6, m: f.m[1] * 0.7, pct: 0.6, traits: [],
+      mutation: null, value: f.value, at: Date.now(), location: 'shore',
+      rarity: f.rarity, weather: 'clear', time: 'night', bait: 'worm', rod: 'wood'
+    }));
+    VF.cosmetics.list.forEach(c => { if (c.aqua) VF.cosmetics.grant(c.id); });
+    VF.hud.refreshAll();
+  });
+  await page.click('.mbtn[data-panel="aquarium"]');
+  await page.waitForTimeout(700);
+
+  let roomClicked = 0, roomDead = 0;
+  const roomOpen = await page.evaluate(() => VF.aquariumUI.isOpen());
+  if (!roomOpen) { console.log('  the aquarium did not open'); roomDead++; }
+
+  await page.evaluate(() => {
+    VF.aquarium.addTank();
+    for (let i = 0; i < 4; i++) VF.aquarium.house(0, 0);
+    for (let i = 0; i < 3; i++) VF.aquarium.house(0, 1);
+    const a = VF.aquarium.state();
+    Object.keys(VF.aquarium.counts()).forEach(id => { a.research[id] = 1; });
+  });
+  await page.waitForTimeout(300);
+
+  for (const station of ['tank', 'desk', 'cabinet', 'pedestal']) {
+    const r = await page.evaluate(k => {
+      const L = VF.aquariumArt.layout(
+        Math.max(360, window.innerWidth - (window.innerWidth >= 900
+          ? Math.min(400, window.innerWidth * 0.30) : 0)),
+        window.innerHeight, VF.aquarium.tankCount());
+      const t = k === 'tank' ? L.tanks[0] : L[k];
+      return t ? { x: Math.round(t.x + t.w / 2), y: Math.round(t.y + t.h / 2) } : null;
+    }, station);
+    if (!r) { console.log('  no ' + station + ' in the layout'); roomDead++; continue; }
+    await page.mouse.click(r.x, r.y);
+    await page.waitForTimeout(350);
+
+    // and every control the drawer put up
+    const n = await page.evaluate(() => document.querySelectorAll('.aq-drawer button').length);
+    for (let i = 0; i < n; i++) {
+      const ok = await page.evaluate(i => {
+        const b = document.querySelectorAll('.aq-drawer button')[i];
+        if (!b || b.disabled) return true;
+        b.click();
+        return VF.aquariumUI.isOpen();
+      }, i);
+      roomClicked++;
+      if (!ok) { roomDead++; }
+      await page.waitForTimeout(45);
+    }
+    await page.waitForTimeout(120);
+  }
+
+  const roomStill = await page.evaluate(() => VF.aquariumUI.isOpen());
+  await page.evaluate(() => VF.aquariumUI.close());
+  await page.waitForTimeout(400);
+  const roomShut = await page.evaluate(() => ({
+    open: VF.aquariumUI.isOpen(), panelOpen: VF.state.rt.panelOpen,
+    housed: VF.aquarium.housed(), findings: VF.state.data.stats.discoveries | 0
+  }));
+  console.log('aquarium: opened', roomOpen, '| controls', roomClicked,
+              '| broken', roomDead, '| survived the walk', roomStill,
+              '| after leaving', JSON.stringify(roomShut));
+  dead += roomDead;
+
   /* Erasing a slot, which is what "reset" became once there were four games.
      Erase the slot being played: that is the one with the confirmation and the
      one that has to leave a playable game behind. */

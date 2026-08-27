@@ -22,6 +22,7 @@
     VF.hud.init();
     VF.panels.init();
     VF.catchUI.init();
+    VF.aquariumUI.init();
 
     VF.weather.reconcile();
     VF.secrets.registerFound();
@@ -187,6 +188,7 @@
         VF.quests.tick(dt);
         VF.merchant.tick(dt);
         VF.charter.tick(dt);
+        VF.aquarium.tick(dt);
         VF.cutscene.tick(dt);
         VF.wrong.tick(dt);
         VF.achievements.tick(dt);

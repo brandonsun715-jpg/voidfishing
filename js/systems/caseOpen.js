@@ -45,8 +45,12 @@
   }
 
   function refundRate(rarity) {
+    /* A duplicate is refunded so a case is never simply wasted, and the two
+       tiers above mythic refund more than the case cost — pulling one twice is
+       rare enough that it should feel like the case paid you rather than like
+       it took something. */
     return { common: 0.30, uncommon: 0.40, rare: 0.55, epic: 0.75,
-             legendary: 1.10, mythic: 1.80 }[rarity] || 0.3;
+             legendary: 1.10, mythic: 1.80, void: 3.00, glitch: 6.00 }[rarity] || 0.3;
   }
 
   VF.caseOpen = { buy: buy, canBuy: canBuy, refundRate: refundRate };

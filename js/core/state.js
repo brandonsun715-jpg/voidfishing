@@ -72,6 +72,15 @@
       /* Standing requests. See js/systems/bounties.js. */
       bounties: { list: [], at: 0 },
 
+      /* The aquarium. Shaped by js/systems/aquarium.js the first time the door
+         is opened, which is also what happens to a save from before it existed
+         — so there is nothing to migrate and nothing to guess. */
+      aquarium: null,
+      /* Findings the aquarium has confirmed: id -> when. Three of them put a
+         species in the water that was not there before, so this is read by the
+         loot pool and by the Fishdex's idea of how many species there are. */
+      discovered: {},
+
       cosmetics: [],          // owned cosmetic ids
       equipped: {},           // cosmetic slot -> id
       cases: {},              // case id -> times opened
@@ -119,7 +128,8 @@
         secretsFound: 0,
         multiTrait: 0,
         wrongEvents: 0,
-        bounties: 0
+        bounties: 0,
+        discoveries: 0
       },
       achievements: {},       // id -> unlock timestamp
       tutorial: { step: 0, done: false },

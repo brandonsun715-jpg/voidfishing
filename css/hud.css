@@ -3,7 +3,12 @@
 #hud {
   position: absolute; inset: 0; z-index: 10;
   pointer-events: none;
-  display: flex; flex-direction: column; justify-content: space-between;
+  /* `space-between` splits any overflow equally between the two ends, so on a
+     short narrow screen the status row is pushed off the TOP of the display —
+     where nothing can reach it and nothing says it is there. Pinning the top
+     and pushing the bottom down does the same thing when there is room, and
+     spills off one end instead of two when there is not. */
+  display: flex; flex-direction: column; justify-content: flex-start;
   padding: clamp(12px, 1.8vw, 22px);
   opacity: 1;
   transition: opacity 400ms var(--e-move);
@@ -113,6 +118,7 @@
 /* ---------------------------------------------------------------- bottom */
 
 .hud-bottom {
+  margin-top: auto;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: flex-end;
@@ -527,6 +533,10 @@
   .gear-row { order: 2; }
   .action-col { order: 1; }
   .menu-row { flex-wrap: wrap; justify-content: flex-end; }
+  /* seven buttons rather than six: they get smaller before they get a
+     second row */
+  .mbtn { padding: 5px 8px; font-size: 9.5px; letter-spacing: 0.09em; }
+  .mbtn-icon { padding: 5px 7px; }
   .fight { width: min(92vw, 430px); bottom: 152px; }
 }
 @media (max-height: 620px) {
