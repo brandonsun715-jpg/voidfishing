@@ -9,6 +9,11 @@
   let shownMoney = 0;
   let pressed = false;
   let shownBarW = -1;
+  /* The fight bar is moved with `transform`, which wants pixels rather than
+     percentages, so the strip it runs in has to be measured. Measuring forces a
+     layout — the point of the exercise is to do it once when a fight opens and
+     once more if the window changes shape, instead of sixty times a second. */
+  let mgW = 0;
   let hintTimer = 0;
   let promptTimer = 0;
 
@@ -24,6 +29,15 @@
     ].forEach(function (id) { D[id] = document.getElementById(id); });
 
     shownMoney = VF.state.data.money;
+    /* The bump takes itself off when it has finished, which is what lets the
+       next one restart it: an animation-name that never goes away never
+       replays, and forcing a reflow to make it replay is a layout per bump. */
+    D.moneyVal.addEventListener('animationend', function () {
+      D.moneyVal.classList.remove('bump');
+    });
+    window.addEventListener('resize', function () {
+      if (!D.fightUI.classList.contains('hidden')) measureFight();
+    });
     bindInput();
     bindBus();
     refreshAll();
@@ -723,10 +737,10 @@
     const d = VF.state.data;
     const rod = VF.rods.get(d.rod);
     const bait = VF.bait.get(d.bait);
-    D.rodName.textContent = rod.name;
-    D.baitName.textContent = bait.name;
+    setText(D.rodName, rod.name);
+    setText(D.baitName, bait.name);
     const n = VF.bait.count(d.bait);
-    D.baitCount.textContent = n === Infinity ? '∞' : n;
+    setText(D.baitCount, n === Infinity ? '∞' : String(n));
     D.baitCount.classList.toggle('low', n !== Infinity && n <= 3);
   }
 
@@ -740,32 +754,52 @@
     if (!c) return;
     const left = VF.conditions.remain();
     D.condFuse.style.transform = 'scaleX(' + VF.conditions.fraction().toFixed(4) + ')';
-    D.condLeft.textContent = left >= 60
+    setText(D.condLeft, left >= 60
       ? Math.ceil(left / 60) + 'm'
-      : Math.max(1, Math.ceil(left)) + 's';
+      : Math.max(1, Math.ceil(left)) + 's');
     D.condLeft.classList.toggle('urgent', left < 30);
   }
 
   function refreshChips() {
-    D.locName.textContent = VF.locations.current().name;
-    D.wxName.textContent = VF.weather.name();
+    setText(D.locName, VF.locations.current().name);
+    setText(D.wxName, VF.weather.name());
     /* The moon only earns a place in the chip when it is up and doing
        something. Naming a phase at midday is noise. */
     let when = VF.time.phaseName() + ' · ' + VF.time.clock();
     if (VF.time.moonName && VF.time.elevation() < 0.30) {
       when += ' · ' + VF.time.moonName().toLowerCase();
     }
-    D.timeName.textContent = when;
+    setText(D.timeName, when);
     const c = VF.conditions.current();
     D.chipCond.classList.toggle('hidden', !c);
     if (c) {
-      D.condName.textContent = c.name;
+      setText(D.condName, c.name);
       D.chipCond.style.borderColor = U.rgbToCss(U.hexToRgb(c.tint), 0.55);
       D.condName.style.color = c.tint;
       D.chipCond.title = c.blurb;
       D.condFuse.style.background = c.tint;
       tickCondition();
     }
+  }
+
+  /* Writing textContent replaces the text node whether or not the string
+     changed, and a replaced text node dirties layout. The HUD rewrites the
+     clock, the weather, the level, the fuse and the fight percentage on a
+     timer, so most of those writes were identical strings costing a layout
+     apiece — measurably the largest source of layout work in an idle frame.
+     Compare first, and an unchanged label costs nothing. */
+  function setText(el, s) {
+    if (el && el.textContent !== s) el.textContent = s;
+  }
+
+  /* Every bar in the HUD is a full-width element squeezed from its left edge
+     rather than an element whose width is written each time. A width is a
+     layout property and a transform is not, so what used to be style, layout,
+     paint and composite is now a composite and nothing else. The gradients come
+     out identical — a 90deg ramp is measured against the element's own box
+     either way. */
+  function setFill(el, v) {
+    el.style.transform = 'scaleX(' + U.clamp(v, 0, 1).toFixed(4) + ')';
   }
 
   function refreshLevel() {
@@ -776,19 +810,19 @@
        because the experience was being thrown away. It counts fathoms now, so
        there is still something arriving. */
     if (capped) {
-      D.levelVal.textContent = 'LV 99';
+      setText(D.levelVal, 'LV 99');
       D.levelVal.classList.add('deep');
       D.xpFill.classList.add('deep');
-      D.xpFill.style.width = (VF.progression.fathomPct() * 100).toFixed(1) + '%';
-      D.xpText.textContent = (d.fathoms | 0) + ' fathoms · ' +
-        U.commas(d.fathomXp | 0) + ' / ' + U.commas(VF.progression.FATHOM_XP);
+      setFill(D.xpFill, VF.progression.fathomPct());
+      setText(D.xpText, (d.fathoms | 0) + ' fathoms · ' +
+        U.commas(d.fathomXp | 0) + ' / ' + U.commas(VF.progression.FATHOM_XP));
     } else {
-      D.levelVal.textContent = 'LV ' + d.level;
+      setText(D.levelVal, 'LV ' + d.level);
       D.levelVal.classList.remove('deep');
       D.xpFill.classList.remove('deep');
       const need = VF.progression.xpToNext();
-      D.xpFill.style.width = (U.clamp(d.xp / Math.max(1, need), 0, 1) * 100).toFixed(1) + '%';
-      D.xpText.textContent = U.commas(d.xp) + ' / ' + U.commas(need);
+      setFill(D.xpFill, U.clamp(d.xp / Math.max(1, need), 0, 1));
+      setText(D.xpText, U.commas(d.xp) + ' / ' + U.commas(need));
     }
 
     /* And the run, saying what it is worth rather than sitting next to the
@@ -796,7 +830,7 @@
     const n = d.streak | 0;
     const bonus = Math.round((VF.progression.streakMult() - 1) * 100);
     if (n >= 3 && bonus > 0) {
-      D.streakVal.textContent = n + ' in a row · +' + bonus + '% value';
+      setText(D.streakVal, n + ' in a row · +' + bonus + '% value');
       D.streakVal.classList.remove('hidden');
       D.streakVal.classList.toggle('hot', bonus >= Math.round(VF.progression.STREAK_CAP * 100));
     } else {
@@ -816,16 +850,17 @@
     tickCaption();
     watchForVisitors(dt);
 
-    /* money counts up rather than snapping */
+    /* Money counts up rather than snapping. The bump used to be restarted on
+       every frame that crossed a whole Jias — which during a payout is every
+       frame — so a 460ms animation never got past its first sixteen
+       milliseconds, and each restart forced a synchronous layout in order to
+       do it. It fires once now, at the moment the count begins, and is left
+       alone to finish. */
     if (Math.abs(shownMoney - d.money) > 0.5) {
-      const before = Math.floor(shownMoney);
+      if (!D.moneyVal.classList.contains('bump')) D.moneyVal.classList.add('bump');
       shownMoney = U.approach(shownMoney, d.money, 0.0006, dt);
       if (Math.abs(shownMoney - d.money) < 1) shownMoney = d.money;
       D.moneyVal.textContent = U.money(shownMoney);
-      if (Math.floor(shownMoney) > before + 1) {
-        D.moneyVal.classList.remove('bump'); void D.moneyVal.offsetWidth;
-        D.moneyVal.classList.add('bump');
-      }
     } else if (D.moneyVal.textContent !== U.money(d.money)) {
       shownMoney = d.money;
       D.moneyVal.textContent = U.money(d.money);
@@ -837,7 +872,7 @@
     /* cast meter */
     if (S.charging) {
       D.castMeter.classList.add('on');
-      D.castFill.style.width = (S.charge * 100).toFixed(1) + '%';
+      setFill(D.castFill, S.charge);
       D.actionBtn.classList.add('charging');
     } else {
       D.castMeter.classList.remove('on');
@@ -867,9 +902,16 @@
     else if (st === 'reeling') { label = 'Reel'; h = 'hold to reel'; cls = 'reeling'; }
     else if (st === 'landed') { label = '—'; h = ''; cls = 'busy'; }
 
-    if (D.actionLabel.textContent !== label) D.actionLabel.textContent = label;
-    if (D.actionHint.textContent !== h) D.actionHint.textContent = h;
+    setText(D.actionLabel, label);
+    setText(D.actionHint, h);
     D.actionBtn.className = 'action-btn' + (cls ? ' ' + cls : '') + (S.charging ? ' charging' : '');
+  }
+
+  /* One forced layout, at the moment a fight opens. Everything the fight does
+     after this is a transform. */
+  function measureFight() {
+    const inner = D.mgBar && D.mgBar.parentNode;
+    mgW = inner ? inner.clientWidth : 0;
   }
 
   /* The catch bar. Everything here is a straight read of the fight state the
@@ -892,6 +934,7 @@
     const f = S.fight;
     if (D.fightUI.classList.contains('hidden')) {
       D.fightUI.classList.remove('hidden');
+      measureFight();
       D.fightUI.classList.add('enter');
       setTimeout(function () { D.fightUI.classList.remove('enter'); }, 320);
       const col = f.c.kind === 'treasure' ? '#d8c79a' : VF.rarities.color(f.c.rarity);
@@ -910,13 +953,18 @@
         : key + ' to go right, let go to go left';
     }
 
-    /* the bar and the fish */
+    /* The bar and the fish. The width is still a width because the walls only
+       move when the fight itself moves them — ordinarily never, and four times
+       in the heaven's trial. The positions are transforms, every frame. */
     if (f.barW !== shownBarW) {
       shownBarW = f.barW;
       D.mgBar.style.width = (f.barW * 100).toFixed(2) + '%';
     }
-    D.mgBar.style.left = ((f.bar - f.barW * 0.5) * 100).toFixed(3) + '%';
-    D.mgFish.style.left = (f.fish * 100).toFixed(3) + '%';
+    if (!mgW) measureFight();
+    D.mgBar.style.transform =
+      'translate3d(' + ((f.bar - f.barW * 0.5) * mgW).toFixed(2) + 'px,0,0)';
+    D.mgFish.style.transform =
+      'translate3d(' + (f.fish * mgW).toFixed(2) + 'px,0,0)';
     D.mgFish.classList.toggle('left', f.fishV < -0.02);
     D.mgBar.classList.toggle('grip', f.inside);
     D.mgBar.classList.toggle('right', f.barV > 0.05);
@@ -924,16 +972,16 @@
 
     /* the progress */
     const pr = U.clamp(f.progress, 0, 1);
-    D.mgProgFill.style.width = (pr * 100).toFixed(2) + '%';
+    setFill(D.mgProgFill, pr);
     D.mgProg.classList.toggle('gain', f.inside);
     D.mgProg.classList.toggle('drain', !f.inside);
     D.mgProg.classList.toggle('low', pr < 0.22);
-    D.fightPct.textContent = Math.round(pr * 100) + '%';
+    setText(D.fightPct, Math.round(pr * 100) + '%');
 
     /* the warning line only says something once it means something */
     const losing = !f.inside && f.outsideT > 0.28;
     const warn = pr < 0.18 ? 'nearly gone' : losing ? 'losing it' : '';
-    if (D.fightWarn.textContent !== warn) D.fightWarn.textContent = warn;
+    setText(D.fightWarn, warn);
     D.fightWarn.classList.toggle('on', !!warn);
     D.fightUI.classList.toggle('shake', f.shakeAmt > 0.45);
 

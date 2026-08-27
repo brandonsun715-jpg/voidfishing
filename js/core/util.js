@@ -123,11 +123,31 @@
   }
   function now() { return performance.now() / 1000; }
 
+  /* The <body> carries three independent flags — the graphics tier, the
+     reduced-flashing switch, and whether you have wandered off your spot. The
+     first was written in four different places by assigning `className`, which
+     does not add a class, it replaces every class: turning the graphics down
+     mid-fight silently cleared the away state, and so did erasing a save.
+     One writer for everything that comes from settings, and it adds and removes
+     rather than assigning, so nothing it does not know about is destroyed. */
+  const TIERS = ['q-low', 'q-medium', 'q-high'];
+  function syncBody() {
+    const s = VF.state.data.settings;
+    const b = document.body.classList;
+    for (let i = 0; i < TIERS.length; i++) b.remove(TIERS[i]);
+    b.add('q-' + s.quality);
+    /* "reduce flashing" is a setting in this game as well as a preference in
+       the operating system, and until now it reached the canvas and nothing
+       else — the interface went on strobing. The stylesheet reads this. */
+    b.toggle('calm', !!s.reduceFlash);
+  }
+
   VF.util = {
     TAU, clamp, lerp, invLerp, smoothstep, smootherstep,
     easeOutCubic, easeInCubic, easeOutBack, easeInOutSine, approach,
     hexToRgb, rgbToCss, mixRgb, shade,
     money, commas, weight, length, duration, pct, ordinalPercentile,
-    el, qs, qsa, clear, esc, deepClone, byId, now
+    el, qs, qsa, clear, esc, deepClone, byId, now,
+    syncBody
   };
 })(window.VF = window.VF || {});

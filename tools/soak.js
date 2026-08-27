@@ -83,11 +83,23 @@ const path = require('path');
       }
       const secs = Math.round(ticks * 8 / 100) / 10;
       out.longestFight = Math.max(out.longestFight, secs);
-      if (stale > 300) out.stuck.push('fight stopped moving at cycle ' + i + ' after ' + secs + 's');
+      /* A fight that has stopped moving has almost always been paused rather
+         than broken: the reeling branch of the simulation does nothing while
+         anything owns rt.panelOpen, so a modal that opened and never closed
+         freezes the fight behind it and every fight after it. Say which one. */
+      if (stale > 300) out.stuck.push('fight stopped moving at cycle ' + i + ' after ' + secs +
+                                      's (panelOpen=' + VF.state.rt.panelOpen + ')');
       else if (guard >= 24000) out.stuck.push('fight ran past 190s at cycle ' + i);
       else if (secs > 45) out.slow.push('cycle ' + i + ': ' + secs + 's');
 
       if (VF.fishing.state() === 'landed') {
+        /* Two species stop the game and play a sequence before the card. It
+           runs about six seconds — far longer than the wait below — so without
+           pressing through it first, the card turns up long after this cycle
+           has moved on, and the panel flag it sets then freezes every fight
+           after it. A player presses a key here; this is that key. */
+        guard = 0;
+        while (VF.cutscene.active() && guard++ < 500) { VF.cutscene.skip(); await sleep(16); }
         // wait for the card, then take one of the three actions
         guard = 0;
         while (!VF.catchUI.isOpen() && guard++ < 120) await sleep(16);
@@ -173,7 +185,8 @@ const path = require('path');
   const leaks = await page.evaluate(() => ({
     particles: VF.particles.count(),
     toasts: document.querySelectorAll('.toast').length,
-    modalKids: document.getElementById('modal').children.length
+    modalKids: document.getElementById('modal').children.length,
+    panelOpen: VF.state.rt.panelOpen
   }));
   console.log('runtime:', JSON.stringify(leaks));
 

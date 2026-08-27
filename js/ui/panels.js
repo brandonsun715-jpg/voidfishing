@@ -154,8 +154,12 @@
       // a panel opened during the exit animation owns the host now — leave it alone
       if (myGen !== gen) return;
       if (n && n.parentNode) n.parentNode.removeChild(n);
-      if (!current) { host.classList.add('hidden'); overlay.classList.add('hidden'); }
-    }, 210);
+      if (!current) {
+        host.classList.add('hidden');
+        overlay.classList.add('hidden');
+        overlay.classList.remove('out');
+      }
+    }, 200);
     closeNow();
   }
 
@@ -166,7 +170,12 @@
     returnFocus();
     VF.state.rt.panelOpen = null;
     U.qsa('.mbtn').forEach(function (b) { b.classList.remove('active'); });
-    overlay.classList.add('hidden');
+    /* The overlay is NOT hidden here. It carries the blur behind the panel, and
+       hiding it in the same frame the panel starts leaving meant the whole
+       backdrop snapped back to sharp while the panel was still fading — the one
+       piece of the interface that visibly stuttered on every close. The
+       deferred tidy-up in close() puts it away once its own fade has run;
+       open() clears it directly when one panel is replacing another. */
   }
 
   /* Rebuilding without naming a tab stays on the tab that is open — a row
@@ -2684,7 +2693,7 @@
       const btn = U.el('button', s.quality === o[0] ? 'active' : '', o[1]);
       btn.addEventListener('click', function () {
         s.quality = o[0];
-        document.body.className = 'q-' + o[0];
+        U.syncBody();
         VF.audio.click();
         VF.scene.resize();
         VF.bus.emit('settings:quality');
@@ -2696,7 +2705,7 @@
     qRow.appendChild(qSeg);
     vis.appendChild(qRow);
     vis.appendChild(toggle('Screen shake', s.screenShake, function (v) { s.screenShake = v; }));
-    vis.appendChild(toggle('Reduce flashing', s.reduceFlash, function (v) { s.reduceFlash = v; }));
+    vis.appendChild(toggle('Reduce flashing', s.reduceFlash, function (v) { s.reduceFlash = v; U.syncBody(); }));
     vis.appendChild(toggle('Show hints', s.showHints, function (v) { s.showHints = v; if (!v) VF.hud.clearHint(); }));
 
     const fsRow = U.el('div', 'set-row');
@@ -2994,7 +3003,7 @@
     VF.scene.rebuild();
     VF.scene.seedAmbient();
     VF.audio.setVolumes();
-    document.body.className = 'q-' + VF.state.data.settings.quality;
+    U.syncBody();
     VF.bus.emit('gear:changed');
     VF.bus.emit('location:changed');
     VF.hud.refreshAll();

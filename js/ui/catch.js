@@ -35,7 +35,15 @@
          whether the sequence is watched or skipped. */
       const scene = VF.cutscene && VF.cutscene.forCatch(c);
       if (scene) {
+        /* This card is opened from the far side of a six-second sequence, so
+           the token has to be taken NOW rather than when the callback runs.
+           Erasing or importing a save mid-cutscene bumps a token that has not
+           been issued yet, and the callback then goes on to allocate a fresh
+           one — so the card arrives regardless, for a fish out of a game that
+           no longer exists. That is the one hole in the guard. */
+        const my = ++pendGen;
         VF.cutscene.play(scene, c, function () {
+          if (my !== pendGen) return;
           later(function () { show(c); }, 260);
         });
         return;

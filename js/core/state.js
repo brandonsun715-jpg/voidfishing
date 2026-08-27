@@ -3,6 +3,13 @@
 (function (VF) {
   'use strict';
 
+  function calm() {
+    try {
+      return !!(window.matchMedia &&
+                window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    } catch (e) { return false; }
+  }
+
   const SCHEMA = 2;
 
   function defaults() {
@@ -123,8 +130,14 @@
         music: 0.55,
         sfx: 0.75,
         quality: 'high',      // low | medium | high
-        screenShake: true,
-        reduceFlash: false,
+        /* The stylesheet honours prefers-reduced-motion, but a media query
+           reaches transitions and keyframes and nothing else — the two effects
+           that are motion rather than decoration live on the canvas, where CSS
+           cannot see them. So the operating system's answer seeds them here.
+           It seeds only: this lands in a NEW save, and the moment anyone sets
+           either switch by hand that choice is what persists. */
+        screenShake: !calm(),
+        reduceFlash: calm(),
         showHints: true
       }
     };

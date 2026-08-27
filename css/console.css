@@ -2,7 +2,9 @@
    Owner build only: index.html loads this inside the owner block, and
    `npm run build` drops the block and this file with it. */
 
+/* console output is read and copied, so it opts back in to selection */
 .con-out {
+  -webkit-user-select: text; user-select: text;
   font-family: var(--mono);
   font-size: 12px;
   line-height: 1.65;

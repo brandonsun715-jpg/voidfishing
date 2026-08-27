@@ -9,7 +9,7 @@
   function boot() {
     const res = VF.save.load();
     const s = VF.state.data.settings;
-    document.body.className = 'q-' + s.quality;
+    U.syncBody();
 
     const canvas = document.getElementById('scene');
     VF.scene.init(canvas);
@@ -95,9 +95,19 @@
                   ' taken back. everything you caught is still here.</span>', 'warn', 7000);
   }
 
+  /* Dragging a window edge fires resize dozens of times a second, and every
+     one of them was resizing the canvas, recomputing the layout, throwing away
+     the baked backdrop and reseeding the drift. None of that can show up more
+     than once a frame, so it only runs once a frame. */
+  let resizePending = false;
   function onResize() {
-    VF.scene.resize();
-    VF.scene.seedAmbient();
+    if (resizePending) return;
+    resizePending = true;
+    requestAnimationFrame(function () {
+      resizePending = false;
+      VF.scene.resize();
+      VF.scene.seedAmbient();
+    });
   }
 
   function startLoop() {
@@ -138,7 +148,7 @@
       perf.stepped++;
       const next = q === 'high' ? 'medium' : 'low';
       VF.state.data.settings.quality = next;
-      document.body.className = 'q-' + next;
+      U.syncBody();
       VF.scene.resize();
       VF.bus.emit('settings:quality');
       VF.save.save();
