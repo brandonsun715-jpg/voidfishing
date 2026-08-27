@@ -1202,3 +1202,117 @@ input[type=range]::-moz-range-thumb {
   .spot-meta { grid-template-columns: repeat(2, 1fr); }
   .map-side { overflow: visible; }
 }
+
+/* ------------------------------------------------------------- rod cards
+
+   The shop's rod list is cards rather than rows. A row gives a rod a strip a
+   hundred pixels tall to lie down in, which is exactly the amount of room its
+   outline needs and does not get — and the outline is now the whole point, so
+   the rod is stood up and given the height. */
+
+.rod-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(226px, 1fr));
+  gap: 12px;
+}
+
+.rod-card {
+  display: flex; flex-direction: column;
+  padding: 13px 13px 12px;
+  border: 1px solid var(--line);
+  border-top: 2px solid var(--rar, var(--line-2));
+  border-radius: var(--r-lg);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.004) 32%),
+    radial-gradient(120% 50% at 50% 0%, color-mix(in srgb, var(--rar, #7fa8c8) 12%, transparent), rgba(0,0,0,0) 70%),
+    rgba(8, 12, 18, 0.72);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 6px 20px rgba(0,0,0,0.4);
+  transition: border-color var(--t-tint) var(--e-move),
+              background var(--t-tint) var(--e-move),
+              transform var(--t-tap) var(--e-out),
+              box-shadow var(--t-tint) var(--e-move);
+}
+.rod-card:hover {
+  border-color: var(--line-3);
+  transform: translateY(-2px);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.09), 0 12px 30px rgba(0,0,0,0.5);
+}
+.rod-card.locked { opacity: 0.5; }
+.rod-card.equipped { border-color: var(--accent); }
+
+/* the numbers, read down rather than across */
+.rc-stats { display: flex; flex-direction: column; gap: 1px; margin-bottom: 8px; }
+.rc-stat { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.rc-k {
+  font-size: 9px; letter-spacing: 0.16em; text-transform: lowercase;
+  color: var(--ink-4);
+}
+.rc-v {
+  font-family: var(--mono); font-variant-numeric: tabular-nums;
+  font-size: 11px; color: var(--ink-2);
+}
+.rc-v.up { color: var(--good); }
+.rc-v.down { color: var(--bad); }
+
+/* the rod itself, standing up */
+.rc-art {
+  display: grid; place-items: center;
+  margin: 2px 0 6px;
+  min-height: 240px;
+}
+.rod-art-v { display: block; }
+
+.rc-rarity {
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  font-size: 10.5px; letter-spacing: 0.22em; text-transform: lowercase;
+  margin-top: 2px;
+}
+.rc-star { font-size: 9px; opacity: 0.8; }
+
+.rc-name {
+  text-align: center; margin-top: 5px;
+  font-size: 12.5px; letter-spacing: 0.03em; color: var(--ink);
+}
+.rc-build {
+  text-align: center; margin-top: 2px;
+  font-size: 9px; letter-spacing: 0.18em; text-transform: lowercase;
+  color: var(--ink-4);
+}
+.rc-desc {
+  margin-top: 8px; font-size: 10.5px; line-height: 1.55;
+  color: var(--ink-3); font-style: italic; text-align: center;
+}
+.rc-perk { margin-top: 5px; font-size: 10px; color: var(--good); text-align: center; }
+.rc-bar { margin-top: 5px; font-size: 9.5px; color: var(--ink-4); text-align: center; line-height: 1.5; }
+
+.rc-foot { margin-top: auto; padding-top: 11px; }
+.rc-price {
+  text-align: center; margin-bottom: 6px;
+  font-family: var(--mono); font-variant-numeric: tabular-nums;
+  font-size: 11px; color: var(--accent);
+}
+.rc-price.cant { color: var(--ink-4); }
+
+.rc-btn {
+  display: block; width: 100%;
+  padding: 8px 10px;
+  font-size: 11px; letter-spacing: 0.10em;
+  color: var(--ink-2); text-align: center;
+  border: 1px solid var(--line-2); border-radius: var(--r);
+  background: var(--fill);
+  transition: color var(--t-tint) var(--e-move),
+              background var(--t-tint) var(--e-move),
+              border-color var(--t-tint) var(--e-move),
+              transform var(--t-tap) var(--e-out);
+}
+button.rc-btn:hover:not(:disabled) { color: var(--ink); border-color: var(--line-3); background: var(--fill-2); }
+button.rc-btn:active:not(:disabled) { transform: translateY(1px); }
+.rc-btn:disabled, .rc-btn.is-off { opacity: 0.42; cursor: default; }
+.rc-btn.is-on { color: var(--accent); border-color: var(--accent-dim); background: rgba(127,168,200,0.10); }
+.rc-btn.is-buy { color: var(--ink); border-color: var(--accent-dim); }
+button.rc-btn.is-buy:hover { border-color: var(--accent); background: rgba(127,168,200,0.14); }
+
+@media (max-width: 620px) {
+  .rod-cards { grid-template-columns: repeat(auto-fill, minmax(178px, 1fr)); gap: 9px; }
+  .rc-art { min-height: 200px; }
+}

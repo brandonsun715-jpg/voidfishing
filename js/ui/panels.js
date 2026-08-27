@@ -21,6 +21,8 @@
       for (let i = 0; i < rodCanvases.length; i++) {
         const e = rodCanvases[i];
         if (!e.cv.isConnected) continue;
+        // a stood-up preview carries its own painter, transform and all
+        if (e.paint) { e.paint(e.ctx, t + e.phase); continue; }
         const g = e.ctx;
         g.clearRect(0, 0, e.cv.width, e.cv.height);
         VF.rodArt.preview(g, e.rod, e.cv.width, e.cv.height, t + e.phase);
@@ -53,6 +55,45 @@
     return btn;
   }
 
+  /* What tier a rod sits in, for the badge on its card. Merchant rods carry
+     one; shelf rods do not, so it comes off the same grade the drawing uses. */
+  /* Weighted toward the bottom on purpose. Grade is rank across all hundred
+     and twenty-nine rods, and the thirty on the shelf are the bottom of that
+     queue — split evenly they would all read Common, which tells the player
+     nothing about which of the thirty is better than which. */
+  const ROD_TIERS = [
+    [0.08, 'Common',    '#9db4c6'], [0.20, 'Uncommon',  '#5fd699'],
+    [0.36, 'Rare',      '#4aa8ff'], [0.56, 'Epic',      '#b06bff'],
+    [0.78, 'Legendary', '#ffb03a'], [1.01, 'Mythic',    '#ff5c9e']
+  ];
+  function rodRarity(rod) {
+    if (rod.rarity) {
+      const r = VF.rarities.get(rod.rarity);
+      return { name: r.name, color: r.color };
+    }
+    const g = VF.rodSig ? VF.rodSig.grade(rod) : 0.4;
+    for (let i = 0; i < ROD_TIERS.length; i++) {
+      if (g < ROD_TIERS[i][0]) return { name: ROD_TIERS[i][1], color: ROD_TIERS[i][2] };
+    }
+    return { name: 'Mythic', color: '#ff5c9e' };
+  }
+
+  function rcStat(host, k, v, dir) {
+    const row = U.el('div', 'rc-stat');
+    row.appendChild(U.el('span', 'rc-k', k));
+    const val = U.el('span', 'rc-v', v);
+    if (dir > 0) val.classList.add('up');
+    else if (dir < 0) val.classList.add('down');
+    row.appendChild(val);
+    host.appendChild(row);
+  }
+
+  /* A control in a panel that keeps focus after a mouse click keeps the space
+     bar with it — see the same helper in js/ui/hud.js. */
+  function dropFocusIn(e) {
+    if (e && e.detail > 0 && e.currentTarget && e.currentTarget.blur) e.currentTarget.blur();
+  }
+
   function rodPreview(rod, i, dim) {
     const cv = U.el('canvas', 'rod-art');
     cv.width = 300; cv.height = 132;
@@ -60,6 +101,36 @@
     if (dim) cv.style.opacity = '0.45';
     VF.rodArt.preview(g, rod, cv.width, cv.height, i * 0.9);
     rodCanvases.push({ cv: cv, ctx: g, rod: rod, phase: i * 0.9 });
+    return cv;
+  }
+
+  /* The same drawing, stood up.
+
+     A rod is a long thin object and a shop is a list of them, so drawing them
+     lying down means each one gets a strip a hundred pixels tall and the thing
+     that distinguishes it — its outline — is the part there is no room for.
+     Stood up in a card it gets the whole height, which is the difference
+     between seeing that two rods are different and being told so. */
+  function rodPreviewV(rod, i, dim, w, h) {
+    const cv = U.el('canvas', 'rod-art-v');
+    const DPR = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = Math.round(w * DPR); cv.height = Math.round(h * DPR);
+    cv.style.width = w + 'px'; cv.style.height = h + 'px';
+    const g = cv.getContext('2d');
+    if (dim) cv.style.opacity = '0.45';
+    const paint = function (ctx, t) {
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+      /* butt at the bottom, tip at the top: rotate the frame a quarter turn
+         and hand the flat renderer a landscape box inside it */
+      ctx.translate(w * 0.5, h * 0.5);
+      ctx.rotate(-Math.PI / 2);
+      ctx.translate(-h * 0.5, -w * 0.5);
+      VF.rodArt.preview(ctx, rod, h, w, t);
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    };
+    paint(g, i * 0.9);
+    rodCanvases.push({ cv: cv, ctx: g, rod: rod, phase: i * 0.9, paint: paint });
     return cv;
   }
   let dexFilter = 'all', dexMode = 'all', dexTab = 'waters', dexLoc = 'all';
@@ -459,10 +530,17 @@
     if (tab === 'cases') { b.appendChild(caseList()); p.appendChild(b); return p; }
 
     if (tab === 'rods') {
+      /* Cards rather than rows.
+
+         A row is the right shape for a list of prices and the wrong one for a
+         list of objects: it gives a rod a hundred-pixel strip lying on its
+         side, which is exactly the amount of room its outline needs and does
+         not get. A card stands the rod up, gives it the full height, and puts
+         the numbers where they can be read down rather than across. */
       const eq = VF.rods.get(d.rod);
       b.appendChild(nextUpgrade(eq));
-      const list = U.el('div', 'list');
-      VF.rods.list.forEach(function (rod) {
+      const grid = U.el('div', 'rod-cards');
+      VF.rods.list.forEach(function (rod, idx) {
         const owned = d.ownedRods.indexOf(rod.id) >= 0;
         // earned rods and the wanderer's stock are never on the shelf; they
         // turn up here once they are yours
@@ -470,71 +548,81 @@
         const block = owned ? null : VF.rods.blocked(rod);
         const locked = !!block || (!owned && rod.noShop);
         const can = VF.economy.canAfford(rod.cost);
+        const inHand = d.rod === rod.id;
+        const rar = rodRarity(rod);
 
-        const row = U.el('div', 'row row-rod' + (owned ? ' owned' : '') + (locked && !owned ? ' locked' : '') +
-                                  (d.rod === rod.id ? ' equipped' : ''));
-        const mark = U.el('div', 'row-mark');
-        mark.style.background = owned ? 'var(--good)' : (locked ? 'var(--line-2)' : 'var(--accent)');
-        row.appendChild(mark);
+        const card = U.el('div', 'rod-card' + (owned ? ' owned' : '') +
+                          (locked && !owned ? ' locked' : '') + (inHand ? ' equipped' : ''));
+        card.style.setProperty('--rar', rar.color);
 
-        const art = U.el('div', 'rod-art-box');
-        art.appendChild(rodPreview(rod, VF.rods.index(rod.id), locked && !owned));
-        row.appendChild(art);
+        /* the numbers, read down */
+        const stats = U.el('div', 'rc-stats');
+        const c = owned ? function () { return 0; } : cmp;
+        rcStat(stats, 'Cast', rod.cast.toFixed(2), c(rod.cast, eq.cast));
+        rcStat(stats, 'Reel', rod.reel.toFixed(2), c(rod.reel, eq.reel));
+        rcStat(stats, 'Line', rod.line.toFixed(2), c(rod.line, eq.line));
+        rcStat(stats, 'Rarity', '\u00d7' + rod.rare.toFixed(2), c(rod.rare, eq.rare));
+        rcStat(stats, 'Luck', '+' + rod.luck.toFixed(2), c(rod.luck, eq.luck));
+        rcStat(stats, 'Bar', Math.round((rod.barSize || 1) * 100) + '%',
+               c(rod.barSize || 1, eq.barSize || 1));
+        card.appendChild(stats);
 
-        const main = U.el('div', 'row-main');
-        const name = U.el('div', 'row-name');
-        name.appendChild(U.el('span', null, rod.name));
-        if (d.rod === rod.id) {
-          const t = U.el('span', 'tag', 'equipped'); t.style.color = 'var(--accent)'; name.appendChild(t);
-        } else if (owned) {
-          const t = U.el('span', 'tag', 'owned'); t.style.color = 'var(--good)'; name.appendChild(t);
-        }
-        main.appendChild(name);
-        // a rod that is never sold has no purchase requirement worth stating —
-        // the level it sits at is not what is standing between you and it
-        /* A rod that does something no other rod does has to say so on its own
-           row rather than leaving it in the prose, because the stat grid below
-           has nowhere to put it. */
-        if (rod.perk && (!locked || owned)) {
-          const pk = U.el('div', 'row-desc', rod.perk);
-          pk.style.color = 'var(--good)';
-          main.appendChild(pk);
-        }
-        main.appendChild(U.el('div', 'row-desc', !locked || owned ? rod.desc
+        /* the rod, stood up */
+        const art = U.el('div', 'rc-art');
+        art.appendChild(rodPreviewV(rod, idx, locked && !owned, 150, 240));
+        card.appendChild(art);
+
+        /* what it is */
+        const badge = U.el('div', 'rc-rarity');
+        badge.style.color = rar.color;
+        badge.appendChild(U.el('span', 'rc-star', '\u2605'));
+        badge.appendChild(U.el('span', null, rar.name));
+        badge.appendChild(U.el('span', 'rc-star', '\u2605'));
+        card.appendChild(badge);
+
+        card.appendChild(U.el('div', 'rc-name', '[' + rod.name + ']'));
+        card.appendChild(U.el('div', 'rc-build', VF.rodFrame ? VF.rodFrame.of(rod).name + ' build' : ''));
+
+        card.appendChild(U.el('div', 'rc-desc', !locked || owned ? rod.desc
           : rod.noShop ? (rod.notForSale || 'Not for sale. Somebody has to give you this one.')
           : block.note));
+        if (rod.perk && (!locked || owned)) {
+          const pk = U.el('div', 'rc-perk', rod.perk);
+          card.appendChild(pk);
+        }
+        card.appendChild(U.el('div', 'rc-bar', rodBarNote(rod)));
 
-        // comparison arrows only matter when deciding whether to buy
-        const c = owned ? function () { return 0; } : cmp;
-        const grid = U.el('div', 'stat-grid');
-        grid.appendChild(statCell('Cast', rod.cast.toFixed(2), c(rod.cast, eq.cast)));
-        grid.appendChild(statCell('Reel', rod.reel.toFixed(2), c(rod.reel, eq.reel)));
-        grid.appendChild(statCell('Line', rod.line.toFixed(2), c(rod.line, eq.line)));
-        grid.appendChild(statCell('Rare', '×' + rod.rare.toFixed(2), c(rod.rare, eq.rare)));
-        grid.appendChild(statCell('Luck', '+' + rod.luck.toFixed(2), c(rod.luck, eq.luck)));
-        main.appendChild(grid);
-        const bn = U.el('div', 'row-desc', rodBarNote(rod));
-        bn.style.color = 'var(--ink-2)';
-        main.appendChild(bn);
-        row.appendChild(main);
-
-        const side = U.el('div', 'row-side');
+        /* and the one thing you can do about it */
+        const foot = U.el('div', 'rc-foot');
         if (owned) {
-          if (d.rod !== rod.id) {
-            side.appendChild(equipButton(rod, function () { refresh('rods'); }));
+          if (inHand) {
+            foot.appendChild(U.el('div', 'rc-btn is-on', '[Equipped]'));
           } else {
-            side.appendChild(U.el('div', 'row-price', 'in hand'));
+            if (!VF.rods.canEquip(rod)) {
+              foot.appendChild(U.el('div', 'rc-btn is-off', '[Needs LV ' + rod.level + ']'));
+            } else {
+              const eb = U.el('button', 'rc-btn', '[Equip]');
+              eb.addEventListener('click', function (e2) {
+                dropFocusIn(e2);
+                VF.state.data.rod = rod.id;
+                VF.audio.click(); VF.bus.emit('gear:changed'); VF.save.save();
+                VF.hud.refreshGear();
+                refresh('rods');
+              });
+              foot.appendChild(eb);
+            }
           }
         } else if (rod.noShop) {
-          /* the keeper does not stock these and will not be talked into it */
-          const n = U.el('div', 'row-price', 'not for sale');
-          n.style.color = 'var(--ink-3)';
-          side.appendChild(n);
+          foot.appendChild(U.el('div', 'rc-btn is-off', '[Not For Sale]'));
         } else {
-          side.appendChild(priceEl(rod.cost, can && !locked));
-          const btn = U.el('button', 'btn btn-sm' + (can && !locked ? ' btn-primary' : ''), 'Buy');
-          btn.disabled = locked || !can;
-          btn.addEventListener('click', function () {
+          const price = U.el('div', 'rc-price' + (can && !locked ? '' : ' cant'),
+                             U.money(rod.cost) + ' jias');
+          foot.appendChild(price);
+          const bb = U.el('button', 'rc-btn' + (can && !locked ? ' is-buy' : ''),
+                          locked ? '[Locked]' : '[Buy]');
+          bb.disabled = locked || !can;
+          bb.addEventListener('click', function (e2) {
+            dropFocusIn(e2);
             const r = VF.economy.buyRod(rod.id);
             if (r.ok) {
               VF.audio.buy();
@@ -542,12 +630,12 @@
               VF.hud.refreshGear(); VF.achievements.check(); refresh('rods');
             } else { VF.audio.error(); }
           });
-          side.appendChild(btn);
+          foot.appendChild(bb);
         }
-        row.appendChild(side);
-        list.appendChild(row);
+        card.appendChild(foot);
+        grid.appendChild(card);
       });
-      b.appendChild(list);
+      b.appendChild(grid);
     } else {
       const list = U.el('div', 'list');
       VF.bait.available().forEach(function (bt) {

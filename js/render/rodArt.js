@@ -13,15 +13,76 @@
     return m * m * p0 + 2 * m * k * p1 + k * k * p2;
   }
 
-  /* Point and tangent anywhere along the blank. */
+  /* Point and tangent anywhere along the blank.
+
+     Two spines, not one. A quadratic can only bow — it has a single control
+     point, so every rod drawn on one curves the same way along its whole
+     length, which is most of why they all looked alike. When a second control
+     point is present the spine is a cubic and can change its mind halfway: an
+     ornate rod that sweeps back and forward again, an alien one that does not
+     agree with itself. Everything downstream reads position and tangent from
+     here and does not care which it got. */
   function ptAt(g, k) {
     const m = 1 - k;
+    if (g.c2x !== undefined) {
+      const m2 = m * m, k2 = k * k;
+      return {
+        x: m2 * m * g.bx + 3 * m2 * k * g.cx + 3 * m * k2 * g.c2x + k2 * k * g.tx,
+        y: m2 * m * g.by + 3 * m2 * k * g.cy + 3 * m * k2 * g.c2y + k2 * k * g.ty,
+        dx: 3 * m2 * (g.cx - g.bx) + 6 * m * k * (g.c2x - g.cx) + 3 * k2 * (g.tx - g.c2x),
+        dy: 3 * m2 * (g.cy - g.by) + 6 * m * k * (g.c2y - g.cy) + 3 * k2 * (g.ty - g.c2y)
+      };
+    }
     return {
       x: m * m * g.bx + 2 * m * k * g.cx + k * k * g.tx,
       y: m * m * g.by + 2 * m * k * g.cy + k * k * g.ty,
       dx: 2 * m * (g.cx - g.bx) + 2 * k * (g.tx - g.cx),
       dy: 2 * m * (g.cy - g.by) + 2 * k * (g.ty - g.cy)
     };
+  }
+
+  /* The spine this rod's frame asks for, from the one the scene handed over.
+
+     The tip does not move: the line comes off it, the scene has already worked
+     out where the bobber is, and a rod whose drawn tip is not its real tip is
+     a rod with the line hanging off the middle of it. Everything else is fair
+     game — how far the control point sits off the chord, which side of the
+     chord it sits on, and whether there is a second one pulling the other way. */
+  function frameSpine(g, F) {
+    if (!F) return g;
+    const dx = g.tx - g.bx, dy = g.ty - g.by;
+    const m = Math.hypot(dx, dy) || 1;
+    const ux = dx / m, uy = dy / m, nx = -uy, ny = ux;
+    const mx = (g.bx + g.tx) / 2, my = (g.by + g.ty) / 2;
+    // where the scene put its control point, split into along and across
+    const along = (g.cx - mx) * ux + (g.cy - my) * uy;
+    const across = (g.cx - mx) * nx + (g.cy - my) * ny;
+    const bend = across * F.bend;
+
+    if (!F.scurve) {
+      return { bx: g.bx, by: g.by,
+               cx: mx + ux * along + nx * bend, cy: my + uy * along + ny * bend,
+               tx: g.tx, ty: g.ty, len: g.len, angle: g.angle };
+    }
+    /* An S: the first control point goes one way, the second the other, and
+       the size of the disagreement is the frame's scurve. */
+    const s = F.scurve;
+    return {
+      bx: g.bx, by: g.by,
+      cx: g.bx + ux * m * 0.34 - nx * bend * s * 1.5 + nx * bend * 0.3,
+      cy: g.by + uy * m * 0.34 - ny * bend * s * 1.5 + ny * bend * 0.3,
+      c2x: g.bx + ux * m * 0.72 + nx * bend * (1 + s * 1.2),
+      c2y: g.by + uy * m * 0.72 + ny * bend * (1 + s * 1.2),
+      tx: g.tx, ty: g.ty, len: g.len, angle: g.angle
+    };
+  }
+
+  /* Stroke the spine, whichever kind it is. */
+  function spinePath(ctx, g) {
+    ctx.beginPath();
+    ctx.moveTo(g.bx, g.by);
+    if (g.c2x !== undefined) ctx.bezierCurveTo(g.cx, g.cy, g.c2x, g.c2y, g.tx, g.ty);
+    else ctx.quadraticCurveTo(g.cx, g.cy, g.tx, g.ty);
   }
 
   /* Point, unit tangent and unit normal at k. The flourishes past the ordinary
@@ -73,12 +134,27 @@
      shading across it — dark at both edges, one hot line where the surface
      turns into the light. That has to be redrawn along the bend, so the blank
      goes down in runs with a cross-section ramp each. */
-  function drawBlank(ctx, g, wButt, wTip, c1, c2, tipRgb, scale) {
-    const N = 12;
+  /* `profile` is the frame's thickness function — see js/render/rodFrame.js.
+     Without one this is the old straight taper from thick to thin, which is
+     the shape every rod in the game used to be. With one it is a parallel
+     harpoon shaft, a noded cane, a stepped telescopic, or a crystal that gets
+     WIDER toward the tip. `from` is where the blank starts, so the grip can
+     eat a fifth of a short heavy rod and a twelfth of a long light one.
+
+     A profile returning zero is a real gap in the blank, and the run is
+     skipped — that is how the segmented frames float. */
+  function drawBlank(ctx, g, wButt, wTip, c1, c2, tipRgb, scale, profile, from) {
+    const N = profile ? 26 : 12;
+    const pf = profile || function () { return 1; };
+    const k0start = from || 0;
+    const wAt = function (k) { return U.lerp(wButt, wTip, k) * pf(k); };
     for (let i = 0; i < N; i++) {
-      const k0 = i / N, k1 = (i + 1) / N, km = (k0 + k1) / 2;
+      const k0 = k0start + (1 - k0start) * (i / N);
+      const k1 = k0start + (1 - k0start) * ((i + 1) / N);
+      const km = (k0 + k1) / 2;
+      if (wAt(km) <= 0.02) continue;              // a gap the frame asked for
       const p = nAt(g, km);
-      const w = U.lerp(wButt, wTip, km) * 0.5;
+      const w = wAt(km) * 0.5;
       // the colour this far along, matching the ramp the blank always had
       const col = km < 0.30 ? U.mixRgb(U.shade(c2, -0.15), c2, km / 0.30)
                 : km < 0.72 ? U.mixRgb(c2, c1, (km - 0.30) / 0.42)
@@ -93,9 +169,12 @@
       cg.addColorStop(U.clamp(t + 0.26, 0.04, 0.98), U.rgbToCss(col));
       cg.addColorStop(1, U.rgbToCss(U.shade(col, -0.58)));
       ctx.fillStyle = cg;
-      // a hair of overlap, or consecutive runs antialias a seam between them
-      taper(ctx, g, Math.max(0, k0 - 0.005), Math.min(1, k1 + 0.005),
-            U.lerp(wButt, wTip, k0), U.lerp(wButt, wTip, k1), 3);
+      // a hair of overlap, or consecutive runs antialias a seam between them.
+      // A profile with steps in it needs more samples inside the run than a
+      // straight taper does, or the step lands between two of them.
+      const pad = profile ? 0.002 : 0.005;
+      taper(ctx, g, Math.max(0, k0 - pad), Math.min(1, k1 + pad),
+            wAt(k0), wAt(k1), profile ? 5 : 3);
       ctx.fill();
     }
   }
@@ -276,9 +355,7 @@
     for (let i = 0; i < HALO.length; i++) {
       ctx.strokeStyle = U.rgbToCss(tipRgb, HALO[i][1] * art.glow);
       ctx.lineWidth = Math.max(2, HALO[i][0] * scale);
-      ctx.beginPath();
-      ctx.moveTo(g.bx, g.by);
-      ctx.quadraticCurveTo(g.cx, g.cy, g.tx, g.ty);
+      spinePath(ctx, g);
       ctx.stroke();
     }
     ctx.restore();
@@ -876,6 +953,658 @@
     }
   }
 
+  /* ---- the frame kit ------------------------------------------------------
+
+     Everything below is STRUCTURE rather than decoration: it changes what the
+     rod is, not what colour it is. A silhouette test is the whole point — put
+     six of these in a row filled flat black and you should still be able to
+     name them.
+
+     All of it works off the blank's own spine, so a part put on at k = 0.5
+     stays at the middle of the rod however the rod bends. */
+
+  /* How wide the blank is at k, given the frame. Parts bolted to it have to
+     know, or they float above a thin rod and sink into a thick one. */
+  function blankW(F, wButt, wTip, k) {
+    const p = F && F.profile ? F.profile(k) : 1;
+    return Math.max(0.4, U.lerp(wButt, wTip, k) * p);
+  }
+
+  /* A flat metal shape laid on the blank at k, given as points in
+     (along, across) units of blank width. The one primitive most of the
+     structural parts are made of. */
+  function plate(ctx, g, k, pts, w, rgb, lit) {
+    const p = nAt(g, k);
+    ctx.beginPath();
+    for (let i = 0; i < pts.length; i++) {
+      const x = p.x + p.tx * pts[i][0] * w + p.nx * pts[i][1] * w;
+      const y = p.y + p.ty * pts[i][0] * w + p.ny * pts[i][1] * w;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    const gr = ctx.createLinearGradient(p.x - p.nx * w * 2, p.y - p.ny * w * 2,
+                                        p.x + p.nx * w * 2, p.y + p.ny * w * 2);
+    gr.addColorStop(0, U.rgbToCss(U.shade(rgb, -0.62)));
+    gr.addColorStop(0.36, U.rgbToCss(U.mixRgb(rgb, [255, 255, 255], lit === undefined ? 0.5 : lit)));
+    gr.addColorStop(1, U.rgbToCss(U.shade(rgb, -0.5)));
+    ctx.fillStyle = gr;
+    ctx.fill();
+  }
+
+  /* -------------------------------------------------------------- the tips
+
+     What the rod ends in. This is the single most legible part of a silhouette
+     because it is the part furthest from everything else, so no two frames end
+     the same way. `reach` on the frame is how far past the tip-top the head
+     goes, so the preview can leave room for it. */
+
+  function drawFrameTip(ctx, g, F, scale, wTipPx, lit, dark, glowRgb, metalRgb, t) {
+    const p = nAt(g, 1);
+    const w = Math.max(1.1, wTipPx);
+    const reach = (F.reach || 0) * g.len;
+
+    switch (F.tip) {
+
+      /* A broad leaf blade on a socket. The rod does not end, it becomes a
+         spear — and the blade is wider than anything else on the rod, which is
+         what makes a harpoon read as a harpoon at a glance. */
+      case 'spear': {
+        const L = Math.max(10, reach || g.len * 0.13);
+        const halfW = Math.max(2.6, w * 2.9);
+        const tipX = p.x + p.tx * L, tipY = p.y + p.ty * L;
+        const midX = p.x + p.tx * L * 0.34, midY = p.y + p.ty * L * 0.34;
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(midX + p.nx * halfW, midY + p.ny * halfW);
+        ctx.lineTo(tipX, tipY);
+        ctx.lineTo(midX - p.nx * halfW, midY - p.ny * halfW);
+        ctx.closePath();
+        const gr = ctx.createLinearGradient(midX - p.nx * halfW, midY - p.ny * halfW,
+                                            midX + p.nx * halfW, midY + p.ny * halfW);
+        gr.addColorStop(0, U.rgbToCss(U.shade(metalRgb, -0.6)));
+        gr.addColorStop(0.42, U.rgbToCss(U.mixRgb(metalRgb, [255, 255, 255], 0.62)));
+        gr.addColorStop(1, U.rgbToCss(U.shade(metalRgb, -0.45)));
+        ctx.fillStyle = gr;
+        ctx.fill();
+        // the fuller down the middle, and a barb either side of the socket
+        ctx.strokeStyle = U.rgbToCss(U.shade(metalRgb, -0.5), 0.8);
+        ctx.lineWidth = Math.max(0.4, w * 0.28);
+        ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(tipX, tipY); ctx.stroke();
+        for (const sgn of [1, -1]) {
+          ctx.beginPath();
+          ctx.moveTo(p.x + p.nx * w * 0.9 * sgn, p.y + p.ny * w * 0.9 * sgn);
+          ctx.lineTo(p.x - p.tx * L * 0.26 + p.nx * halfW * 0.95 * sgn,
+                     p.y - p.ty * L * 0.26 + p.ny * halfW * 0.95 * sgn);
+          ctx.lineTo(p.x - p.tx * L * 0.10 + p.nx * w * 1.1 * sgn,
+                     p.y - p.ty * L * 0.10 + p.ny * w * 1.1 * sgn);
+          ctx.closePath();
+          ctx.fillStyle = U.rgbToCss(U.shade(metalRgb, -0.28));
+          ctx.fill();
+        }
+        break;
+      }
+
+      /* Three of them, splayed. Reads as a fork at any size. */
+      case 'prong': {
+        const L = Math.max(9, reach || g.len * 0.11);
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        for (const off of [-1, 0, 1]) {
+          const spread = off * L * 0.30;
+          const base = 0.34;
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          ctx.quadraticCurveTo(p.x + p.tx * L * base + p.nx * spread * 0.55,
+                               p.y + p.ty * L * base + p.ny * spread * 0.55,
+                               p.x + p.tx * L + p.nx * spread,
+                               p.y + p.ty * L + p.ny * spread);
+          ctx.strokeStyle = U.rgbToCss(U.shade(metalRgb, off === 0 ? -0.1 : -0.34));
+          ctx.lineWidth = Math.max(0.9, w * (off === 0 ? 1.5 : 1.15));
+          ctx.stroke();
+          ctx.strokeStyle = U.rgbToCss(U.mixRgb(metalRgb, [255, 255, 255], 0.7), 0.75);
+          ctx.lineWidth = Math.max(0.3, w * 0.34);
+          ctx.stroke();
+        }
+        break;
+      }
+
+      /* It hooks back on itself. Organic, and unmistakable. */
+      case 'hook': {
+        const L = Math.max(7, reach || g.len * 0.05);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.quadraticCurveTo(p.x + p.tx * L * 1.05 + p.nx * L * 0.10,
+                             p.y + p.ty * L * 1.05 + p.ny * L * 0.10,
+                             p.x + p.tx * L * 0.72 + p.nx * L * 0.86,
+                             p.y + p.ty * L * 0.72 + p.ny * L * 0.86);
+        ctx.strokeStyle = U.rgbToCss(U.shade(metalRgb, -0.16));
+        ctx.lineWidth = Math.max(1.0, w * 1.5);
+        ctx.stroke();
+        ctx.strokeStyle = U.rgbToCss(U.mixRgb(metalRgb, [255, 255, 255], 0.6), 0.7);
+        ctx.lineWidth = Math.max(0.3, w * 0.42);
+        ctx.stroke();
+        break;
+      }
+
+      /* A cluster of shards growing out of the end, largest along the axis. */
+      case 'shard': {
+        const L = Math.max(8, reach || g.len * 0.09);
+        const seeds = [[1.0, 0.0, 1.0], [0.62, 0.42, 0.72], [0.55, -0.5, 0.66],
+                       [0.34, 0.66, 0.45], [0.30, -0.72, 0.42]];
+        for (let i = 0; i < seeds.length; i++) {
+          const [fl, fo, fw] = seeds[i];
+          const ex = p.x + p.tx * L * fl + p.nx * L * fo;
+          const ey = p.y + p.ty * L * fl + p.ny * L * fo;
+          const bw = w * 1.5 * fw;
+          ctx.beginPath();
+          ctx.moveTo(p.x + p.nx * bw, p.y + p.ny * bw);
+          ctx.lineTo(ex, ey);
+          ctx.lineTo(p.x - p.nx * bw, p.y - p.ny * bw);
+          ctx.closePath();
+          const gr = ctx.createLinearGradient(p.x - p.nx * bw, p.y - p.ny * bw, ex, ey);
+          gr.addColorStop(0, U.rgbToCss(U.shade(glowRgb, -0.42), 0.95));
+          gr.addColorStop(1, U.rgbToCss(U.mixRgb(glowRgb, [255, 255, 255], 0.75), 0.9));
+          ctx.fillStyle = gr;
+          ctx.fill();
+        }
+        bloom(ctx, p.x + p.tx * L * 0.5, p.y + p.ty * L * 0.5, w * 2.2, glowRgb, 0.5);
+        break;
+      }
+
+      /* Nothing solid at all past the last collar: a ring, and light standing
+         in the gap where the rest of the rod should be. */
+      case 'emitter': {
+        const L = Math.max(6, reach || g.len * 0.07);
+        ctx.strokeStyle = U.rgbToCss(U.mixRgb(metalRgb, [255, 255, 255], 0.45));
+        ctx.lineWidth = Math.max(0.7, w * 0.55);
+        ringPath(ctx, g, 0.985, w * 2.3, 0.42);
+        ctx.stroke();
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const beam = ctx.createLinearGradient(p.x, p.y, p.x + p.tx * L, p.y + p.ty * L);
+        beam.addColorStop(0, U.rgbToCss(glowRgb, 0.55));
+        beam.addColorStop(1, U.rgbToCss(glowRgb, 0));
+        ctx.strokeStyle = beam;
+        ctx.lineWidth = Math.max(1.0, w * 1.3);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(p.x + p.tx * L, p.y + p.ty * L);
+        ctx.stroke();
+        ctx.restore();
+        bloom(ctx, p.x, p.y, w * 1.9, glowRgb, 0.8);
+        break;
+      }
+
+      /* The last of it comes apart into strands that do not agree with each
+         other about which way the rod is pointing. */
+      case 'split': {
+        const L = Math.max(8, g.len * 0.10);
+        ctx.lineCap = 'round';
+        for (let i = 0; i < 4; i++) {
+          const off = (i - 1.5) / 1.5;
+          const wob = Math.sin(t * 0.9 + i * 2.1 + (F.phase || 0)) * 0.22;
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          ctx.quadraticCurveTo(p.x + p.tx * L * 0.5 + p.nx * L * off * 0.20,
+                               p.y + p.ty * L * 0.5 + p.ny * L * off * 0.20,
+                               p.x + p.tx * L * (0.72 + Math.abs(off) * 0.28) + p.nx * L * (off * 0.55 + wob),
+                               p.y + p.ty * L * (0.72 + Math.abs(off) * 0.28) + p.ny * L * (off * 0.55 + wob));
+          ctx.strokeStyle = U.rgbToCss(glowRgb, 0.34 + 0.3 * (1 - Math.abs(off)));
+          ctx.lineWidth = Math.max(0.35, w * 0.7 * (1 - Math.abs(off) * 0.5));
+          ctx.stroke();
+        }
+        break;
+      }
+
+      /* It curls back over itself, like something that grew rather than
+         something that was made. */
+      case 'curl': {
+        const L = Math.max(8, (reach || g.len * 0.06) * 1.6);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.bezierCurveTo(p.x + p.tx * L * 0.9, p.y + p.ty * L * 0.9,
+                          p.x + p.tx * L * 0.85 + p.nx * L * 0.95,
+                          p.y + p.ty * L * 0.85 + p.ny * L * 0.95,
+                          p.x + p.tx * L * 0.18 + p.nx * L * 0.86,
+                          p.y + p.ty * L * 0.18 + p.ny * L * 0.86);
+        ctx.strokeStyle = U.rgbToCss(U.shade(metalRgb, -0.2));
+        ctx.lineWidth = Math.max(0.8, w * 1.25);
+        ctx.stroke();
+        bloom(ctx, p.x + p.tx * L * 0.2 + p.nx * L * 0.84,
+                   p.y + p.ty * L * 0.2 + p.ny * L * 0.84, w * 1.5, glowRgb, 0.45);
+        break;
+      }
+
+      /* Snapped off, and never repaired. */
+      case 'chipped': {
+        ctx.beginPath();
+        ctx.moveTo(p.x - p.nx * w, p.y - p.ny * w);
+        ctx.lineTo(p.x + p.tx * w * 1.6 + p.nx * w * 0.3,
+                   p.y + p.ty * w * 1.6 + p.ny * w * 0.3);
+        ctx.lineTo(p.x + p.nx * w * 0.9, p.y + p.ny * w * 0.9);
+        ctx.lineTo(p.x - p.tx * w * 0.8, p.y - p.ty * w * 0.8);
+        ctx.closePath();
+        ctx.fillStyle = U.rgbToCss(U.shade(metalRgb, -0.35));
+        ctx.fill();
+        break;
+      }
+
+      default:
+        return false;      // the signature's own tip-top handles it
+    }
+    return true;
+  }
+
+  /* ------------------------------------------------------------ the extras
+
+     Bolted-on structure. Each one is here because it changes the outline. */
+
+  function drawFrameExtras(ctx, g, F, scale, wButt, wTip, metalRgb, gripRgb, glowRgb, c1, t) {
+    const ex = F.extras || [];
+    const W = function (k) { return blankW(F, wButt, wTip, k); };
+
+    for (let i = 0; i < ex.length; i++) {
+      switch (ex[i]) {
+
+        /* A bar across the shaft above the hand. Nothing else in the game has
+           anything perpendicular to the blank, so this alone names the frame. */
+        case 'crossbar': {
+          const k = F.grip.len + 0.075;
+          const p = nAt(g, k);
+          const arm = W(k) * 3.6;
+          ctx.strokeStyle = U.rgbToCss(U.shade(metalRgb, -0.22));
+          ctx.lineWidth = Math.max(1.1, W(k) * 0.62);
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(p.x - p.nx * arm, p.y - p.ny * arm);
+          ctx.lineTo(p.x + p.nx * arm, p.y + p.ny * arm);
+          ctx.stroke();
+          ctx.strokeStyle = U.rgbToCss(U.mixRgb(metalRgb, [255, 255, 255], 0.55), 0.6);
+          ctx.lineWidth = Math.max(0.3, W(k) * 0.18);
+          ctx.stroke();
+          for (const sgn of [1, -1]) {
+            ctx.fillStyle = U.rgbToCss(U.shade(metalRgb, -0.05));
+            ctx.beginPath();
+            ctx.arc(p.x + p.nx * arm * sgn, p.y + p.ny * arm * sgn,
+                    Math.max(0.8, W(k) * 0.42), 0, TAU);
+            ctx.fill();
+          }
+          break;
+        }
+
+        /* A heavy ball behind the hand. Makes the rod read as something that
+           needs balancing, which is what an oversized rod IS. */
+        case 'counterweight': {
+          const p = nAt(g, 0.008);
+          const r = Math.max(2.0, wButt * 1.55);
+          const gr = ctx.createRadialGradient(p.x - r * 0.35, p.y - r * 0.4, r * 0.1, p.x, p.y, r);
+          gr.addColorStop(0, U.rgbToCss(U.mixRgb(metalRgb, [255, 255, 255], 0.5)));
+          gr.addColorStop(0.6, U.rgbToCss(metalRgb));
+          gr.addColorStop(1, U.rgbToCss(U.shade(metalRgb, -0.68)));
+          ctx.fillStyle = gr;
+          ctx.beginPath();
+          ctx.ellipse(p.x - p.tx * r * 0.5, p.y - p.ty * r * 0.5, r, r * 0.92,
+                      Math.atan2(p.ty, p.tx), 0, TAU);
+          ctx.fill();
+          break;
+        }
+
+        /* A bracket over the shoulder of the taper, where a very heavy rod
+           would actually need one. */
+        case 'shoulderPlate': {
+          const k = 0.44;
+          const w = W(k);
+          plate(ctx, g, k, [[-w * 2.4, -w * 1.5], [w * 3.0, -w * 0.9],
+                            [w * 3.0, w * 0.9], [-w * 2.4, w * 1.5]],
+                1, metalRgb, 0.44);
+          break;
+        }
+
+        /* Rings round the cane where it grew a node. */
+        case 'nodeRings': {
+          for (let n = 1; n <= 6; n++) {
+            const k = n / 7;
+            collar(ctx, g, k, 0.006, W(k) * 1.18, U.shade(c1, -0.3), 0.3);
+          }
+          break;
+        }
+
+        /* Thread over the joins, which is what holds a cane rod together. */
+        case 'whipping': {
+          for (let n = 0; n < 3; n++) {
+            const k = 0.22 + n * 0.26;
+            ctx.strokeStyle = U.rgbToCss(U.shade(glowRgb, -0.35), 0.8);
+            ctx.lineWidth = Math.max(0.35, scale * 0.5);
+            for (let w2 = 0; w2 < 5; w2++) {
+              const kk = k + w2 * 0.006;
+              ringPath(ctx, g, kk, W(kk) * 0.72, 0.34);
+              ctx.stroke();
+            }
+          }
+          break;
+        }
+
+        /* Bolt heads down the shaft. Cheap, and it says machined. */
+        case 'bolts': {
+          for (let n = 0; n < 5; n++) {
+            const k = 0.24 + n * 0.14;
+            const p = nAt(g, k);
+            const r = Math.max(0.55, W(k) * 0.30);
+            ctx.fillStyle = U.rgbToCss(U.mixRgb(metalRgb, [255, 255, 255], 0.35));
+            ctx.beginPath();
+            ctx.arc(p.x + p.nx * W(k) * 0.42, p.y + p.ny * W(k) * 0.42, r, 0, TAU);
+            ctx.fill();
+            ctx.fillStyle = U.rgbToCss(U.shade(metalRgb, -0.6));
+            ctx.beginPath();
+            ctx.arc(p.x + p.nx * W(k) * 0.42, p.y + p.ny * W(k) * 0.42, r * 0.42, 0, TAU);
+            ctx.fill();
+          }
+          break;
+        }
+
+        /* Machined bands at the section joins, which is where the steps in the
+           profile land. */
+        case 'sectionCollars': {
+          const n = F.id === 'telescopic' ? 6 : 4;
+          for (let s2 = 1; s2 < n; s2++) {
+            const k = s2 / n;
+            collar(ctx, g, k, 0.0085, W(k) * 1.42, metalRgb, 0.62);
+          }
+          break;
+        }
+
+        /* Curls off the blank, on alternating sides. Ornate is a silhouette
+           word, not a colour word. */
+        case 'scrollwork': {
+          ctx.lineCap = 'round';
+          for (let n = 0; n < 4; n++) {
+            const k = 0.30 + n * 0.16;
+            const p = nAt(g, k);
+            const sgn = n % 2 ? 1 : -1;
+            const r = W(k) * 3.2;
+            ctx.strokeStyle = U.rgbToCss(U.mixRgb(metalRgb, [255, 255, 255], 0.3), 0.85);
+            ctx.lineWidth = Math.max(0.4, W(k) * 0.34);
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+            ctx.bezierCurveTo(p.x + p.nx * r * sgn, p.y + p.ny * r * sgn,
+                              p.x + p.tx * r * 0.9 + p.nx * r * sgn,
+                              p.y + p.ty * r * 0.9 + p.ny * r * sgn,
+                              p.x + p.tx * r * 0.55, p.y + p.ty * r * 0.55);
+            ctx.stroke();
+          }
+          break;
+        }
+
+        /* Bands that flare rather than sit flush. */
+        case 'flaredCollars': {
+          for (let n = 0; n < 3; n++) {
+            const k = 0.26 + n * 0.22;
+            const w = W(k);
+            plate(ctx, g, k, [[-w * 0.7, -w * 1.05], [w * 0.7, -w * 2.0],
+                              [w * 0.7, w * 2.0], [-w * 0.7, w * 1.05]],
+                  1, metalRgb, 0.66);
+          }
+          break;
+        }
+
+        /* Spurs down one side, like a spine. */
+        case 'ribs': {
+          for (let n = 0; n < 7; n++) {
+            const k = 0.22 + n * 0.095;
+            const p = nAt(g, k);
+            const L = Math.min(W(k) * U.lerp(2.5, 0.9, n / 6), scale * 13);
+            ctx.beginPath();
+            ctx.moveTo(p.x - p.tx * W(k) * 0.8, p.y - p.ty * W(k) * 0.8);
+            ctx.quadraticCurveTo(p.x - p.nx * L * 0.7, p.y - p.ny * L * 0.7,
+                                 p.x + p.tx * W(k) * 1.1 - p.nx * L,
+                                 p.y + p.ty * W(k) * 1.1 - p.ny * L);
+            ctx.lineTo(p.x + p.tx * W(k) * 1.2, p.y + p.ty * W(k) * 1.2);
+            ctx.closePath();
+            ctx.fillStyle = U.rgbToCss(U.shade(c1, U.lerp(0.14, -0.2, n / 6)));
+            ctx.fill();
+          }
+          break;
+        }
+
+        /* Beads down the grip end, so the hand is holding a spine. */
+        case 'vertebrae': {
+          for (let n = 0; n < 4; n++) {
+            const k = 0.04 + n * 0.035;
+            collar(ctx, g, k, 0.012, wButt * U.lerp(2.1, 1.6, n / 3), U.shade(gripRgb, 0.25), 0.4);
+          }
+          break;
+        }
+
+        /* A pennant near the tip. Nothing else in the game has cloth on it. */
+        case 'banner': {
+          const k = 0.80;
+          const p = nAt(g, k);
+          const L = g.len * 0.085, D = g.len * 0.055;
+          const wave = Math.sin(t * 1.4 + (F.phase || 0)) * D * 0.22;
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          ctx.quadraticCurveTo(p.x - p.tx * L * 0.5 + p.nx * (D * 0.5 + wave),
+                               p.y - p.ty * L * 0.5 + p.ny * (D * 0.5 + wave),
+                               p.x - p.tx * L + p.nx * D * 0.2,
+                               p.y - p.ty * L + p.ny * D * 0.2);
+          ctx.lineTo(p.x - p.tx * L * 0.7, p.y - p.ty * L * 0.7);
+          ctx.closePath();
+          const gr = ctx.createLinearGradient(p.x, p.y,
+                                              p.x - p.tx * L + p.nx * D, p.y - p.ty * L + p.ny * D);
+          gr.addColorStop(0, U.rgbToCss(U.mixRgb(glowRgb, [255, 255, 255], 0.5), 0.85));
+          gr.addColorStop(1, U.rgbToCss(U.shade(glowRgb, -0.35), 0.5));
+          ctx.fillStyle = gr;
+          ctx.fill();
+          break;
+        }
+
+        /* A ball finial on the butt, and one under the reel. */
+        case 'finial': {
+          const p = nAt(g, 0.004);
+          const r = Math.max(1.4, wButt * 1.1);
+          ctx.fillStyle = U.rgbToCss(U.mixRgb(metalRgb, [255, 255, 255], 0.28));
+          ctx.beginPath();
+          ctx.arc(p.x - p.tx * r * 0.7, p.y - p.ty * r * 0.7, r, 0, TAU);
+          ctx.fill();
+          gem(ctx, p.x - p.tx * r * 0.7, p.y - p.ty * r * 0.7, r * 0.48,
+              Math.atan2(p.ty, p.tx), glowRgb, 6);
+          break;
+        }
+
+        /* Two brackets bridging the gaps in a segmented blank, so it reads as
+           held apart rather than broken. */
+        case 'floatGaps': {
+          for (let n = 1; n < 5; n++) {
+            const k = n / 5;
+            const p = nAt(g, k);
+            const w = Math.max(1.2, U.lerp(wButt, wTip, k));
+            for (const sgn of [1, -1]) {
+              ctx.strokeStyle = U.rgbToCss(U.mixRgb(metalRgb, [255, 255, 255], 0.3), 0.9);
+              ctx.lineWidth = Math.max(0.4, w * 0.26);
+              ctx.beginPath();
+              ctx.moveTo(p.x - p.tx * w * 2.2 + p.nx * w * 0.9 * sgn,
+                         p.y - p.ty * w * 2.2 + p.ny * w * 0.9 * sgn);
+              ctx.lineTo(p.x + p.tx * w * 2.2 + p.nx * w * 0.9 * sgn,
+                         p.y + p.ty * w * 2.2 + p.ny * w * 0.9 * sgn);
+              ctx.stroke();
+            }
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            ctx.strokeStyle = U.rgbToCss(glowRgb, 0.34);
+            ctx.lineWidth = Math.max(0.5, w * 0.5);
+            ctx.beginPath();
+            ctx.moveTo(p.x - p.tx * w * 2.0, p.y - p.ty * w * 2.0);
+            ctx.lineTo(p.x + p.tx * w * 2.0, p.y + p.ty * w * 2.0);
+            ctx.stroke();
+            ctx.restore();
+          }
+          break;
+        }
+
+        /* A rail running alongside the blank, offset from it. */
+        case 'rail': {
+          ctx.strokeStyle = U.rgbToCss(U.shade(metalRgb, -0.2), 0.9);
+          ctx.lineWidth = Math.max(0.4, wButt * 0.22);
+          ctx.beginPath();
+          for (let n = 0; n <= 16; n++) {
+            const k = 0.22 + (0.70) * (n / 16);
+            const p = nAt(g, k);
+            const o = W(k) * 1.9;
+            const x = p.x + p.nx * o, y = p.y + p.ny * o;
+            n ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+          }
+          ctx.stroke();
+          break;
+        }
+
+        /* Facet lines down a crystal blank. */
+        case 'facets': {
+          ctx.strokeStyle = U.rgbToCss(U.mixRgb(glowRgb, [255, 255, 255], 0.5), 0.34);
+          ctx.lineWidth = Math.max(0.3, scale * 0.4);
+          for (const o of [-0.42, 0, 0.42]) {
+            ctx.beginPath();
+            for (let n = 0; n <= 18; n++) {
+              const k = 0.16 + 0.80 * (n / 18);
+              const p = nAt(g, k);
+              const x = p.x + p.nx * W(k) * o, y = p.y + p.ny * W(k) * o;
+              n ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+            }
+            ctx.stroke();
+          }
+          break;
+        }
+
+        /* Threads trailing off the last of a void rod, going the wrong way. */
+        case 'strands': {
+          ctx.save();
+          ctx.globalCompositeOperation = 'lighter';
+          for (let n = 0; n < 5; n++) {
+            const k = 0.55 + n * 0.08;
+            const p = nAt(g, k);
+            const L = g.len * 0.05 * (1 + n * 0.2);
+            const sw = Math.sin(t * 0.7 + n * 1.9 + (F.phase || 0));
+            ctx.strokeStyle = U.rgbToCss(glowRgb, 0.16);
+            ctx.lineWidth = Math.max(0.3, scale * 0.35);
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+            ctx.quadraticCurveTo(p.x - p.tx * L * 0.4 + p.nx * L * sw,
+                                 p.y - p.ty * L * 0.4 + p.ny * L * sw,
+                                 p.x - p.tx * L + p.nx * L * sw * 0.4,
+                                 p.y - p.ty * L + p.ny * L * sw * 0.4);
+            ctx.stroke();
+          }
+          ctx.restore();
+          break;
+        }
+
+        /* The rod's own outline, offset, in the wrong place. */
+        case 'wrongShadow': {
+          ctx.save();
+          ctx.globalAlpha = 0.20;
+          const off = wButt * 2.2;
+          ctx.translate(-off * 0.6, off * 0.5);
+          ctx.strokeStyle = U.rgbToCss(glowRgb);
+          ctx.lineWidth = Math.max(0.6, wButt * 0.7);
+          spinePath(ctx, g);
+          ctx.stroke();
+          ctx.restore();
+          break;
+        }
+
+        /* Growths off the spine, not symmetric, not evenly spaced. */
+        case 'growths': {
+          const spots = [[0.30, 1, 1.0], [0.47, -1, 0.62], [0.66, 1, 0.72], [0.80, -1, 0.4]];
+          for (let n = 0; n < spots.length; n++) {
+            const [k, sgn, sc] = spots[n];
+            const p = nAt(g, k);
+            const r = W(k) * 2.4 * sc;
+            const gr = ctx.createRadialGradient(p.x + p.nx * r * sgn * 0.6, p.y + p.ny * r * sgn * 0.6,
+                                                r * 0.1,
+                                                p.x + p.nx * r * sgn * 0.6, p.y + p.ny * r * sgn * 0.6, r);
+            gr.addColorStop(0, U.rgbToCss(U.mixRgb(c1, [255, 255, 255], 0.35)));
+            gr.addColorStop(1, U.rgbToCss(U.shade(c1, -0.5)));
+            ctx.fillStyle = gr;
+            ctx.beginPath();
+            ctx.ellipse(p.x + p.nx * r * sgn * 0.6, p.y + p.ny * r * sgn * 0.6,
+                        r, r * 0.72, Math.atan2(p.ty, p.tx), 0, TAU);
+            ctx.fill();
+          }
+          break;
+        }
+
+        /* A second, thinner limb running beside the blank and rejoining it. */
+        case 'offSpine': {
+          ctx.strokeStyle = U.rgbToCss(U.shade(c1, -0.1), 0.9);
+          ctx.lineWidth = Math.max(0.5, wButt * 0.4);
+          ctx.beginPath();
+          for (let n = 0; n <= 20; n++) {
+            const u = n / 20;
+            const k = 0.26 + 0.52 * u;
+            const p = nAt(g, k);
+            const o = Math.sin(u * Math.PI) * W(k) * 3.4;
+            const x = p.x - p.nx * o, y = p.y - p.ny * o;
+            n ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+          }
+          ctx.stroke();
+          break;
+        }
+
+        /* A wrapped repair over a break. */
+        case 'splint': {
+          const k = 0.44;
+          const p = nAt(g, k);
+          const w = W(k);
+          plate(ctx, g, k, [[-w * 2.6, -w * 0.95], [w * 2.6, -w * 0.95],
+                            [w * 2.6, w * 0.95], [-w * 2.6, w * 0.95]],
+                1, U.shade(metalRgb, -0.25), 0.34);
+          ctx.strokeStyle = U.rgbToCss(U.shade(gripRgb, 0.2), 0.9);
+          ctx.lineWidth = Math.max(0.35, scale * 0.5);
+          for (let n = 0; n < 6; n++) {
+            const kk = k - 0.024 + n * 0.0095;
+            ringPath(ctx, g, kk, w * 1.05, 0.34);
+            ctx.stroke();
+          }
+          break;
+        }
+
+        /* One section that plainly did not come with the others. */
+        case 'mismatch': {
+          const w0 = W(0.62), w1 = W(0.80);
+          ctx.fillStyle = U.rgbToCss(U.shade(U.mixRgb(c1, metalRgb, 0.5), -0.2));
+          taper(ctx, g, 0.62, 0.80, w0 * 1.06, w1 * 1.06, 6);
+          ctx.fill();
+          collar(ctx, g, 0.62, 0.007, w0 * 1.3, metalRgb, 0.5);
+          collar(ctx, g, 0.80, 0.007, w1 * 1.3, metalRgb, 0.5);
+          break;
+        }
+
+        /* Cord binding, at the two places a shaft weapon would carry it. */
+        case 'lashings': {
+          for (const k of [F.grip.len + 0.03, 0.70]) {
+            const w = W(k);
+            ctx.strokeStyle = U.rgbToCss(U.shade(gripRgb, 0.28), 0.95);
+            ctx.lineWidth = Math.max(0.4, scale * 0.62);
+            for (let n = 0; n < 7; n++) {
+              const kk = k + n * 0.008;
+              ringPath(ctx, g, kk, w * 0.86, 0.34);
+              ctx.stroke();
+            }
+          }
+          break;
+        }
+
+        /* A brass ferrule where a two-piece rod comes apart. */
+        case 'ferruleBrass': {
+          collar(ctx, g, 0.52, 0.014, W(0.52) * 1.5, metalRgb, 0.6);
+          break;
+        }
+      }
+    }
+  }
+
   function pull() {
     const S = VF.fishing && VF.fishing.S;
     if (!S) return 0;
@@ -903,7 +1632,25 @@
     /* How this particular rod is built — guide count and form, grip material,
        what is inlaid down the blank, how it ends at both ends. Everything that
        used to be identical on all hundred and twenty-nine of them. */
-    const sig = VF.rodSig ? VF.rodSig.of(rod) : null;
+    let sig = VF.rodSig ? VF.rodSig.of(rod) : null;
+    /* What the rod is actually BUILT like — see js/render/rodFrame.js. The
+       signature above decides the jewellery; the frame decides the shape, and
+       the shape is what survives being reduced to a silhouette. Where the two
+       disagree the frame wins, because a bone rod's guides are the bone rod's
+       guides however the hash felt about it. */
+    const F = VF.rodFrame ? VF.rodFrame.of(rod) : null;
+    if (sig && F) {
+      sig = {
+        grade: sig.grade, seed: sig.seed, phase: sig.phase,
+        guides: F.guideAt, guideForm: F.guides.form, guideScale: F.guides.scale,
+        taper: sig.taper, ferrules: F.extras.indexOf('sectionCollars') >= 0 ? [] : sig.ferrules,
+        wraps: sig.wraps, wrapWidth: sig.wrapWidth,
+        grip: F.grip.kind, gripLen: F.blankAt + F.grip.len, checks: sig.checks,
+        seat: sig.seat, inlay: sig.inlay, inlayDensity: sig.inlayDensity,
+        butt: sig.butt, tip: sig.tip,
+        reel: sig.reel, reelSize: F.reel.scale, reelAt: F.reel.at
+      };
+    }
     // stroke weight tracks rod length; `weight` compensates for canvases
     // drawn at a higher resolution than they are displayed
     const scale = U.clamp(g.len / 300, 0.55, 1.35) * (opts.weight || 1);
@@ -914,6 +1661,10 @@
     const stoneRgb = U.hexToRgb(art.stone || art.tip);
     const under = opts.under === undefined ? 1 : opts.under;   // which side the reel hangs
 
+    /* From here down `g` is the frame's spine, not the scene's. The tip is in
+       the same place either way, so the line still comes off the end of it. */
+    g = frameSpine(g, F);
+
     if (art.apex) {
       apexUnder(ctx, art, g, t, scale, tipRgb);
     } else if (art.glow > 0.02) {
@@ -922,17 +1673,22 @@
       ctx.strokeStyle = U.rgbToCss(tipRgb, 0.13 * art.glow);
       ctx.lineWidth = Math.max(4, 7 * scale);
       ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(g.bx, g.by);
-      ctx.quadraticCurveTo(g.cx, g.cy, g.tx, g.ty);
+      spinePath(ctx, g);
       ctx.stroke();
       ctx.restore();
     }
 
-    /* ---- the blank: one continuous taper from a thick butt to a hair tip ---- */
-    const wButt = Math.max(1.8, 5.0 * scale * (sig ? U.lerp(0.92, 1.10, sig.taper - 0.78) : 1));
-    const wTip = Math.max(0.55, 0.85 * scale * (sig ? U.lerp(1.15, 0.80, sig.taper - 0.78) : 1));
-    drawBlank(ctx, g, wButt, wTip, c1, c2, tipRgb, scale);
+    /* ---- the blank ----
+       Not one continuous taper any more. The frame's profile decides the
+       thickness at every point, which is where most of the silhouette lives:
+       a parallel harpoon shaft, a noded cane, a stepped telescopic, or a
+       crystal that gets wider toward the tip rather than thinner. */
+    const wButt = Math.max(1.8, 5.0 * scale * (sig ? U.lerp(0.92, 1.10, sig.taper - 0.78) : 1))
+                  * (F ? F.wButt : 1);
+    const wTip = Math.max(0.55, 0.85 * scale * (sig ? U.lerp(1.15, 0.80, sig.taper - 0.78) : 1))
+                 * (F ? F.wTip : 1);
+    drawBlank(ctx, g, wButt, wTip, c1, c2, tipRgb, scale,
+              F ? F.profile : null, F ? F.blankAt : 0);
 
     // whatever is set into the blank goes on before the family flourish, so a
     // style that lights the rod lights the inlay too
@@ -968,13 +1724,25 @@
 
     for (let i = 0; i < guides.length; i++) {
       const k = guides[i];
-      const rr = Math.max(0.8, U.lerp(3.0, 1.1, k) * scale * gScale);
+      /* A guide is sized off the blank it is standing on. That used to be a
+         fixed ramp, so a harpoon shaft twice as thick as a whip carried the
+         same rings — and the rings are half of what a rod's outline is. */
+      const local = F ? blankW(F, wButt, wTip, k) / Math.max(0.4, wButt) : U.lerp(1, 0.4, k);
+      const rr = Math.max(0.8, U.lerp(3.0, 1.1, k) * scale * gScale * U.lerp(0.75, 1.5, local));
       drawGuide(ctx, g, k, gForm, rr, scale, under, ringLit, ringDark, tipRgb,
                 t, sig ? sig.phase : 0);
     }
 
-    // the tip-top, in whichever way this rod ends
-    if (sig) drawTipTop(ctx, g, sig, scale, ringLit, ringDark, tipRgb, t);
+    // the tip-top, in whichever way this rod ends — the frame first, because
+    // the end of the rod is the part of a silhouette furthest from everything
+    // else and therefore the part that names it
+    let tipDone = false;
+    if (F) {
+      tipDone = drawFrameTip(ctx, g, F, scale, blankW(F, wButt, wTip, 1),
+                             ringLit, ringDark, tipRgb, metalRgb, t);
+    }
+    if (tipDone) { /* the frame ended it */ }
+    else if (sig) drawTipTop(ctx, g, sig, scale, ringLit, ringDark, tipRgb, t);
     else {
       const p = ptAt(g, 1);
       const m = Math.hypot(p.dx, p.dy) || 1;
@@ -1009,20 +1777,217 @@
           U.hexToRgb(art.stone || art.tip), 6);
     }
 
-    drawReel(ctx, g, art, t, scale, opts, under, tipRgb, c1, c2, sig, metalRgb);
-    drawReelStyle(ctx, art, g, t, scale, under, tipRgb, c1, c2);
+    /* The structure the frame bolts on: a crossbar, a counterweight, rib
+       spurs, a splint over a break. Before the reel, so the reel sits in front
+       of anything it overlaps. */
+    if (F) drawFrameExtras(ctx, g, F, scale, wButt, wTip, metalRgb, gripRgb, tipRgb, c1, t);
+
+    /* Which side the reel hangs, and how far along. A centrepin frame puts it
+       behind the hand; a harpoon puts it forward of the grip. */
+    const rUnder = F ? under * (F.reel.side || 1) : under;
+    drawReel(ctx, g, art, t, scale, opts, rUnder, tipRgb, c1, c2, sig, metalRgb, F);
+    /* The family flourishes that decorate a spinning reel are drawn where a
+       spinning reel is. A frame that put its reel somewhere else does not get
+       them, rather than getting them hanging in the air beside it. */
+    if (!F || F.reel.kind === 'spin') drawReelStyle(ctx, art, g, t, scale, rUnder, tipRgb, c1, c2);
   }
 
   /* A spinning reel: seat, stem, spool with a line wrap, bail and a crank
      that actually turns when the player is reeling. */
-  function drawReel(ctx, g, art, t, scale, opts, under, tipRgb, c1, c2, sig, metalRgb) {
+  /* Five reels that are not a spinning reel.
+
+     A spinning reel hanging under the blank a fifth of the way up was on every
+     rod in the game, and a reel is the largest single object bolted to a rod —
+     so where it is and what shape it is does more for a silhouette than
+     anything except the blank itself. A centrepin's is a big thin disc behind
+     the hand. A harpoon's is a drum lying along the shaft. An alien one is not
+     touching the rod at all. */
+  function drawFrameReel(ctx, g, F, t, scale, opts, under, metalRgb, c1, c2, glowRgb, sig) {
+    const k = F.reel.at;
+    const p = nAt(g, k);
+    const rr = Math.max(2.6, 6.0 * scale * F.reel.scale);
+    const nx = p.nx * under, ny = p.ny * under;
+    const spin = (opts.spin || 0) + (F.phase || 0);
+    const lit = U.mixRgb(metalRgb, [255, 255, 255], 0.5);
+
+    function body(cx, cy, R, squash, rot) {
+      const gr = ctx.createRadialGradient(cx - R * 0.3, cy - R * 0.36, R * 0.08, cx, cy, R);
+      gr.addColorStop(0, U.rgbToCss(lit));
+      gr.addColorStop(0.55, U.rgbToCss(metalRgb));
+      gr.addColorStop(1, U.rgbToCss(U.shade(metalRgb, -0.68)));
+      ctx.fillStyle = gr;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, R, R * squash, rot, 0, TAU);
+      ctx.fill();
+      ctx.strokeStyle = U.rgbToCss(U.shade(metalRgb, -0.5), 0.9);
+      ctx.lineWidth = Math.max(0.4, R * 0.10);
+      ctx.stroke();
+    }
+
+    switch (F.reel.kind) {
+
+      /* A drum lying along the shaft, on top of it rather than under. */
+      case 'drum': {
+        const L = rr * 2.1, R = rr * 0.95;
+        const cx = p.x + nx * R * 0.9, cy = p.y + ny * R * 0.9;
+        const ax = p.tx, ay = p.ty;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(Math.atan2(ay, ax));
+        const bg = ctx.createLinearGradient(0, -R, 0, R);
+        bg.addColorStop(0, U.rgbToCss(U.shade(metalRgb, -0.62)));
+        bg.addColorStop(0.34, U.rgbToCss(lit));
+        bg.addColorStop(1, U.rgbToCss(U.shade(metalRgb, -0.7)));
+        ctx.fillStyle = bg;
+        ctx.beginPath();
+        ctx.rect(-L / 2, -R, L, R * 2);
+        ctx.fill();
+        // the end plates, and the line packed on the drum between them
+        for (const sgn of [-1, 1]) {
+          ctx.fillStyle = U.rgbToCss(U.shade(metalRgb, sgn < 0 ? -0.2 : -0.45));
+          ctx.beginPath();
+          ctx.ellipse(sgn * L / 2, 0, R * 0.36, R * 1.06, 0, 0, TAU);
+          ctx.fill();
+        }
+        ctx.fillStyle = U.rgbToCss(U.shade(c1, 0.2), 0.55);
+        ctx.fillRect(-L * 0.30, -R * 0.72, L * 0.60, R * 1.44);
+        // and a crank on the near plate
+        ctx.strokeStyle = U.rgbToCss(lit);
+        ctx.lineWidth = Math.max(0.5, R * 0.20);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(L / 2, 0);
+        ctx.lineTo(L / 2 + Math.cos(spin) * R * 0.2, Math.sin(spin) * R * 1.25);
+        ctx.stroke();
+        ctx.restore();
+        break;
+      }
+
+      /* A big thin disc, mostly rim. Behind the hand on a centrepin frame. */
+      case 'pin': {
+        const R = rr * 1.55;
+        const cx = p.x + nx * R * 0.52, cy = p.y + ny * R * 0.52;
+        body(cx, cy, R, 0.94, 0);
+        ctx.strokeStyle = U.rgbToCss(U.shade(metalRgb, -0.3), 0.85);
+        ctx.lineWidth = Math.max(0.35, R * 0.07);
+        for (let i = 0; i < 6; i++) {
+          const ang = spin * 0.4 + i * TAU / 6;
+          ctx.beginPath();
+          ctx.moveTo(cx + Math.cos(ang) * R * 0.24, cy + Math.sin(ang) * R * 0.24);
+          ctx.lineTo(cx + Math.cos(ang) * R * 0.82, cy + Math.sin(ang) * R * 0.82);
+          ctx.stroke();
+        }
+        ctx.fillStyle = U.rgbToCss(U.shade(metalRgb, 0.1));
+        ctx.beginPath(); ctx.arc(cx, cy, R * 0.20, 0, TAU); ctx.fill();
+        // the foot back to the blank
+        ctx.strokeStyle = U.rgbToCss(U.shade(metalRgb, -0.35));
+        ctx.lineWidth = Math.max(0.6, rr * 0.34);
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y); ctx.lineTo(cx, cy); ctx.stroke();
+        break;
+      }
+
+      /* Not touching it. */
+      case 'orb': {
+        const R = rr * 0.92;
+        const drift = Math.sin(t * 0.6 + (F.phase || 0)) * R * 0.22;
+        const cx = p.x + nx * R * 2.4 + p.tx * drift;
+        const cy = p.y + ny * R * 2.4 + p.ty * drift;
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const hg = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 2.4);
+        hg.addColorStop(0, U.rgbToCss(glowRgb, 0.30));
+        hg.addColorStop(1, U.rgbToCss(glowRgb, 0));
+        ctx.fillStyle = hg;
+        ctx.fillRect(cx - R * 2.6, cy - R * 2.6, R * 5.2, R * 5.2);
+        ctx.restore();
+        body(cx, cy, R, 1, 0);
+        // two rings around it, turning
+        for (let i = 0; i < 2; i++) {
+          ctx.strokeStyle = U.rgbToCss(U.mixRgb(glowRgb, [255, 255, 255], 0.4), 0.7);
+          ctx.lineWidth = Math.max(0.4, R * 0.12);
+          ctx.beginPath();
+          ctx.ellipse(cx, cy, R * 1.5, R * (0.34 + i * 0.5),
+                      spin * (i ? -0.5 : 0.7) + i * 1.1, 0, TAU);
+          ctx.stroke();
+        }
+        // and the line going back to the blank without anything holding it
+        ctx.strokeStyle = U.rgbToCss(glowRgb, 0.4);
+        ctx.lineWidth = Math.max(0.3, scale * 0.4);
+        ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(p.x, p.y); ctx.stroke();
+        break;
+      }
+
+      /* Set into the blank line itself. Almost nothing. */
+      case 'inline': {
+        const R = rr * 0.62;
+        const cx = p.x + nx * R * 0.5, cy = p.y + ny * R * 0.5;
+        body(cx, cy, R, 0.86, Math.atan2(p.ty, p.tx));
+        ctx.fillStyle = U.rgbToCss(U.shade(c1, 0.25), 0.7);
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, R * 0.52, R * 0.44, Math.atan2(p.ty, p.tx), 0, TAU);
+        ctx.fill();
+        break;
+      }
+
+      /* A flat disc lying flush against the blank, with a lit slot. */
+      case 'disc': {
+        const R = rr * 1.15;
+        const cx = p.x + nx * R * 0.62, cy = p.y + ny * R * 0.62;
+        body(cx, cy, R, 0.98, 0);
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = U.rgbToCss(glowRgb, 0.75);
+        ctx.lineWidth = Math.max(0.5, R * 0.16);
+        ctx.beginPath();
+        ctx.arc(cx, cy, R * 0.58, spin, spin + 2.4);
+        ctx.stroke();
+        ctx.restore();
+        break;
+      }
+
+      /* A stem carrying a small spool well clear of the blank. */
+      case 'tall': {
+        const R = rr * 0.78, H = rr * 2.6;
+        const cx = p.x + nx * H, cy = p.y + ny * H;
+        // the stem, tapered
+        ctx.beginPath();
+        ctx.moveTo(p.x - p.tx * rr * 0.5, p.y - p.ty * rr * 0.5);
+        ctx.lineTo(p.x + p.tx * rr * 0.5, p.y + p.ty * rr * 0.5);
+        ctx.lineTo(cx + p.tx * rr * 0.22, cy + p.ty * rr * 0.22);
+        ctx.lineTo(cx - p.tx * rr * 0.22, cy - p.ty * rr * 0.22);
+        ctx.closePath();
+        const sg2 = ctx.createLinearGradient(p.x - p.tx * rr, p.y - p.ty * rr,
+                                             p.x + p.tx * rr, p.y + p.ty * rr);
+        sg2.addColorStop(0, U.rgbToCss(U.shade(metalRgb, -0.6)));
+        sg2.addColorStop(0.4, U.rgbToCss(lit));
+        sg2.addColorStop(1, U.rgbToCss(U.shade(metalRgb, -0.55)));
+        ctx.fillStyle = sg2;
+        ctx.fill();
+        body(cx, cy, R, 0.9, 0);
+        gem(ctx, cx, cy, R * 0.4, Math.atan2(p.ty, p.tx), glowRgb, 6);
+        break;
+      }
+
+      default:
+        return false;
+    }
+    return true;
+  }
+
+  function drawReel(ctx, g, art, t, scale, opts, under, tipRgb, c1, c2, sig, metalRgb, F) {
+    if (F && F.reel.kind !== 'spin' &&
+        drawFrameReel(ctx, g, F, t, scale, opts, under, metalRgb || U.hexToRgb(art.tip),
+                      c1, c2, tipRgb, sig)) return;
     const a = g.angle;
     const cosA = Math.cos(a), sinA = Math.sin(a);
     const nx = -sinA * under, ny = cosA * under;
     const rr = Math.max(2.8, 6.0 * scale * (sig ? sig.reelSize : 1));
     const seatK = sig ? sig.reelAt : 0.215;
-    const sx = g.bx + cosA * g.len * seatK;
-    const sy = g.by + sinA * g.len * seatK;
+    /* On the spine rather than on the straight line between the ends: a rod
+       that bends as hard as some of these do left its own reel behind. */
+    const seatP = ptAt(g, seatK);
+    const sx = seatP.x, sy = seatP.y;
     const cx = sx + nx * rr * 1.9, cy = sy + ny * rr * 1.9;
 
     /* The reel seat. It was a flat grey slab on every rod in the game, sitting
@@ -1246,9 +2211,7 @@
         ctx.globalCompositeOperation = 'lighter';
         ctx.strokeStyle = U.rgbToCss(tipRgb, 0.22);
         ctx.lineWidth = Math.max(1.6, 2.6 * scale);
-        ctx.beginPath();
-        ctx.moveTo(g.bx, g.by);
-        ctx.quadraticCurveTo(g.cx, g.cy, g.tx, g.ty);
+        spinePath(ctx, g);
         ctx.stroke();
         ctx.restore();
         break;
@@ -1274,9 +2237,14 @@
       case 'glass': {
         ctx.strokeStyle = 'rgba(255,255,255,0.75)';
         ctx.lineWidth = Math.max(0.5, 0.9 * scale);
+        // sampled rather than a second quadratic: on an S-curved spine the
+        // control point is near the butt and a curve through it swings wide
         ctx.beginPath();
-        ctx.moveTo(U.lerp(g.bx, g.tx, 0.16), U.lerp(g.by, g.ty, 0.16));
-        ctx.quadraticCurveTo(g.cx, g.cy, g.tx, g.ty);
+        for (let hk = 0; hk <= 16; hk++) {
+          const kk = 0.16 + 0.84 * (hk / 16);
+          const hp = ptAt(g, kk);
+          hk ? ctx.lineTo(hp.x, hp.y) : ctx.moveTo(hp.x, hp.y);
+        }
         ctx.stroke();
         break;
       }
@@ -2026,9 +2994,7 @@
         seam.addColorStop(1, U.rgbToCss(tipRgb, 0.20));
         ctx.strokeStyle = seam;
         ctx.lineWidth = Math.max(0.6, 1.3 * scale);
-        ctx.beginPath();
-        ctx.moveTo(g.bx, g.by);
-        ctx.quadraticCurveTo(g.cx, g.cy, g.tx, g.ty);
+        spinePath(ctx, g);
         ctx.stroke();
         ctx.restore();
         break;
@@ -2141,9 +3107,7 @@
         // a standing charge along the whole blank
         ctx.strokeStyle = U.rgbToCss(tipRgb, 0.16 + 0.10 * Math.sin(t * 5.5));
         ctx.lineWidth = Math.max(1.4, 2.4 * scale);
-        ctx.beginPath();
-        ctx.moveTo(g.bx, g.by);
-        ctx.quadraticCurveTo(g.cx, g.cy, g.tx, g.ty);
+        spinePath(ctx, g);
         ctx.stroke();
         ctx.restore();
         break;
@@ -2197,9 +3161,7 @@
         ctx.globalCompositeOperation = 'lighter';
         ctx.strokeStyle = U.rgbToCss(tipRgb, 0.10 + 0.06 * Math.sin(t * 1.3));
         ctx.lineWidth = Math.max(0.8, 1.6 * scale);
-        ctx.beginPath();
-        ctx.moveTo(g.bx, g.by);
-        ctx.quadraticCurveTo(g.cx, g.cy, g.tx, g.ty);
+        spinePath(ctx, g);
         ctx.stroke();
         ctx.restore();
         break;
@@ -2276,9 +3238,7 @@
         ctx.globalCompositeOperation = 'lighter';
         ctx.strokeStyle = U.rgbToCss(tipRgb, 0.85);
         ctx.lineWidth = Math.max(0.8, 1.5 * scale);
-        ctx.beginPath();
-        ctx.moveTo(g.bx, g.by);
-        ctx.quadraticCurveTo(g.cx, g.cy, g.tx, g.ty);
+        spinePath(ctx, g);
         ctx.stroke();
         ctx.restore();
 
@@ -2694,9 +3654,7 @@
         // a core of molten gold sitting inside the char
         ctx.strokeStyle = U.rgbToCss(gold, 0.30 + 0.14 * Math.sin(t * 4.1));
         ctx.lineWidth = Math.max(1.2, 2.2 * scale);
-        ctx.beginPath();
-        ctx.moveTo(g.bx, g.by);
-        ctx.quadraticCurveTo(g.cx, g.cy, g.tx, g.ty);
+        spinePath(ctx, g);
         ctx.stroke();
         // and the throw-off from the top
         const pT = nAt(g, 1);
@@ -2726,9 +3684,7 @@
           ctx.strokeStyle = U.rgbToCss(neon, pair[1]);
           ctx.lineWidth = Math.max(0.5, pair[0] * scale);
           ctx.lineCap = 'round';
-          ctx.beginPath();
-          ctx.moveTo(g.bx, g.by);
-          ctx.quadraticCurveTo(g.cx, g.cy, g.tx, g.ty);
+          spinePath(ctx, g);
           ctx.stroke();
         });
         for (let i = 0; i < 4; i++) {
@@ -2919,9 +3875,7 @@
         // a thin seam of light running between them along the dark blank
         ctx.strokeStyle = U.rgbToCss(white, 0.22 + 0.10 * Math.sin(t * 2.2));
         ctx.lineWidth = Math.max(0.4, 0.7 * scale);
-        ctx.beginPath();
-        ctx.moveTo(g.bx, g.by);
-        ctx.quadraticCurveTo(g.cx, g.cy, g.tx, g.ty);
+        spinePath(ctx, g);
         ctx.stroke();
         // and motes off both, going nowhere in particular
         for (let i = 0; i < 10; i++) {
@@ -3946,10 +4900,28 @@
     /* A rod with a head past the tip needs the room for it — the head is the
        rod, and a preview that crops it is showing the wrong object. `reach`
        says how far past the tip-top the thing goes, in tip-to-butt lengths. */
-    const reach = rod.art.reach || 0;
+    const F = VF.rodFrame ? VF.rodFrame.of(rod) : null;
+    const reach = Math.max(rod.art.reach || 0, (F && F.reach) || 0);
     const pad = w * 0.035;
+
+    /* Drawn at its real length relative to the rest of the shelf, rather than
+       stretched to fill the box.
+
+       Every rod being exactly as long as the box is a lie the preview was
+       telling: `art.len` runs from 0.78 to past 1.7 and the scene uses all of
+       it, so a rod more than twice the length of another was being shown at
+       the same size with a slightly different taper. Length is half of what
+       makes two objects look like different objects, and it was the half being
+       thrown away. The short ones are short now. */
+    const span = VF.rods && VF.rods.lenSpan ? VF.rods.lenSpan() : null;
+    let fill = 1;
+    if (span && span.hi > span.lo && isFinite(rod.art.len)) {
+      fill = 0.68 + 0.32 * Math.pow(U.clamp((rod.art.len - span.lo) / (span.hi - span.lo), 0, 1), 0.72);
+    }
+
     const bx = pad, by = h * 0.86;
-    const tx = w - pad - w * 0.13 * reach, ty = h * 0.16 + h * 0.34 * reach;
+    const fx = w - pad - w * 0.13 * reach, fy = h * 0.16 + h * 0.34 * reach;
+    const tx = bx + (fx - bx) * fill, ty = by + (fy - by) * fill;
     const len = Math.hypot(tx - bx, ty - by);
     const angle = Math.atan2(ty - by, tx - bx);
     const flex = 0.10 + Math.sin(t * 0.8) * 0.02;
@@ -3971,5 +4943,6 @@
     ctx.stroke();
   }
 
-  VF.rodArt = { draw: draw, preview: preview, quadAt: quadAt, tick: tick };
+  VF.rodArt = { draw: draw, preview: preview, quadAt: quadAt, tick: tick,
+                spine: frameSpine };
 })(window.VF = window.VF || {});

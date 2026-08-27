@@ -440,7 +440,25 @@
 /* @end-admin */
 
 
+  /* The shortest and longest rod on the shelf, so a preview can draw one at its
+     real length instead of stretching every rod to the same box. Recomputed
+     when the wanderer's hundred are appended. */
+  let span = null;
+  function lenSpan() {
+    if (span) return span;
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 0; i < LIST.length; i++) {
+      const l = LIST[i].art && LIST[i].art.len;
+      if (!l || LIST[i].admin) continue;
+      if (l < lo) lo = l;
+      if (l > hi) hi = l;
+    }
+    span = { lo: isFinite(lo) ? lo : 0.78, hi: isFinite(hi) ? hi : 1.7 };
+    return span;
+  }
+
   VF.rods = {
+    lenSpan: lenSpan,
     list: LIST,
 /* @admin-only */
     admin: admin,
@@ -455,6 +473,8 @@
       // so appending the wanderer's hundred moves everybody and the answers
       // have to be thrown away
       if (VF.rodSig) VF.rodSig.clear();
+      span = null;
+      if (VF.rodFrame) VF.rodFrame.clear();
     },
     get: function (id) { return BY_ID[id] || BY_ID.wood; },
     index: function (id) { for (let i = 0; i < LIST.length; i++) if (LIST[i].id === id) return i; return 0; },
