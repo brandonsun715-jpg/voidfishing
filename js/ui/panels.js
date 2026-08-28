@@ -222,6 +222,7 @@
     if (current) closeNow();
     stopRodLoop();
     stopMapLoop();
+    if (VF.boatUI) VF.boatUI.stop();
     gen++;
     current = id;
     curTab = tab === undefined ? null : tab;
@@ -260,6 +261,7 @@
   function closeNow() {
     stopRodLoop();
     stopMapLoop();
+    if (VF.boatUI) VF.boatUI.stop();
     current = null; node = null; curTab = null;
     returnFocus();
     VF.state.rt.panelOpen = null;
@@ -278,6 +280,7 @@
     if (!current) return;
     stopRodLoop();
     stopMapLoop();
+    if (VF.boatUI) VF.boatUI.stop();
     if (tab === undefined) tab = curTab; else curTab = tab;
     const id = current, prev = node;
     /* Where the reader was. A panel is rebuilt from scratch on every change,
@@ -337,6 +340,17 @@
     return c;
   }
 
+  /* The panel furniture, as an object a module outside this file can build
+     with. Nothing in here is stateful; `refresh` and `close` are the two live
+     wires and both already exist. */
+  function scaffold() {
+    return { shell: shell, body: body, tabs: function (items, active, pick) {
+               return tabs(items, active, pick);
+             },
+             statCell: statCell, priceEl: priceEl,
+             refresh: refresh, close: close };
+  }
+
   function build(id, tab) {
     switch (id) {
       case 'shop': return buildShop(tab || 'rods');
@@ -345,6 +359,10 @@
       case 'stats': return buildStats(tab || 'stats');
       case 'settings': return buildSettings();
       case 'map': return buildMap();
+      /* Built by its own module, handed the same scaffold every other panel
+         is built from — so the boatyard is a different set of rows inside the
+         same furniture rather than a second panel system. */
+      case 'boat': return VF.boatUI.build(scaffold(), tab || 'boat');
       case 'merchant': return buildMerchant();
       case 'cases': return buildCases();
       case 'wardrobe': return buildWardrobe(tab || 'all');
@@ -1403,14 +1421,136 @@
     return wrap;
   }
 
+  /* Leads, and the expeditions they open into. What the player is currently
+     chasing, in the order they could act on it. */
+  function leadsView(b, leads) {
+    const d = VF.state.data;
+    const run = VF.expedition ? VF.expedition.current() : null;
+
+    if (run) {
+      b.appendChild(U.el('div', 'panel-note', 'under way'));
+      b.appendChild(expCard({ def: run.def, started: 1, done: 0, leg: run.rec.leg, open: 1 }, run));
+    }
+
+    b.appendChild(U.el('div', 'panel-note', 'leads'));
+    if (!leads.length) {
+      b.appendChild(U.el('div', 'empty',
+        'nothing is pointing anywhere yet. strange catches leave clues, and clues point somewhere.'));
+    } else {
+      leads.forEach(function (l) {
+        const card = U.el('div', 'lead' + (l.ready ? ' ready' : ''));
+        card.appendChild(U.el('div', 'lead-name', l.def.name));
+        card.appendChild(U.el('div', 'lead-note', l.def.note));
+        const where = l.def.where ? VF.locations.get(l.def.where).name : 'anywhere';
+        const need = U.el('div', 'lead-need' + (l.ready ? ' met' : ''),
+          where.toLowerCase() + (l.def.need ? ' · ' + l.def.need : '') +
+          (l.ready ? ' · you are standing in it' : ''));
+        card.appendChild(need);
+        b.appendChild(card);
+      });
+    }
+
+    /* Expeditions that a lead has opened but that are not running. */
+    const offer = VF.expedition ? VF.expedition.offered().filter(function (x) {
+      return x.open && !x.started;
+    }) : [];
+    if (offer.length) {
+      b.appendChild(U.el('div', 'panel-note', 'expeditions'));
+      offer.forEach(function (x) { b.appendChild(expCard(x, null)); });
+    }
+    const done = VF.expedition ? VF.expedition.offered().filter(function (x) { return x.done; }) : [];
+    if (done.length) {
+      b.appendChild(U.el('div', 'panel-note', 'finished'));
+      done.forEach(function (x) { b.appendChild(expCard(x, null)); });
+    }
+  }
+
+  function expCard(x, run) {
+    const def = x.def;
+    const card = U.el('div', 'exp' + (x.started && !x.done ? ' running' : ''));
+    const head = U.el('div', 'exp-head');
+    head.appendChild(U.el('span', 'exp-name', def.name));
+    head.appendChild(U.el('span', 'exp-stage',
+      x.done ? 'done' : x.started ? 'leg ' + (x.leg + 1) + ' of ' + def.legs.length : 'ready'));
+    card.appendChild(head);
+    card.appendChild(U.el('div', 'exp-obj', def.objective));
+
+    const legs = U.el('div', 'exp-legs');
+    def.legs.forEach(function (_, i) {
+      legs.appendChild(U.el('div', 'exp-leg' +
+        (i < x.leg ? ' done' : i === x.leg && x.started && !x.done ? ' now' : '')));
+    });
+    card.appendChild(legs);
+
+    if (x.started && !x.done && run && run.leg) {
+      card.appendChild(U.el('div', 'exp-obj', run.leg.task));
+      const w = run.leg.at ? VF.locations.get(run.leg.at).name : 'anywhere';
+      card.appendChild(U.el('div', 'exp-where',
+        w.toLowerCase() + (run.leg.hint ? ' · ' + run.leg.hint : '')));
+    } else if (!x.started) {
+      card.appendChild(U.el('div', 'exp-where', def.need));
+      const btn = U.el('button', 'mod-buy', 'begin');
+      btn.addEventListener('click', function () {
+        if (VF.expedition.begin(def.id)) refresh('leads');
+      });
+      card.appendChild(btn);
+    }
+    return card;
+  }
+
+  /* The field notes: what has been met, and what it did. A creature that has
+     escaped but never been landed is listed with what is known about it,
+     which is the escape line and nothing else. */
+  function fieldView(b) {
+    const d = VF.state.data;
+    const seen = VF.creatureData.list.filter(function (c) {
+      return (d.creatures || {})[c.id];
+    });
+    if (!seen.length) {
+      b.appendChild(U.el('div', 'empty',
+        'nothing has happened to you yet that was not a fish.'));
+      return;
+    }
+    const cc = VF.creatureData.counts();
+    b.appendChild(U.el('div', 'panel-note',
+      cc.caught + ' landed · ' + cc.met + ' met · ' + cc.total + ' out there'));
+    seen.forEach(function (c) {
+      const r = d.creatures[c.id];
+      const card = U.el('div', 'exp' + (r.caught ? ' running' : ''));
+      const head = U.el('div', 'exp-head');
+      head.appendChild(U.el('span', 'exp-name', r.caught ? c.name : '???'));
+      head.appendChild(U.el('span', 'exp-stage',
+        r.caught ? 'landed ×' + r.caught : 'met ×' + r.met));
+      card.appendChild(head);
+      card.appendChild(U.el('div', 'exp-obj', r.caught ? c.journal : c.blurb));
+      const f = U.el('div', 'exp-found');
+      if (r.escaped) f.appendChild(U.el('span', 'exp-chip', 'got away ×' + r.escaped));
+      if (c.on.locs.length && r.caught) {
+        c.on.locs.forEach(function (l) {
+          f.appendChild(U.el('span', 'exp-chip', VF.locations.get(l).name.toLowerCase()));
+        });
+      }
+      if (f.childElementCount) card.appendChild(f);
+      b.appendChild(card);
+    });
+  }
+
   function buildJournal(tab) {
     const d = VF.state.data;
     const p = shell('Journal', d.journal.length + ' entries · ' +
                     Object.keys(d.secrets).length + ' hidden places found');
     const qn = VF.quests.activeCount();
     const bn = VF.bounties.list().length;
+    /* Three new tabs, in the journal rather than in three new panels: a lead,
+       a creature and an expedition are all the same thing to the player —
+       something written down that they have not finished. */
+    const leads = VF.discovery ? VF.discovery.open() : [];
+    const ready = leads.filter(function (l) { return l.ready; }).length;
+    const cc = VF.creatureData ? VF.creatureData.counts() : { met: 0, caught: 0 };
     p.appendChild(tabs([
       { id: 'quests', label: 'quests' + (qn ? ' ' + qn : '') },
+      { id: 'leads', label: 'leads' + (ready ? ' •' : (leads.length ? ' ' + leads.length : '')) },
+      { id: 'field', label: 'field' + (cc.met ? ' ' + cc.met : '') },
       { id: 'board', label: 'board' + (VF.bounties.anyReady() ? ' •' : (bn ? ' ' + bn : '')) },
       { id: 'entries', label: 'entries' },
       { id: 'people', label: 'people' + (VF.npcs.anyNew() ? ' •' : '') },
@@ -1419,6 +1559,8 @@
     const b = body();
 
     if (tab === 'board') { b.appendChild(boardView()); p.appendChild(b); return p; }
+    if (tab === 'leads') { leadsView(b, leads); p.appendChild(b); return p; }
+    if (tab === 'field') { fieldView(b); p.appendChild(b); return p; }
 
     if (tab === 'quests') {
       const open = VF.quests.visible();
@@ -2681,6 +2823,17 @@
       card.appendChild(tiers);
     }
 
+    /* Anything currently pointing at this water. The chart is where a player
+       decides where to go, so it is where a lead has to be readable. */
+    const ptr = VF.discovery ? VF.discovery.forPlace(loc.id) : [];
+    ptr.forEach(function (l) {
+      const el = U.el('div', 'lead' + (l.ready ? ' ready' : ''));
+      el.appendChild(U.el('div', 'lead-name', l.def.name));
+      el.appendChild(U.el('div', 'lead-note', l.def.note));
+      if (l.def.need) el.appendChild(U.el('div', 'lead-need', l.def.need));
+      card.appendChild(el);
+    });
+
     const meta = U.el('div', 'spot-meta');
     [['rarity', '×' + loc.rarityBoost.toFixed(2)],
      ['value', '×' + loc.valueBoost.toFixed(2)],
@@ -2772,6 +2925,20 @@
       return;
     }
     VF.fishing.reelIn();
+    /* With a hull that can cross, the water between two places is a place.
+       The arrival is identical either way — everything below runs when the
+       crossing lands — so this is the same function with a scene in front of
+       it rather than a second way to travel. */
+    if (VF.voyage && VF.voyage.possible(id)) {
+      close();
+      // where the crossing actually ended up, which is not always where it was pointed
+      VF.voyage.begin(id, function (real) { arrive(real || id); });
+      return;
+    }
+    arrive(id);
+  }
+
+  function arrive(id) {
     const d = VF.state.data;
     d.location = id;
     if (d.seenLocations.indexOf(id) < 0) d.seenLocations.push(id);

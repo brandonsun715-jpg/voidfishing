@@ -356,3 +356,18 @@
   .boat-hud { bottom: clamp(76px, 11vh, 118px); left: 10px; }
   .boat-chip { font-size: 10px; padding: 5px 8px; }
 }
+
+/* Two small pieces of furniture the new panels needed and the old ones did
+   without: a quiet heading inside a scrolling body, and a rule between two
+   groups of rows. Defined here rather than in panels.css because nothing that
+   was already there uses them. */
+.panel-note {
+  margin: 14px 0 8px;
+  font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--ink-3);
+}
+.panel-body > .panel-note:first-child { margin-top: 0; }
+.panel-sep {
+  height: 1px; margin: 18px 0 4px;
+  background: linear-gradient(90deg, var(--line), rgba(255,255,255,0));
+}

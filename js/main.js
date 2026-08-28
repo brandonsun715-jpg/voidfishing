@@ -187,6 +187,8 @@
         VF.conditions.tick(dt);
         VF.encounters.tick(dt);
         VF.creature.tick(dt);
+        VF.voyage.tick(dt);
+        VF.zones.tick(dt);
         VF.quests.tick(dt);
         VF.merchant.tick(dt);
         VF.charter.tick(dt);

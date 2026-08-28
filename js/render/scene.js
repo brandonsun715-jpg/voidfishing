@@ -532,6 +532,7 @@
 
   function update(dt) {
     if (VF.creatureArt) VF.creatureArt.tick(dt);
+    if (VF.zoneArt) VF.zoneArt.tick(dt);
     t += dt;
 
     computeLayout();
@@ -894,6 +895,10 @@
     /* An encounter draws under the line and over the surface: it is in the
        water, not on the screen. Everything it puts there inherits the fog,
        the palette and the shake because it is inside the same transform. */
+    /* What is on the water HERE and nowhere else, under the encounter layer
+       and over the surface: the gulls, the panes, the crystals, the contacts,
+       the bottle drifting in. Half of what makes a zone a zone. */
+    mark('zone', function () { if (VF.zoneArt) VF.zoneArt.draw(ctx, L, P); });
     mark('creature', function () { if (VF.creatureArt) VF.creatureArt.draw(ctx, L, P); });
     mark('line', function () { drawLineAndBobber(P); drawDeparture(P); });
     mark('particles', function () { VF.particles.draw(ctx); });
@@ -2265,6 +2270,16 @@
     for (let i = 1; i < top.length; i++) ctx.lineTo(top[i][0], top[i][1]);
     ctx.stroke();
 
+    /* The boat, moored off the end of the ledge.
+
+       It is alongside rather than underneath on purpose. Every location in
+       this game is a place to sit at the edge of water — that composition is
+       what the nine zones ARE — and putting the angler in a hull would have
+       rewritten all nine of them to add one. Moored, it is on screen in every
+       frame, it carries the paint and the trim and whatever is on its deck,
+       and it reads correctly: that is how you got here and how you leave. */
+    drawBoat(P, endX, lipY);
+
     if (VF.visit && VF.visit.active()) { L.merchant = null; drawVisit(P, rim); return; }
 
     ctx.save();
@@ -2285,6 +2300,49 @@
                           rodState.angle + rodState.sway);
 
     drawMerchant(P, rim);
+  }
+
+  function drawBoat(P, endX, lipY) {
+    if (!VF.boat || !VF.boatArt || !VF.boat.afloat()) return;
+    const fh = L.figureH;
+    /* Moored out rather than alongside the camera. It sits at the depth the
+       perspective ramp calls two thirds of the way out, and takes that
+       depth's scale, so it is unmistakably a boat and unmistakably not the
+       subject of the shot — the subject is the water. */
+    const by = L.horizonY + L.waterH * 0.42;
+    const sc = scaleAt(by);
+    const len = fh * 0.66 * sc;
+    const bx = Math.max(endX + len * 0.80, W * 0.52);
+    const roll = Math.sin(t * 0.7) * 0.030 + Math.sin(t * 1.9) * 0.010;
+    const lift = Math.sin(t * 0.9 + 1) * fh * 0.010 * sc;
+    const light = { bright: P.bright, tint: P.waterTop, k: 0.30 + P.fogAmt * 0.35 };
+
+    ctx.save();
+    // the mooring line back to the ledge
+    ctx.strokeStyle = U.rgbToCss(P.glow, 0.13);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(endX - fh * 0.10, lipY);
+    ctx.quadraticCurveTo((endX + bx) * 0.5, by + fh * 0.16,
+                         bx - len * 0.46, by + lift - len * 0.06);
+    ctx.stroke();
+
+    // and its reflection, before the boat, so the boat sits on top of it
+    ctx.save();
+    ctx.globalAlpha = 0.20 * (1 - P.void * 0.7);
+    ctx.translate(bx, by + lift + len * 0.09);
+    ctx.scale(1, -0.55);
+    ctx.rotate(roll);
+    VF.boatArt.drawMine(ctx, len, { time: t, light: light });
+    ctx.restore();
+
+    ctx.translate(bx, by + lift);
+    ctx.rotate(roll);
+    VF.boatArt.drawMine(ctx, len, { time: t, light: light });
+    ctx.restore();
+
+    // the water it is displacing
+    if (Math.sin(t * 0.7) > 0.985) VF.fx.ripple(bx, by + len * 0.08, len * 0.55, 2.2);
   }
 
   /* The wanderer stands a little up the shore with a case at his side and the

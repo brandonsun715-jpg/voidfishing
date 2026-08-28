@@ -67,6 +67,7 @@
           <button class="mbtn" data-panel="fishdex">Fishdex</button>
           <button class="mbtn" data-panel="bag">Bag</button>
           <button class="mbtn" data-panel="aquarium">Aquarium</button>
+          <button class="mbtn" data-panel="boat">Boat</button>
           <button class="mbtn" data-panel="wardrobe">Wardrobe</button>
           <button class="mbtn" data-panel="journal">Journal</button>
           <button class="mbtn" data-panel="stats">Stats</button>
@@ -126,6 +127,10 @@
         <span id="fightPct" class="fight-pct">&mdash;</span>
       </div>
     </div>
+
+    <!-- Instruments, bottom left. Never takes a press: it is what the boat and
+         this particular water are telling you, not somewhere to go. -->
+    <div id="boatHud" class="boat-hud hidden"></div>
 
     <!-- an encounter. Sits where the fight bar sits, because it is the same
          part of the screen doing the same job: telling you what is on the
@@ -208,6 +213,10 @@
 <script src="js/data/secrets.js"></script>
 <script src="js/data/discoveries.js"></script>
 <script src="js/data/creatures.js"></script>
+<script src="js/data/boats.js"></script>
+<script src="js/data/seas.js"></script>
+<script src="js/data/zones.js"></script>
+<script src="js/data/expeditions.js"></script>
 <script src="js/data/npcs.js"></script>
 <script src="js/data/quests.js"></script>
 <script src="js/data/cosmetics.js"></script>
@@ -229,6 +238,10 @@
 <script src="js/systems/discovery.js"></script>
 <script src="js/systems/parasite.js"></script>
 <script src="js/systems/creature.js"></script>
+<script src="js/systems/boat.js"></script>
+<script src="js/systems/voyage.js"></script>
+<script src="js/systems/zones.js"></script>
+<script src="js/systems/expedition.js"></script>
 <script src="js/systems/wrong.js"></script>
 <script src="js/systems/caseOpen.js"></script>
 <script src="js/systems/visit.js"></script>
@@ -249,6 +262,9 @@
 <script src="js/render/fishArt.js"></script>
 <script src="js/render/astralArt.js"></script>
 <script src="js/render/creatureArt.js"></script>
+<script src="js/render/boatArt.js"></script>
+<script src="js/render/voyageArt.js"></script>
+<script src="js/render/zoneArt.js"></script>
 <script src="js/render/rodSignature.js"></script>
 <script src="js/render/rodFrame.js"></script>
 <script src="js/render/rodArt.js"></script>
@@ -268,6 +284,7 @@
 <script src="js/ui/panels.js"></script>
 <script src="js/ui/catch.js"></script>
 <script src="js/ui/encounterUI.js"></script>
+<script src="js/ui/boatUI.js"></script>
 <script src="js/ui/catchCard.js"></script>
 <script src="js/ui/aquarium.js"></script>
 <script src="js/ui/tutorial.js"></script>

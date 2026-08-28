@@ -22,6 +22,7 @@
       'hud', 'moneyVal', 'levelVal', 'xpFill', 'xpText', 'streakVal', 'locName', 'wxName', 'timeName',
       'chipLoc', 'gearRod', 'gearBait', 'rodName', 'baitName', 'baitCount',
       'castMeter', 'castFill', 'actionBtn', 'actionLabel', 'actionHint',
+      'boatHud',
       'fightUI', 'fightName', 'fightWarn', 'mgTrack', 'mgBar', 'mgFish',
       'mgProg', 'mgProgFill', 'fightHint', 'fightPct',
       'prompt', 'hintBox', 'edgeGlow', 'encounter', 'encText',
@@ -93,6 +94,8 @@
   }
 
   function pressStart(e, px, py) {
+    // a crossing owns the whole screen, and its own card takes the press
+    if (VF.voyage && VF.voyage.active()) { VF.voyage.press(); return; }
     // a sequence owns the input while it is running
     if (VF.cutscene && VF.cutscene.active()) { VF.cutscene.skip(); return; }
     if (VF.state.rt.panelOpen) return;
@@ -109,6 +112,11 @@
       VF.creature.press(px === undefined ? null : px, py === undefined ? null : py);
       return;
     }
+    /* And then whatever this particular water has floating on it. A bottle,
+       a sonar return, a shard, a shape coming in over the flats — pointing at
+       one of those is not a cast, so the zone gets first refusal before the
+       rod does. It only ever takes a press that actually landed on something. */
+    if (VF.zones && px !== undefined && VF.zones.press(px, py)) return;
     if (pressed) return;
     pressed = true;
     const st = VF.fishing.state();
@@ -925,8 +933,60 @@
 
   let chipTimer = 0;
 
+  /* The boat and the water, as two or three chips in the corner. Rebuilt only
+     when what it says changes — this is next to a canvas that is already
+     using the frame, and a DOM write per frame for a string that changes
+     every forty seconds is forty seconds of wasted layout. */
+  /* Whatever this water is saying right now goes through the prompt the game
+     already has, rather than a fourth kind of message box. */
+  let saidZone = '';
+  function tickZoneSay() {
+    if (!VF.zones) return;
+    const line = VF.zones.prompt();
+    if (line === saidZone) return;
+    saidZone = line;
+    if (line) showPrompt(line, VF.locations.current().glow, 3.4);
+  }
+
+  let boatKey = '';
+  function tickBoatHud() {
+    if (!D.boatHud || !VF.boat) return;
+    const show = VF.boat.afloat() && !VF.state.rt.panelOpen;
+    D.boatHud.classList.toggle('hidden', !show);
+    if (!show) return;
+
+    const rows = [];
+    const hull = VF.boat.hull();
+    const sound = Math.round(VF.boat.integrity() * 100);
+    rows.push([hull.name.toLowerCase(), sound < 100 ? sound + '%' : '']);
+
+    const z = VF.zones ? VF.zones.view() : null;
+    if (z) {
+      if (z.moon) rows.push(['moon', z.moon.name.toLowerCase()]);
+      if (z.rule === 'resonance') rows.push(['resonance', Math.round(z.charge * 100) + '%']);
+      if (z.rule === 'inverted') rows.push(['depth', Math.round(z.depth * 100) + '%']);
+      if (z.rule === 'sonar') rows.push(['sonar', z.blind ? 'not fitted' : z.contact ? 'CONTACT' : 'clear']);
+    }
+    const par = VF.parasite && VF.parasite.current();
+    if (par) rows.push([par.def.name.toLowerCase(), par.left + ' left']);
+
+    const key = rows.map(function (r) { return r.join(':'); }).join('|');
+    if (key === boatKey) return;
+    const ping = boatKey && key.indexOf('CONTACT') >= 0 && boatKey.indexOf('CONTACT') < 0;
+    boatKey = key;
+    U.clear(D.boatHud);
+    rows.forEach(function (r) {
+      const c = U.el('div', 'boat-chip' + (ping ? ' ping' : ''));
+      c.appendChild(document.createTextNode(r[0] + (r[1] ? ' ' : '')));
+      if (r[1]) c.appendChild(U.el('b', null, r[1]));
+      D.boatHud.appendChild(c);
+    });
+  }
+
   function tick(dt) {
     if (VF.encounterUI) VF.encounterUI.tick();
+    tickBoatHud();
+    tickZoneSay();
     if (VF.conditions.current()) tickCondition();
     const d = VF.state.data;
     const S = VF.fishing.S;

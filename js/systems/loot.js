@@ -274,6 +274,7 @@
   roll = function (opts) {
     const c = rollPlain(opts);
     if (VF.parasite) { try { VF.parasite.onRoll(c); } catch (e) { /* not worth a cast */ } }
+    if (VF.zones) { try { VF.zones.onRoll(c); } catch (e) { /* nor is a zone rule */ } }
     return c;
   };
 
