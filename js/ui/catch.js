@@ -59,6 +59,7 @@
 
   function banner(c) {
     const traits = c.traits || [];
+    if (c.rarity === 'astral') return { text: 'this is not a fish', color: '#ff4fd8', bow: 1 };
     if (c.rarity === 'unknown') return { text: 'the record has no tier for this', color: '#ffffff' };
     if (c.rarity === 'glitch') return { text: 'this should not be here', color: '#ff2d55' };
     if (traits.length >= 3) return { text: traits.length + ' traits', color: VF.traits.color(traits) };
@@ -118,6 +119,7 @@
 
     const ban = U.el('div', 'catch-banner', b.text);
     ban.style.background = b.color;
+    if (b.bow) ban.classList.add('bow-bg');
     card.appendChild(ban);
 
     const hero = U.el('div', 'catch-hero');
@@ -141,6 +143,7 @@
 
     const rr = U.el('div', 'catch-rarity', r.name);
     rr.style.color = b.color;
+    if (VF.rarities.rainbow(c.rarity)) rr.classList.add('bow-fg');
     body.appendChild(rr);
 
     body.appendChild(U.el('h2', 'catch-name', VF.traits.title(traits, c.fish.name)));
@@ -167,22 +170,33 @@
 
     body.appendChild(U.el('p', 'catch-desc', topTrait ? topTrait.desc : c.fish.desc));
 
+    /* Some things come in one size. A planet does, and so does the thing that
+       stood up in the trench — their kg range is a single number, so the size
+       percentile is a coin toss dressed up as a measurement and the runt-to-
+       giant bar is measuring a set with one member in it. Both come off, and
+       the row says what it can actually say instead. */
+    const fixed = c.fish.kg[0] === c.fish.kg[1];
+    let fill = null;
     const metrics = U.el('div', 'catch-metrics');
     metrics.appendChild(metric('Weight', U.weight(c.kg)));
     metrics.appendChild(metric('Length', U.length(c.m)));
-    metrics.appendChild(metric('Size', U.ordinalPercentile(c.pct)));
+    metrics.appendChild(metric(fixed ? 'Specimens' : 'Size',
+                               fixed ? 'one' : U.ordinalPercentile(c.pct)));
     body.appendChild(metrics);
 
-    const track = U.el('div', 'size-track');
-    const fill = U.el('div', 'size-fill');
-    fill.style.background = 'linear-gradient(90deg, ' + U.rgbToCss(U.hexToRgb(r.color), 0.35) + ', ' + r.glow + ')';
-    track.appendChild(fill);
-    body.appendChild(track);
+    if (!fixed) {
+      const track = U.el('div', 'size-track');
+      fill = U.el('div', 'size-fill');
+      fill.style.background = 'linear-gradient(90deg, ' +
+        U.rgbToCss(U.hexToRgb(r.color), 0.35) + ', ' + r.glow + ')';
+      track.appendChild(fill);
+      body.appendChild(track);
 
-    const note = U.el('div', 'size-note');
-    note.appendChild(U.el('span', null, 'runt'));
-    note.appendChild(U.el('span', null, c.isGiant ? 'a specimen' : 'giant'));
-    body.appendChild(note);
+      const note = U.el('div', 'size-note');
+      note.appendChild(U.el('span', null, 'runt'));
+      note.appendChild(U.el('span', null, c.isGiant ? 'a specimen' : 'giant'));
+      body.appendChild(note);
+    }
 
     const val = U.el('div', 'catch-value');
     const coin = U.el('span', 'coin', '◈');
@@ -213,7 +227,9 @@
     host.appendChild(card);
     host.classList.remove('hidden');
 
-    requestAnimationFrame(function () { fill.style.width = (c.pct * 100).toFixed(1) + '%'; });
+    if (fill) {
+      requestAnimationFrame(function () { fill.style.width = (c.pct * 100).toFixed(1) + '%'; });
+    }
 
     if (c.isNew) {
       VF.audio.discover();

@@ -58,15 +58,33 @@
   function commas(n) {
     return Math.floor(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   }
+  /* Above a million tonnes the comma form stops being a number a person can
+     read and starts being a layout problem — the widest catch card in the game
+     is about twenty characters and 5.97e24 is twenty-nine of them. So the top
+     of the catalogue prints in scientific notation, which is both shorter and
+     the honest way to write it. */
   function weight(kg) {
     if (kg < 0.1) return (kg * 1000).toFixed(0) + ' g';
     if (kg < 1) return kg.toFixed(2) + ' kg';
     if (kg < 100) return kg.toFixed(1) + ' kg';
-    return commas(Math.round(kg)) + ' kg';
+    if (kg < 1e9) return commas(Math.round(kg)) + ' kg';
+    return sci(kg) + ' kg';
   }
   function length(m) {
     if (m < 1) return (m * 100).toFixed(0) + ' cm';
-    return m.toFixed(2) + ' m';
+    if (m < 1e6) return m.toFixed(2) + ' m';
+    return sci(m / 1000) + ' km';
+  }
+  /* 5.97 × 10^24, with a real multiplication sign and a real superscript, so
+     it reads as a magnitude rather than as a broken number. */
+  function sci(n) {
+    const e = Math.floor(Math.log10(Math.abs(n)));
+    const m = n / Math.pow(10, e);
+    const SUP = '\u2070\u00b9\u00b2\u00b3\u2074\u2075\u2076\u2077\u2078\u2079';
+    const digits = String(e).split('').map(function (d) {
+      return d === '-' ? '\u207b' : SUP[+d];
+    }).join('');
+    return m.toFixed(2) + '\u00d710' + digits;
   }
   function duration(sec) {
     sec = Math.max(0, Math.floor(sec));
@@ -146,7 +164,7 @@
     TAU, clamp, lerp, invLerp, smoothstep, smootherstep,
     easeOutCubic, easeInCubic, easeOutBack, easeInOutSine, approach,
     hexToRgb, rgbToCss, mixRgb, shade,
-    money, commas, weight, length, duration, pct, ordinalPercentile,
+    money, commas, weight, length, sci, duration, pct, ordinalPercentile,
     el, qs, qsa, clear, esc, deepClone, byId, now,
     syncBody
   };

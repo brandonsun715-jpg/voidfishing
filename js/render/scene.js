@@ -1591,7 +1591,7 @@
     const a = U.clamp(Math.sin(Math.min(1, k * 1.12) * Math.PI) * 1.45, 0, 1);
     if (a <= 0.01) return;
 
-    const col = U.hexToRgb(VF.rarities.color(A.rarity));
+    const col = VF.rarities.colorAt(A.rarity, t);
     const wob = Math.sin(t * 1.7) * wh * 0.012 * (1 - e * 0.6);
 
     ctx.save();
@@ -2484,7 +2484,8 @@
     const size = VF.fishArt.fitSize(fish, box);
     // whatever body it has — a being, an object or an ordinary fish
     const half = size * 2 * VF.fishArt.bodyRatio(fish.art.body,
-                                                 fish.art.being || fish.art.object);
+                                                 fish.art.being || fish.art.object ||
+                                                 fish.art.astral);
     const surface = L.horizonY + L.waterH * F.surf;
     const k = U.smootherstep(U.clamp(C.rise, 0, 1));
 

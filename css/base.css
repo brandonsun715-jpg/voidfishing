@@ -279,3 +279,41 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
   }
   #grain { animation: none; }
 }
+
+/* ---------------------------------------------------------------- ASTRAL
+
+   The only tier whose colour is not a colour. Every rarity pip, chip and
+   label in the game is painted from js/data/rarities.js with a flat hex; the
+   top one gets that hex inline as its fallback and one of these two classes
+   over the top, and the cascade does the rest — a CSS animation outranks an
+   inline declaration, so nothing has to be driven per frame from script.
+
+   Both keyframe tracks walk the same hues in the same order at the same rate,
+   so a pip and its label stay in step across a whole panel. Under
+   prefers-reduced-motion the block above pins the animation at its first
+   frame, which is a perfectly good magenta — the tier still reads as its own
+   thing without anything moving. */
+@keyframes bow-fg {
+  0%   { color: #ff4fd8; }
+  17%  { color: #ff6a4f; }
+  34%  { color: #ffd24f; }
+  50%  { color: #6bff8f; }
+  67%  { color: #4fd8ff; }
+  84%  { color: #7a6bff; }
+  100% { color: #ff4fd8; }
+}
+@keyframes bow-bg {
+  0%   { background: #ff4fd8; }
+  17%  { background: #ff6a4f; }
+  34%  { background: #ffd24f; }
+  50%  { background: #6bff8f; }
+  67%  { background: #4fd8ff; }
+  84%  { background: #7a6bff; }
+  100% { background: #ff4fd8; }
+}
+.bow-fg { animation: bow-fg 5.6s linear infinite; }
+.bow-bg { animation: bow-bg 5.6s linear infinite; }
+/* A rarity label in this tier is the loudest word on any screen it is on, and
+   it should be: it is the only one a player may never see. */
+.bow-fg { text-shadow: 0 0 10px rgba(255,255,255,0.30); letter-spacing: 0.16em; }
+.bow-bg { box-shadow: 0 0 8px rgba(255,255,255,0.34); }

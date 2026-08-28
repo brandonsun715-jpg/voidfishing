@@ -1003,11 +1003,34 @@
       D.fightUI.classList.add('enter');
       setTimeout(function () { D.fightUI.classList.remove('enter'); }, 320);
       const col = f.c.kind === 'treasure' ? '#d8c79a' : VF.rarities.color(f.c.rarity);
+      /* One tier has no single colour. The marker reads --fishcol, which is
+         normally written here once and then left alone; for that tier the
+         inline value is cleared instead so the animation in css/hud.css owns
+         the variable — an inline custom property on the element beats an
+         animation on an ancestor, so the class has to go on the marker. */
+      const bow = f.c.kind !== 'treasure' && VF.rarities.rainbow(f.c.rarity);
+      D.fightName.classList.toggle('bow-fg', !!bow);
+      D.mgFish.classList.toggle('fight-bow', !!bow);
       D.fightName.textContent = f.c.kind === 'treasure' ? 'something heavy'
         : f.c.isNew ? 'unknown — something new'
         : VF.traits.title(f.c.traits, f.c.fish.name);
       D.fightName.style.color = col;
-      D.mgFish.style.setProperty('--fishcol', col);
+      if (bow) {
+        D.mgFish.style.removeProperty('--fishcol');
+        /* And the marker stops being a fish, because this one is not one.
+           Its own outline only once it has been landed before, though — the
+           bar is on screen for the whole fight and the shape of what is on
+           the end of the line is the reveal. Until then the tier's own mark
+           in css/hud.css stands in, which gives nothing away and is still
+           not a trout. */
+        const seen = !!VF.state.data.fishdex[f.c.id];
+        const gl = seen ? VF.fishArt.glyph(f.c.fish) : '';
+        if (gl) D.mgFish.style.setProperty('--fishglyph', gl);
+        else D.mgFish.style.removeProperty('--fishglyph');
+      } else {
+        D.mgFish.style.setProperty('--fishcol', col);
+        D.mgFish.style.removeProperty('--fishglyph');
+      }
       // sized here and then only when the fight itself moves the walls, which
       // ordinarily never happens and in the heaven's trial happens four times
       shownBarW = -1;

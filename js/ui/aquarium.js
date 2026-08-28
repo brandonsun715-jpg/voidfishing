@@ -342,7 +342,7 @@
     const on = view.kind === 'tank' && view.index === tankIndex && view.specimen === idx;
     const c = U.el('button', 'aq-chip' + (on ? ' on' : ''));
     const pip = U.el('span', 'aq-pip');
-    pip.style.background = VF.rarities.color(k.rarity);
+    VF.rarities.paint(pip, k.rarity, 'background');
     c.appendChild(pip);
     c.appendChild(U.el('span', 'aq-chip-n', f ? f.name : k.id));
     c.appendChild(U.el('span', 'aq-chip-w', U.weight(k.kg)));
@@ -485,7 +485,7 @@
       const f = VF.fish.byId(k.id);
       const c = U.el('button', 'aq-chip');
       const pip = U.el('span', 'aq-pip');
-      pip.style.background = VF.rarities.color(k.rarity);
+      VF.rarities.paint(pip, k.rarity, 'background');
       c.appendChild(pip);
       c.appendChild(U.el('span', 'aq-chip-n', f ? f.name : k.id));
       c.appendChild(U.el('span', 'aq-chip-w', U.weight(k.kg)));
@@ -669,7 +669,7 @@
         const on = cur === k;
         const c = U.el('button', 'aq-chip' + (on ? ' on' : ''));
         const pip = U.el('span', 'aq-pip');
-        pip.style.background = VF.rarities.color(k.rarity);
+        VF.rarities.paint(pip, k.rarity, 'background');
         c.appendChild(pip);
         c.appendChild(U.el('span', 'aq-chip-n', f ? f.name : k.id));
         c.appendChild(U.el('span', 'aq-chip-w', U.weight(k.kg)));

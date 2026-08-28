@@ -9,6 +9,19 @@
   const U = VF.util;
   const TAU = U.TAU;
 
+  /* One scratch canvas, grown as needed and never shrunk, for the two things
+     that need a second buffer: knocking an astral subject down to a flat
+     silhouette, and nothing else so far. Making one per frame at 900px is a
+     visible hitch on a phone; keeping one is not. */
+  let SCRATCH = null;
+  function scratch(side) {
+    const n = Math.max(16, Math.ceil(side));
+    if (typeof document === 'undefined') return null;
+    if (!SCRATCH) SCRATCH = document.createElement('canvas');
+    if (SCRATCH.width < n || SCRATCH.height < n) { SCRATCH.width = n; SCRATCH.height = n; }
+    return SCRATCH;
+  }
+
   function hash(s) {
     let h = 2166136261;
     for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
@@ -32,7 +45,18 @@
   /* `obj` is only consulted for body 'object' and body 'being', where the
      proportions belong to the thing itself rather than to any fish
      silhouette. */
+  /* The eight are drawn from their own centre at a half-height of `size`, but
+     they are not all the same shape around it: a planet is a disc and a kaiju
+     is twice as tall as it is centred. This is the reach above and below the
+     origin in units of `size`, which is what the cutscene framing needs to
+     keep a head in shot. */
+  const ASTRAL_H = {
+    ufo: 0.34, zeus: 1.02, earth: 1.00, kaiju: 1.28,
+    cthulhu: 1.06, kraken: 0.92, sun: 0.96, coin: 0.96
+  };
+
   function bodyRatio(kind, obj) {
+    if (kind === 'astral') return (ASTRAL_H[obj] === undefined ? 1 : ASTRAL_H[obj]) * 0.5;
     if (kind === 'object') return OBJ_H[obj] === undefined ? 0.50 : OBJ_H[obj];
     if (kind === 'being') return BEING_H[obj] === undefined ? 0.60 : BEING_H[obj];
     return BODY_H[kind] === undefined ? 0.30 : BODY_H[kind];
@@ -1536,6 +1560,10 @@
     // being, and there are exactly two of those
     if (art.body === 'object') return drawObject(ctx, fish, size, opts);
     if (art.body === 'being') return drawBeing(ctx, fish, size, opts);
+    /* And the eight that are not fish at all. Nothing below this line applies
+       to them — no body path, no fins, no counter-shading — so they leave here
+       and are drawn by their own file. */
+    if (art.body === 'astral') return VF.astralArt.draw(ctx, fish, size, opts);
     const tm = opts.time === undefined ? 0 : opts.time;
     const sway = Math.sin(tm * 2.1) * 0.55;
     const rnd = VF.rng.make(hash(fish.id));
@@ -2149,8 +2177,73 @@
   }
 
   /* The largest half-size a creature can be drawn at and still fit a box. */
-  function fitSize(fish, box) {
+  /* The fight marker's mask, as a data URI: this subject in solid white,
+     cropped to its own ink.
+
+     css/hud.css draws that marker as a fish, because everything in the game
+     is a fish. Nothing in the last tier is one, and a fight against a planet
+     that puts a little trout on the bar is a joke at its own expense — so the
+     eight bring their own outline. Built once per species and kept: it is a
+     readback and two canvases, which is fine once and not fine per frame. */
+  const GLYPH = Object.create(null);
+  function glyph(fish) {
+    if (GLYPH[fish.id] !== undefined) return GLYPH[fish.id];
+    GLYPH[fish.id] = '';
+    if (typeof document === 'undefined') return '';
+    try {
+      const N = 128;
+      const cv = document.createElement('canvas');
+      cv.width = cv.height = N;
+      const g = cv.getContext('2d');
+      g.translate(N / 2, N / 2);
+      draw(g, fish, N * 0.28, { time: 0, sheen: false, detail: false });
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.globalCompositeOperation = 'source-in';
+      g.fillStyle = '#ffffff';
+      g.fillRect(0, 0, N, N);
+      /* Cropped to the ink. `contain` sizes the mask by the image box, so a
+         subject with three quarters empty margin would come out a quarter of
+         the size of one without. */
+      const px = g.getImageData(0, 0, N, N).data;
+      let x0 = N, y0 = N, x1 = -1, y1 = -1;
+      for (let y = 0; y < N; y++) {
+        for (let x = 0; x < N; x++) {
+          if (px[(y * N + x) * 4 + 3] > 24) {
+            if (x < x0) x0 = x;
+            if (x > x1) x1 = x;
+            if (y < y0) y0 = y;
+            if (y > y1) y1 = y;
+          }
+        }
+      }
+      if (x1 < 0) return '';
+      const w = x1 - x0 + 1, h = y1 - y0 + 1;
+      const out = document.createElement('canvas');
+      out.width = w; out.height = h;
+      out.getContext('2d').drawImage(cv, x0, y0, w, h, 0, 0, w, h);
+      GLYPH[fish.id] = 'url("' + out.toDataURL('image/png') + '")';
+    } catch (e) { /* no canvas, or a readback that is not allowed: no glyph */ }
+    return GLYPH[fish.id];
+  }
+
+  /* `over` is whether this box is one the subject is allowed to overrun.
+
+     An astral subject says for itself how much of the box it wants and two of
+     them want more than there is — the Earth running off the edges of the
+     catch card is the point of it. In an eighty-pixel Fishdex tile there is
+     nothing dramatic about overrunning, only a subject you cannot identify,
+     so the tiles pass false and get the shape whole. (Named `spill` rather
+     than the obvious `over`, which is already the name of the overshoot
+     factor further down this same function.) */
+  function fitSize(fish, box, spill) {
     const kind = fish.art.body;
+    if (kind === 'astral') {
+      const f = spill === false ? 1 : VF.astralArt.fill(fish);
+      const r = ASTRAL_H[fish.art.astral] === undefined ? 1 : ASTRAL_H[fish.art.astral];
+      // whole, a tall subject is limited by its own height rather than by fill
+      const cap = spill === false ? (box * 0.46) / r : Infinity;
+      return Math.max(8, Math.min(cap, box * 0.34 * f));
+    }
     if (kind === 'being') {
       const rb = bodyRatio(kind, fish.art.being);
       return Math.max(6, Math.min(box * 0.40, (box * 0.44) / (rb * 2)));
@@ -2206,6 +2299,34 @@
         ctx.stroke();
       }
       ctx.restore();
+      return;
+    }
+    /* An astral subject casts its own shadow. There is no path to fill — the
+       eight are painted, not outlined — so it is rendered once onto a scratch
+       canvas and knocked down to a flat shape with source-in. Which is more
+       work than a fill, and is why the scratch canvas is kept between frames
+       rather than made each time. */
+    if (art.body === 'astral') {
+      const liftA = U.clamp(near === undefined ? 0 : near, 0, 1);
+      const flatA = U.mixRgb([2, 3, 6], U.shade(U.hexToRgb(art.c1), -0.40), liftA * 0.85);
+      const sc = scratch(size * 4.2);
+      if (sc) {
+        const g2 = sc.getContext('2d');
+        g2.setTransform(1, 0, 0, 1, 0, 0);
+        g2.clearRect(0, 0, sc.width, sc.height);
+        g2.save();
+        g2.translate(sc.width / 2, sc.height / 2);
+        VF.astralArt.draw(g2, fish, size, { time: 0, sheen: false });
+        g2.restore();
+        g2.globalCompositeOperation = 'source-in';
+        g2.fillStyle = U.rgbToCss(flatA);
+        g2.fillRect(0, 0, sc.width, sc.height);
+        g2.globalCompositeOperation = 'source-over';
+        ctx.save();
+        ctx.globalAlpha = alpha === undefined ? 0.8 : alpha;
+        ctx.drawImage(sc, -sc.width / 2, -sc.height / 2);
+        ctx.restore();
+      }
       return;
     }
     if (art.body === 'object') {
@@ -3184,6 +3305,6 @@
   }
 
   VF.fishArt = { draw: draw, drawSilhouette: drawSilhouette, palette: palette,
-                 hash: hash, bodyRatio: bodyRatio, fitSize: fitSize,
+                 hash: hash, bodyRatio: bodyRatio, fitSize: fitSize, glyph: glyph,
                  objectShape: objectShape, OBJ_H: OBJ_H };
 })(window.VF = window.VF || {});

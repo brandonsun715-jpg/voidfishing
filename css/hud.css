@@ -704,3 +704,29 @@ body.wrong .toasts { opacity: 0; transition: opacity 500ms var(--e-move); }
 body.calm .fight-warn.on,
 body.calm .mg-prog.low .mg-prog-fill,
 body.calm .mbtn.flash { animation: none; }
+
+/* The astral tier in the fight bar. The marker takes its colour from
+   --fishcol, which is set once from script at the top of the fight, so for the
+   one tier that has no single colour the variable itself is animated instead
+   and everything downstream of it follows without knowing. */
+@keyframes bow-var {
+  0%   { --fishcol: #ff4fd8; }
+  17%  { --fishcol: #ff6a4f; }
+  34%  { --fishcol: #ffd24f; }
+  50%  { --fishcol: #6bff8f; }
+  67%  { --fishcol: #4fd8ff; }
+  84%  { --fishcol: #7a6bff; }
+  100% { --fishcol: #ff4fd8; }
+}
+@property --fishcol {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #7fd0ff;
+}
+.fight-bow {
+  animation: bow-var 5.6s linear infinite;
+  /* An eight-pointed star, one point per member of the tier. It stands in
+     until the species has been landed once, at which point js/ui/hud.js
+     replaces it with that subject's own outline. */
+  --fishglyph: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 0 13.6 8.2 19.8 2.6 16.4 10.4 24 12 16.4 13.6 19.8 21.4 13.6 15.8 12 24 10.4 15.8 4.2 21.4 7.6 13.6 0 12 7.6 10.4 4.2 2.6 10.4 8.2Z'/%3E%3C/svg%3E");
+}

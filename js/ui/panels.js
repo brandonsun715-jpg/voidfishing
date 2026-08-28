@@ -761,7 +761,7 @@
       const can = VF.economy.canAfford(rod.cost);
       const row = U.el('div', 'row row-rod' + (gone ? ' owned' : '') + (!can && !gone ? ' locked' : ''));
       const mark = U.el('div', 'row-mark');
-      mark.style.background = VF.rarities.color(rod.rarity);
+      VF.rarities.paint(mark, rod.rarity, 'background');
       row.appendChild(mark);
 
       const art = U.el('div', 'rod-art-box');
@@ -772,7 +772,7 @@
       const name = U.el('div', 'row-name');
       name.appendChild(U.el('span', null, rod.name));
       const rt = U.el('span', 'tag', VF.rarities.get(rod.rarity).name);
-      rt.style.color = VF.rarities.color(rod.rarity);
+      VF.rarities.paint(rt, rod.rarity, 'color');
       name.appendChild(rt);
       if (gone) {
         const t2 = U.el('span', 'tag', owned ? 'yours' : 'sold');
@@ -1020,7 +1020,7 @@
       const row = U.el('div', 'row' + (own ? ' owned' : '') + (levelOk ? '' : ' locked') +
                               (VF.charms.isEquipped(c.id) ? ' equipped' : ''));
       const mark = U.el('div', 'row-mark');
-      mark.style.background = VF.rarities.color(c.rarity);
+      VF.rarities.paint(mark, c.rarity, 'background');
       row.appendChild(mark);
 
       const iconBox = U.el('div', 'rod-art-box');
@@ -1036,7 +1036,7 @@
       const name = U.el('div', 'row-name');
       name.appendChild(U.el('span', null, c.name));
       const kt = U.el('span', 'tag', c.kind);
-      kt.style.color = VF.rarities.color(c.rarity);
+      VF.rarities.paint(kt, c.rarity, 'color');
       name.appendChild(kt);
       if (VF.charms.isEquipped(c.id)) {
         const t = U.el('span', 'tag', 'worn'); t.style.color = 'var(--accent)'; name.appendChild(t);
@@ -1193,7 +1193,7 @@
         if (pc <= 0) return;
         const sp = U.el('span', null, VF.rarities.get(r).name + ' ' +
           (pc >= 1 ? pc.toFixed(1) : pc >= 0.01 ? pc.toFixed(2) : pc.toFixed(4)) + '%');
-        sp.style.color = VF.rarities.color(r);
+        VF.rarities.paint(sp, r, 'color');
         odds.appendChild(sp);
       });
       main.appendChild(odds);
@@ -1277,7 +1277,7 @@
       const on = VF.cosmetics.equippedIn(c.slot) === c;
       const cell = U.el('div', 'cos-cell' + (own ? '' : ' locked') + (on ? ' on' : ''));
       const pip = U.el('div', 'cos-pip');
-      pip.style.background = VF.rarities.color(c.rarity);
+      VF.rarities.paint(pip, c.rarity, 'background');
       if (own) pip.style.boxShadow = '0 0 8px ' + U.rgbToCss(U.hexToRgb(VF.rarities.get(c.rarity).glow), 0.7);
       cell.appendChild(pip);
 
@@ -1346,8 +1346,8 @@
       const g = art.getContext('2d');
       g.save(); g.translate(84, 42);
       const got = !!VF.state.data.fishdex[f.id];
-      if (got) VF.fishArt.draw(g, f, VF.fishArt.fitSize(f, 84), { time: 0.3 });
-      else { g.globalAlpha = 0.34; VF.fishArt.drawSilhouette(g, f, VF.fishArt.fitSize(f, 84), 0.85); }
+      if (got) VF.fishArt.draw(g, f, VF.fishArt.fitSize(f, 84, false), { time: 0.3 });
+      else { g.globalAlpha = 0.34; VF.fishArt.drawSilhouette(g, f, VF.fishArt.fitSize(f, 84, false), 0.85); }
       g.restore();
       row.appendChild(art);
 
@@ -1806,6 +1806,11 @@
         dot.style.cssText = 'display:inline-block;width:5px;height:5px;border-radius:50%;' +
           'margin-right:6px;vertical-align:middle;background:' + col +
           ';box-shadow:0 0 6px ' + U.rgbToCss(U.hexToRgb(VF.rarities.get(o.id).glow), 0.6);
+        // the one tier whose dot cannot be a hex
+        if (VF.rarities.rainbow(o.id)) {
+          dot.classList.add('bow-bg');
+          if (dexFilter === o.id) btn.classList.add('bow-fg');
+        }
         btn.insertBefore(dot, btn.firstChild);
       }
       btn.addEventListener('click', function () { dexFilter = o.id; VF.audio.click(); refresh(); });
@@ -1867,7 +1872,7 @@
       cv.width = 240; cv.height = 132;
       const g = cv.getContext('2d');
       g.save(); g.translate(120, 66);
-      const sz = VF.fishArt.fitSize(f, 118);
+      const sz = VF.fishArt.fitSize(f, 118, false);
       if (has) VF.fishArt.draw(g, f, sz, { time: i * 0.7 });
       else { g.globalAlpha = 0.34; VF.fishArt.drawSilhouette(g, f, sz, 0.85); }
       g.restore();
@@ -1915,7 +1920,7 @@
     const g = cv.getContext('2d');
     g.save(); g.translate(200, 84);
     // objects are boxier than any fish, so the hero has to be fitted, not fixed
-    VF.fishArt.draw(g, f, Math.min(62, VF.fishArt.fitSize(f, cv.height)),
+    VF.fishArt.draw(g, f, Math.min(62, VF.fishArt.fitSize(f, cv.height, false)),
                     { time: 1.2, mutation: entry.record ? entry.record.mutation : null });
     g.restore();
     hero.appendChild(cv);
@@ -2041,7 +2046,7 @@
       cv.width = 320; cv.height = 150;
       const g = cv.getContext('2d');
       g.save(); g.translate(160, 72);
-      if (f) VF.fishArt.draw(g, f, VF.fishArt.fitSize(f, 150), { time: i * 0.9, traits: k.traits || [] });
+      if (f) VF.fishArt.draw(g, f, VF.fishArt.fitSize(f, 150, false), { time: i * 0.9, traits: k.traits || [] });
       g.restore();
       cell.appendChild(cv);
 
@@ -2192,7 +2197,7 @@
           const eqd = VF.charms.isEquipped(c.id);
           const row = U.el('div', 'row row-rod' + (eqd ? ' equipped' : ' owned'));
           const mark = U.el('div', 'row-mark');
-          mark.style.background = VF.rarities.color(c.rarity);
+          VF.rarities.paint(mark, c.rarity, 'background');
           row.appendChild(mark);
           const iconBox = U.el('div', 'rod-art-box');
           iconBox.style.cssText = 'width:84px;flex:0 0 84px;display:grid;place-items:center';
@@ -2202,7 +2207,7 @@
           const nm = U.el('div', 'row-name');
           nm.appendChild(U.el('span', null, c.name));
           const kt = U.el('span', 'tag', c.kind);
-          kt.style.color = VF.rarities.color(c.rarity);
+          VF.rarities.paint(kt, c.rarity, 'color');
           nm.appendChild(kt);
           main.appendChild(nm);
           main.appendChild(U.el('div', 'row-desc', c.desc));
@@ -2237,7 +2242,7 @@
           const cell = U.el('div', 'cos-cell' + (n ? '' : ' locked'));
           cell.style.cursor = 'default';
           const pip = U.el('div', 'cos-pip');
-          pip.style.background = VF.rarities.color(t.rarity);
+          VF.rarities.paint(pip, t.rarity, 'background');
           cell.appendChild(pip);
           const cv = U.el('canvas', 'cos-art');
           cv.width = 236; cv.height = 108;
@@ -3254,7 +3259,7 @@
       cell.appendChild(cosThumb(it, 118, 70, i * 0.4));
       cell.appendChild(U.el('div', 'rn', it.name));
       const bar = U.el('div', 'rbar');
-      bar.style.background = VF.rarities.color(it.rarity);
+      VF.rarities.paint(bar, it.rarity, 'background');
       cell.appendChild(bar);
       strip.appendChild(cell);
     });
@@ -3316,7 +3321,7 @@
       const slotName = (VF.cosmetics.slots.filter(function (s2) { return s2.id === res.item.slot; })[0] || {}).name;
       resultBox.appendChild(U.el('div', 'result-slot', slotName || res.item.slot));
       const rr = U.el('div', 'result-rarity', VF.rarities.get(res.rarity).name);
-      rr.style.color = VF.rarities.color(res.rarity);
+      VF.rarities.paint(rr, res.rarity, 'color');
       resultBox.appendChild(rr);
       if (res.duplicate) {
         resultBox.appendChild(U.el('div', 'result-dupe',

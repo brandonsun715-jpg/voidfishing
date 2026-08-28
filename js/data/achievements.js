@@ -3,6 +3,12 @@
 (function (VF) {
   'use strict';
 
+  /* The eight. Written out rather than derived from VF.fish so this file does
+     not have to care what order the catalogue is in or whether it has loaded
+     yet — achievements are tested against saved data, not against the world. */
+  const ASTRAL = ['ufo', 'zeus', 'earth', 'kaiju', 'cthulhu', 'kraken',
+                  'brandon_sun', 'josh_jia'];
+
   function dexCount(d) { return Object.keys(d.fishdex).length; }
   function dexOf(d, rarity) {
     let n = 0;
@@ -59,6 +65,23 @@
       test: function (d) { return !!d.fishdex.nessie && !!d.fishdex.oscar_brophy; } },
     { id: 'glitch', name: '??????', desc: 'Land something that should not exist.', hidden: true, reward: 4000000,
       test: function (d) { return !!d.flags.rare_glitch; } },
+
+    /* The last tier. One for arriving, one for each of the two that do not
+       fit inside the frame, and one for all eight — which is the longest
+       thing in the game to finish and is supposed to be. */
+    { id: 'astral', name: '??????', desc: 'Land something that is not a fish and not an object.',
+      hidden: true, reward: 250000000,
+      test: function (d) { return !!d.flags.rare_astral; } },
+    { id: 'astral_big', name: '??????', desc: 'Land something larger than the frame it is shown in.',
+      hidden: true, reward: 900000000,
+      test: function (d) { return !!d.fishdex.earth || !!d.fishdex.kaiju; } },
+    { id: 'astral_all', name: '??????', desc: 'Land all eight.', hidden: true, reward: 9000000000,
+      count: [function (d) {
+        return ASTRAL.reduce(function (n, id) { return n + (d.fishdex[id] ? 1 : 0); }, 0);
+      }, 8],
+      test: function (d) {
+        return ASTRAL.every(function (id) { return !!d.fishdex[id]; });
+      } },
 
     { id: 'mutation_1', name: 'Not Standard Issue', desc: 'Land a mutated fish.', reward: 800,
       count: [function (d) { return d.stats.mutationsFound; }, 1],

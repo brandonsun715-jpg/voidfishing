@@ -1220,6 +1220,269 @@
       ]
     } },
 
+
+  /* ============================== ASTRAL ==============================
+
+     Eight of them, and the tier is not "rarer". Every rung below this one
+     answered "what is the next fish" and this one answers "what if it is not
+     a fish". So: nothing here has a body type, nothing here has fins, and
+     none of it is drawn by the fish renderer — `body: 'astral'` sends the
+     whole entry to js/render/astralArt.js, which draws each of the eight from
+     scratch and shares no code with anything else in the catalogue.
+
+     `fill` is how much of the frame the subject wants. Two of them want more
+     than there is, on purpose: a planet that fits neatly inside a catch card
+     is a marble, and the entire claim this tier makes is scale.
+
+     Every one carries its own `trial` and its own `cutscene`. There is no
+     shared astral fight and no shared astral sequence — a planet does not
+     fight like a god and neither of them fights like a man standing on the
+     water — so the tier table in js/data/trials.js has no entry and each of
+     these writes its own from nothing. */
+
+  { id: 'ufo', name: 'Unidentified', rarity: 'astral', value: 9200000000,
+    kg: [1.2, 4.6], m: [22, 61], diff: 0.96,
+    cutscene: 'ufo',
+    desc: 'It came up on the line and it was never in the water. There is no hull breach, no ' +
+          'corrosion and no growth on it, and the underside is still warm. The mass reads at ' +
+          'about the weight of a bicycle across sixty metres of it. Nobody aboard has come out ' +
+          'and the ramp has been down the entire time.',
+    locs: [], baits: [], time: ['night'], weather: ['clear'],
+    art: { body: 'astral', astral: 'ufo', seed: 1, fill: 1.62, glow: 0.9,
+           c1: '#b7c4d4', c2: '#5c6d82', c3: '#79ffdc' },
+    trial: {
+      phases: [
+        /* it does not pull. it holds station, and the bar has to hold with it,
+           and then it moves in a straight line faster than anything should */
+        { at: 0.00, name: 'It Is Holding Still', start: 0.30,
+          barW: 0.190, barSpeed: 1.06, fishSpeed: 0.30, fishTurn: 1.60, dart: 0.06,
+          fill: 0.150, drain: 0.150 },
+        { at: 0.36, name: 'It Moved Without Turning',
+          barW: 0.150, barSpeed: 1.55, fishSpeed: 1.36, fishTurn: 0.06, dart: 0.92,
+          evade: 0.30, fill: 0.140, drain: 0.196 },
+        { at: 0.64, name: 'It Is Holding Still Again',
+          barW: 0.126, barSpeed: 1.10, fishSpeed: 0.26, fishTurn: 1.80, dart: 0.05,
+          fill: 0.128, drain: 0.228 },
+        { at: 0.88, name: 'It Has Decided',
+          barW: 0.104, barSpeed: 1.70, fishSpeed: 1.44, fishTurn: 0.05, dart: 0.94,
+          evade: 0.52, fill: 0.176, drain: 0.240 }
+      ]
+    } },
+
+  { id: 'zeus', name: 'Zeus', rarity: 'astral', value: 14000000000,
+    kg: [180, 340], m: [2.6, 4.1], diff: 0.99,
+    cutscene: 'zeus',
+    desc: 'Every strike inside the bay for the last six hours landed on the same square metre of ' +
+          'water. He came up on the fourth one. He is not angry and he is not surprised, which ' +
+          'between the two of them is the harder thing to sit with. He asked whose rod it was ' +
+          'and then he said the name back.',
+    locs: [], baits: [], time: [], weather: ['storm'],
+    art: { body: 'astral', astral: 'zeus', seed: 2, fill: 1.14, glow: 1,
+           c1: '#f0e7d0', c2: '#d8b48c', c3: '#9fdcff' },
+    trial: {
+      phases: [
+        /* the meter is not the fight. the bolts are. every phase is shorter
+           and faster than the one before it and there is no slow part */
+        { at: 0.00, name: 'The Sky Picks A Side', start: 0.26,
+          barW: 0.176, barSpeed: 1.30, fishSpeed: 1.00, fishTurn: 0.34, dart: 0.60,
+          fill: 0.156, drain: 0.170 },
+        { at: 0.30, name: 'First Strike',
+          barW: 0.146, barSpeed: 1.52, fishSpeed: 1.18, fishTurn: 0.20, dart: 0.80,
+          evade: 0.26, fill: 0.150, drain: 0.198 },
+        { at: 0.58, name: 'Second Strike',
+          barW: 0.122, barSpeed: 1.68, fishSpeed: 1.30, fishTurn: 0.14, dart: 0.88,
+          evade: 0.40, fill: 0.158, drain: 0.222 },
+        { at: 0.82, name: 'He Is Not Trying Yet',
+          barW: 0.100, barSpeed: 1.86, fishSpeed: 1.42, fishTurn: 0.10, dart: 0.94,
+          evade: 0.56, fill: 0.184, drain: 0.246 }
+      ]
+    } },
+
+  { id: 'earth', name: 'Earth', rarity: 'astral', value: 60000000000,
+    kg: [5.97e24, 5.97e24], m: [12742000, 12742000], diff: 1,
+    cutscene: 'earth',
+    desc: 'The hook is set somewhere in the middle of an ocean that is not on any chart you own. ' +
+          'It is turning. There is weather on it. Down the night side there are lights in the ' +
+          'shapes people make when they build next to a river, and every one of them is still on. ' +
+          'The scale gave up and printed the whole number.',
+    locs: [], baits: [], time: [], weather: [],
+    art: { body: 'astral', astral: 'earth', seed: 3, fill: 1.94, glow: 1,
+           c1: '#1b4f8c', c2: '#3c7a45', c3: '#8ed2ff' },
+    trial: {
+      phases: [
+        /* you are not landing this. you are being landed. the meter creeps
+           and the drain never lets up, and the only phase that goes quickly
+           is the one where it stops resisting, which is worse */
+        { at: 0.00, name: 'The Line Does Not Move', start: 0.34,
+          barW: 0.220, barSpeed: 0.92, fishSpeed: 0.16, fishTurn: 2.40, dart: 0.03,
+          fill: 0.106, drain: 0.184 },
+        { at: 0.34, name: 'It Is Turning',
+          barW: 0.180, barSpeed: 1.00, fishSpeed: 0.34, fishTurn: 1.90, dart: 0.08,
+          fill: 0.100, drain: 0.206 },
+        { at: 0.62, name: 'You Are What Is Moving',
+          barW: 0.140, barSpeed: 1.14, fishSpeed: 0.52, fishTurn: 1.30, dart: 0.18,
+          evade: 0.20, fill: 0.098, drain: 0.230 },
+        { at: 0.90, name: 'It Comes The Rest Of The Way',
+          barW: 0.116, barSpeed: 1.34, fishSpeed: 0.86, fishTurn: 0.60, dart: 0.40,
+          evade: 0.34, fill: 0.190, drain: 0.244 }
+      ]
+    } },
+
+  /* The archetype, not the character — the one this is obviously reaching for
+     is somebody's trademark and this is not it. Same silhouette job: something
+     the size of a coastline that walks. */
+  { id: 'kaiju', name: 'The Kaiju', rarity: 'astral', value: 21000000000,
+    kg: [82000000, 164000000], m: [96, 152], diff: 1,
+    cutscene: 'kaiju',
+    desc: 'Nine plates down the back and every one of them lit from the inside. It stood up in ' +
+          'water that is eleven kilometres deep and the water came to its knee. It has not ' +
+          'noticed the line, the boat, or you. The plates go bright in order, back to front, ' +
+          'and each time they do the bay goes out half a metre and comes back.',
+    locs: [], baits: [], time: [], weather: [],
+    art: { body: 'astral', astral: 'kaiju', seed: 4, fill: 1.86, glow: 1,
+           c1: '#3a4a45', c2: '#93a08f', c3: '#6fe4ff' },
+    trial: {
+      phases: [
+        /* it does not know it is hooked, and that is the first half. the
+           second half is what happens in the six seconds after it works it out */
+        { at: 0.00, name: 'It Has Not Noticed', start: 0.32,
+          barW: 0.200, barSpeed: 1.00, fishSpeed: 0.38, fishTurn: 1.50, dart: 0.10,
+          fill: 0.132, drain: 0.166 },
+        { at: 0.40, name: 'One Step',
+          barW: 0.164, barSpeed: 1.22, fishSpeed: 0.72, fishTurn: 0.70, dart: 0.34,
+          evade: 0.14, fill: 0.128, drain: 0.198 },
+        { at: 0.68, name: 'The Plates Light',
+          barW: 0.128, barSpeed: 1.54, fishSpeed: 1.24, fishTurn: 0.18, dart: 0.86,
+          evade: 0.42, fill: 0.140, drain: 0.230 },
+        { at: 0.92, name: 'It Has Noticed',
+          barW: 0.098, barSpeed: 1.80, fishSpeed: 1.46, fishTurn: 0.09, dart: 0.96,
+          evade: 0.62, fill: 0.196, drain: 0.252 }
+      ]
+    } },
+
+  { id: 'cthulhu', name: 'Cthulhu', rarity: 'astral', value: 33000000000,
+    kg: [1400000, 3800000], m: [58, 104], diff: 1,
+    cutscene: 'cthulhu',
+    desc: 'It has been on the end of the line for some time. The reel reports no tension in ' +
+          'either direction, which the manufacturer says is not a state the reel has. Looking at ' +
+          'the head is fine. Looking away from the head and then back is not. It is not asleep ' +
+          'and it has not been asleep and the difference has never mattered to it.',
+    locs: [], baits: [], time: [], weather: [],
+    art: { body: 'astral', astral: 'cthulhu', seed: 5, fill: 1.44, glow: 1,
+           c1: '#4c6d54', c2: '#16241c', c3: '#d6ff5c' },
+    trial: {
+      phases: [
+        /* the bar drifts on its own and the drain is worst when nothing is
+           happening. this is the only fight in the game you can lose by
+           holding perfectly still, which is the point of it */
+        { at: 0.00, name: 'It Is Already Looking', start: 0.28,
+          barW: 0.184, barSpeed: 1.08, fishSpeed: 0.56, fishTurn: 1.10, dart: 0.24,
+          fill: 0.128, drain: 0.204 },
+        { at: 0.32, name: 'The Dream Part',
+          barW: 0.150, barSpeed: 1.20, fishSpeed: 0.80, fishTurn: 0.44, dart: 0.52,
+          evade: 0.34, fill: 0.126, drain: 0.216 },
+        { at: 0.60, name: 'It Turns Its Head',
+          barW: 0.120, barSpeed: 1.46, fishSpeed: 1.14, fishTurn: 0.20, dart: 0.78,
+          evade: 0.50, fill: 0.138, drain: 0.234 },
+        { at: 0.86, name: 'And Keeps Turning It',
+          barW: 0.096, barSpeed: 1.66, fishSpeed: 1.30, fishTurn: 0.12, dart: 0.90,
+          evade: 0.66, fill: 0.182, drain: 0.248 }
+      ]
+    } },
+
+  { id: 'kraken', name: 'The Kraken', rarity: 'astral', value: 17000000000,
+    kg: [640000, 1900000], m: [44, 88], diff: 0.99,
+    cutscene: 'kraken',
+    desc: 'Eight arms and every one of them found the boat before the head did. It fights the way ' +
+          'a thing fights when it has never once lost: no runs, no head-shakes, just an even ' +
+          'and unhurried pull that does not stop for anything you do to it. The eye is a metre ' +
+          'across and the slit in it is horizontal, like a goat.',
+    locs: [], baits: [], time: [], weather: ['storm'],
+    art: { body: 'astral', astral: 'kraken', seed: 6, fill: 1.38, glow: 0.85,
+           c1: '#7d3552', c2: '#2a1220', c3: '#ffd066' },
+    trial: {
+      phases: [
+        /* eight arms: eight surges, and the fight goes on much longer than
+           anything else here because nothing about it is ever sudden */
+        { at: 0.00, name: 'One Arm', start: 0.24,
+          barW: 0.196, barSpeed: 1.12, fishSpeed: 0.66, fishTurn: 0.80, dart: 0.30,
+          fill: 0.118, drain: 0.164 },
+        { at: 0.26, name: 'Three Arms',
+          barW: 0.166, barSpeed: 1.28, fishSpeed: 0.88, fishTurn: 0.48, dart: 0.50,
+          evade: 0.20, fill: 0.114, drain: 0.190 },
+        { at: 0.52, name: 'Six Arms',
+          barW: 0.138, barSpeed: 1.44, fishSpeed: 1.06, fishTurn: 0.30, dart: 0.68,
+          evade: 0.34, fill: 0.118, drain: 0.216 },
+        { at: 0.76, name: 'All Of Them',
+          barW: 0.114, barSpeed: 1.62, fishSpeed: 1.24, fishTurn: 0.18, dart: 0.82,
+          evade: 0.48, fill: 0.130, drain: 0.238 },
+        { at: 0.93, name: 'And The Head',
+          barW: 0.094, barSpeed: 1.78, fishSpeed: 1.38, fishTurn: 0.11, dart: 0.92,
+          evade: 0.60, fill: 0.192, drain: 0.250 }
+      ]
+    } },
+
+  /* Two people, the same way Oscar Brophy is a person: they come up on the
+     line, they are dry, and neither of them will say how long they were down
+     there. */
+  { id: 'brandon_sun', name: 'Brandon Sun', rarity: 'astral', value: 26000000000,
+    kg: [68, 92], m: [1.70, 1.88], diff: 0.98,
+    cutscene: 'brandon',
+    desc: 'He surfaced at four in the morning with the light coming off him and the sun still an ' +
+          'hour out. The horizon did not brighten while he was up; it brightened when he turned ' +
+          'to face it. He looked at the rod for a while, said it was a good one, and did not ' +
+          'answer anything else. The bay was warm for a week afterwards.',
+    locs: [], baits: [], time: ['dawn'], weather: [],
+    art: { body: 'astral', astral: 'sun', seed: 7, fill: 1.18, glow: 1,
+           c1: '#e8a53a', c2: '#e0b08a', c3: '#ffe58a' },
+    trial: {
+      phases: [
+        /* he is not resisting. he is warming the line, and every phase the
+           bar answers slightly less than you asked it to */
+        { at: 0.00, name: 'The Water Is Warm', start: 0.34,
+          barW: 0.186, barSpeed: 1.22, fishSpeed: 0.62, fishTurn: 0.90, dart: 0.26,
+          fill: 0.150, drain: 0.162 },
+        { at: 0.36, name: 'It Is Getting Warmer',
+          barW: 0.152, barSpeed: 1.36, fishSpeed: 0.92, fishTurn: 0.42, dart: 0.56,
+          evade: 0.22, fill: 0.144, drain: 0.194 },
+        { at: 0.66, name: 'The Line Is Glowing',
+          barW: 0.122, barSpeed: 1.56, fishSpeed: 1.18, fishTurn: 0.22, dart: 0.80,
+          evade: 0.38, fill: 0.150, drain: 0.222 },
+        { at: 0.90, name: 'Sunrise, An Hour Early',
+          barW: 0.100, barSpeed: 1.74, fishSpeed: 1.34, fishTurn: 0.12, dart: 0.90,
+          evade: 0.54, fill: 0.188, drain: 0.242 }
+      ]
+    } },
+
+  { id: 'josh_jia', name: 'Josh Jia', rarity: 'astral', value: 48000000000,
+    kg: [64, 88], m: [1.68, 1.86], diff: 0.98,
+    cutscene: 'josh',
+    desc: 'Came up holding a coin nobody has ever been paid in, edge on, and would not put it ' +
+          'down. Every price in the shop moved by a little while he was on deck and moved back ' +
+          'when he left. He asked what the rod cost. He was told. He said that was not what it ' +
+          'cost and he was right, and the ledger now agrees with him.',
+    locs: [], baits: [], time: [], weather: [],
+    art: { body: 'astral', astral: 'coin', seed: 8, fill: 1.18, glow: 1,
+           c1: '#2f5aa8', c2: '#dcb08c', c3: '#ffd45c' },
+    trial: {
+      phases: [
+        /* the meter is a price and he is negotiating it. the fill is high and
+           so is the drain: you gain fast and lose fast the entire way */
+        { at: 0.00, name: 'An Opening Offer', start: 0.40,
+          barW: 0.200, barSpeed: 1.30, fishSpeed: 0.80, fishTurn: 0.60, dart: 0.44,
+          fill: 0.210, drain: 0.226 },
+        { at: 0.38, name: 'A Counter',
+          barW: 0.158, barSpeed: 1.46, fishSpeed: 1.02, fishTurn: 0.34, dart: 0.66,
+          evade: 0.28, fill: 0.200, drain: 0.244 },
+        { at: 0.68, name: 'He Is Not Moving On It',
+          barW: 0.124, barSpeed: 1.62, fishSpeed: 1.22, fishTurn: 0.18, dart: 0.84,
+          evade: 0.46, fill: 0.204, drain: 0.258 },
+        { at: 0.92, name: 'Sold',
+          barW: 0.100, barSpeed: 1.80, fishSpeed: 1.38, fishTurn: 0.10, dart: 0.92,
+          evade: 0.60, fill: 0.240, drain: 0.268 }
+      ]
+    } },
+
   /* ================== FOUND IN A TANK, NOT IN THE WATER ==================
 
      These three do not exist until the aquarium works out that they should.

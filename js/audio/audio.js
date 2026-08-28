@@ -601,6 +601,24 @@
           bell(root - 12 + sc[i % sc.length], n + i * 0.19, 0.095, 5.0, (i / 4 - 0.5) * 1.2);
         }
         noiseBurst(n, 2.0, 'lowpass', 340, 0.05, 80, { attack: 0.5 });
+      } else if (kind === 'astral') {
+        /* The last tier does not get a louder version of the one below it. It
+           gets the whole scale at once, three octaves of it, over a pedal that
+           holds for eight seconds — which is longer than any other stinger in
+           the game and is the only thing here that outlasts its own cutscene
+           beat on purpose. */
+        ducking = 1;
+        tone(n, 33, 8.0, 'sine', 0.15, 33, { attack: 0.9, lp: 170 });
+        tone(n + 0.4, 49.5, 7.0, 'sine', 0.075, 49.5, { attack: 1.2, lp: 220 });
+        for (let i = 0; i < 12; i++) {
+          bell(root - 12 + sc[i % sc.length] + 12 * Math.floor(i / sc.length),
+               n + i * 0.135, 0.070, 5.5, Math.sin(i * 1.9) * 0.9);
+        }
+        for (let i = 0; i < 5; i++) {
+          tone(n + 1.1 + i * 0.22, 1400 + i * 620, 1.4, 'sine', 0.020, null,
+               { attack: 0.25, lp: 6000, pan: (i / 4 - 0.5) * 1.5 });
+        }
+        noiseBurst(n + 0.9, 3.4, 'highpass', 3600, 0.022, 6000, { attack: 1.1, pink: false });
       } else {
         ducking = 1;
         for (let i = 0; i < 8; i++) {
