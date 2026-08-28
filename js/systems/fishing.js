@@ -34,6 +34,7 @@
 
     pending: null,       // rolled catch waiting to be hooked
     pendingOpts: null,   // forced roll options from an encounter
+    armed: null,         // a species the owner console put on the next cast
     biteWindow: BITE_WINDOW,
     fight: null,
 
@@ -76,7 +77,12 @@
 
   function cast(power) {
     const d = VF.state.data;
-    S.pendingOpts = null;
+    /* Ordinarily this clears whatever the last cast left armed. If the owner
+       console has named a species for the next cast, that is not leftovers —
+       it is the instruction — so it survives into pendingOpts and is spent
+       here rather than lingering into the cast after. */
+    S.pendingOpts = S.armed ? { forceFish: S.armed } : null;
+    S.armed = null;
     if (!VF.bait.consume(d.bait)) { d.bait = 'worm'; VF.bait.consume('worm'); }
 
     const rod = VF.rods.get(d.rod);
@@ -722,6 +728,18 @@
     return true;
   }
 
+  /* Put a species on the next cast, whatever the water would have given you.
+     Only the owner console calls this. It arms rather than spawning, because
+     the interesting part of a rare catch is not the card at the end — it is
+     the shadow coming in, the fight and the sequence, and a catch conjured
+     straight onto the stone skips all three. */
+  function arm(id) {
+    const f = VF.fish.byId(id);
+    if (!f) return false;
+    S.armed = f.id;
+    return true;
+  }
+
   /* Return the rod to a usable state from anywhere (used by save reset). */
   function hardReset() {
     S.charging = false;
@@ -729,6 +747,7 @@
     S.pending = null;
     endApproach();
     S.pendingOpts = null;
+    S.armed = null;
     S.fight = null;
     S.lastResult = null;
     S.encounterActive = false;
@@ -738,6 +757,7 @@
   VF.fishing = {
     S: S,
     hardReset: hardReset,
+    arm: arm,
     acceptCatch: acceptCatch,
     tick: tick,
     canCast: canCast,

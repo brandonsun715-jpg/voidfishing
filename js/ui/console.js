@@ -144,6 +144,37 @@
         return { kind: 'good', text: 'jias set to ' + U.money(d.money) + '.' };
       }
     },
+    /* Put a species on the next cast.
+
+       It arms rather than conjuring. The interesting half of a rare catch is
+       the shadow coming in, the fight and the sequence that runs after it —
+       a record dropped straight into the fishdex has none of that, and the
+       whole reason to look at one of these is to watch it arrive.
+
+       Takes an id or a name, because nobody remembers two hundred ids:
+       `/spawn earth`, `/spawn the kraken` and `/spawn brandon_sun` are all
+       the same instruction. */
+    {
+      match: /^\/spawn(?:\s+(.+))?$/,
+      run: function (m) {
+        const q = (m[1] || '').trim();
+        if (!q) {
+          return { kind: 'note', text: 'which one? /spawn earth — an id or a name.' };
+        }
+        const key = function (x) { return x.toLowerCase().replace(/[^a-z0-9]+/g, ''); };
+        const want = key(q);
+        let f = VF.fish.byId(q.replace(/\s+/g, '_'));
+        if (!f) {
+          f = VF.fish.list.find(function (x) { return key(x.id) === want; }) ||
+              VF.fish.list.find(function (x) { return key(x.name) === want; }) ||
+              VF.fish.list.find(function (x) { return key(x.name).indexOf(want) >= 0; });
+        }
+        if (!f) return { kind: 'bad', text: 'nothing in the water is called that.' };
+        if (!VF.fishing.arm(f.id)) return { kind: 'bad', text: 'could not arm that one.' };
+        return { kind: 'good',
+                 text: f.name + ' is on the next cast. close this and cast.' };
+      }
+    },
     {
       match: /^\/(time|left)$/,
       run: function () {
@@ -174,6 +205,7 @@
   ];
 
   const HELP = [
+    '/spawn earth         puts a species on the next cast, by id or by name',
     '/give admin_rod      the one that is not in the game',
     '/give heavens_rod    the one at the end of the long thread',
     '/give every_rod      all of them, the wanderer\'s included',
