@@ -69,14 +69,26 @@ const path = require('path');
   await page.evaluate(() => { if (VF.catchUI.isOpen()) VF.catchUI.defaultAction(); });
   await page.waitForTimeout(400);
 
-  // every menu
-  for (const p of ['shop', 'fishdex', 'bag', 'wardrobe', 'journal', 'stats', 'settings', 'map']) {
-    await page.evaluate((p) => VF.panels.open(p), p);
-    await page.waitForTimeout(180);
+  /* Every menu, and every tab of the two panels that have several — read off
+     the buttons in the bar rather than a list here, so a panel added later
+     cannot quietly stop being checked in the shipped file, which is exactly
+     what happened when the Boat was added. */
+  const menus = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('.mbtn')).map(b => b.dataset.panel).filter(Boolean));
+  const tabsFor = { boat: ['boat', 'fit', 'paint', 'deck'],
+                    journal: ['quests', 'leads', 'field', 'board', 'entries', 'people', 'records'] };
+  let opened = 0;
+  for (const p of menus.concat(['map'])) {
+    if (p === 'aquarium') continue;         // its own screen, walked below
+    for (const tab of (tabsFor[p] || [undefined])) {
+      await page.evaluate((a) => VF.panels.open(a[0], a[1]), [p, tab]);
+      await page.waitForTimeout(150);
+      opened++;
+    }
     await page.evaluate(() => VF.panels.close());
-    await page.waitForTimeout(120);
+    await page.waitForTimeout(110);
   }
-  console.log('menus opened: 8');
+  console.log('menus opened:', opened);
 
   // a conversation
   await page.evaluate(() => { VF.fishing.hardReset(); VF.visit.start('keeper'); });

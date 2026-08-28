@@ -175,6 +175,70 @@
                  text: f.name + ' is on the next cast. close this and cast.' };
       }
     },
+    /* The three that exist so the owner can look at the new half of the game
+       without waiting for a one-in-fifty-thousand roll or a lead to line up. */
+    {
+      match: /^\/meet(?:\s+(.+))?$/,
+      run: function (m) {
+        const q = (m[1] || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+        if (!q) {
+          return { kind: 'note', text: 'which one? ' +
+            VF.creatureData.list.map(function (c) { return c.id; }).join(' · ') };
+        }
+        const key = function (x) { return x.toLowerCase().replace(/[^a-z0-9]+/g, ''); };
+        const c = VF.creatureData.list.filter(function (x) {
+          return key(x.id) === q || key(x.name) === q || key(x.name).indexOf(q) >= 0;
+        })[0];
+        if (!c) return { kind: 'bad', text: 'nothing out there is called that.' };
+        VF.creature.abort();
+        if (!VF.creature.begin(c.id)) return { kind: 'bad', text: 'it will not start here.' };
+        return { kind: 'good', text: 'close this.' };
+      }
+    },
+    {
+      match: /^\/sail(?:\s+(.+))?$/,
+      run: function (m) {
+        const q = (m[1] || '').trim().toLowerCase().replace(/\s+/g, '_');
+        const d = VF.state.data;
+        const to = q ? VF.locations.list.filter(function (l) {
+          return l.id === q || l.name.toLowerCase().replace(/[^a-z]+/g, '') === q.replace(/[^a-z]+/g, '');
+        })[0] : null;
+        if (!to) {
+          return { kind: 'note', text: 'where to? ' +
+            VF.locations.list.map(function (l) { return l.id; }).join(' · ') };
+        }
+        if (d.unlockedLocations.indexOf(to.id) < 0) d.unlockedLocations.push(to.id);
+        /* A crossing needs a hull that crosses. Rather than refuse, hand one
+           over — this is the owner console and the point is to see the thing. */
+        const b = VF.boat.shape();
+        if (VF.boat.tierRank() < 1) {
+          if (b.owned.indexOf('dory') < 0) b.owned.push('dory');
+          b.hull = 'dory';
+        }
+        VF.panels.close();
+        setTimeout(function () {
+          VF.voyage.begin(to.id, function (real) {
+            d.location = real || to.id;
+            VF.loot.invalidatePool(); VF.weather.reconcile();
+            VF.bus.emit('location:changed', d.location);
+          });
+        }, 260);
+        return { kind: 'good', text: 'under way.' };
+      }
+    },
+    {
+      match: /^\/lead(?:\s+(.+))?$/,
+      run: function (m) {
+        const q = (m[1] || '').trim();
+        if (!q || q === 'all') {
+          let n = 0;
+          for (const id in VF.discoveryData.leads) if (VF.discovery.openLead(id)) n++;
+          return { kind: 'good', text: n + ' leads opened. they are in the journal.' };
+        }
+        if (!VF.discovery.openLead(q)) return { kind: 'bad', text: 'no such lead.' };
+        return { kind: 'good', text: 'opened. it is in the journal.' };
+      }
+    },
     {
       match: /^\/(time|left)$/,
       run: function () {
@@ -206,6 +270,9 @@
 
   const HELP = [
     '/spawn earth         puts a species on the next cast, by id or by name',
+    '/meet lurker         starts an encounter here and now',
+    '/sail trench         a crossing to anywhere, with a hull if you have not got one',
+    '/lead all            opens every lead, so the journal has something in it',
     '/give admin_rod      the one that is not in the game',
     '/give heavens_rod    the one at the end of the long thread',
     '/give every_rod      all of them, the wanderer\'s included',

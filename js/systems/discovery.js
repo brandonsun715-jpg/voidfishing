@@ -153,6 +153,20 @@
     VF.bus.emit('discovery:found', { kind: kind, name: name });
   }
 
+  /* A lead does not sit in a list waiting to be clicked. It fires when the
+     player is standing in the water it named, in the conditions it named,
+     with a line out — which is a moment they were already having rather than
+     an errand. Throttled so a lead whose condition is "at night" does not go
+     off on the first cast after sunset and then again on the second. */
+  let sinceTry = 0;
+  VF.bus.on('fishing:waiting', function () {
+    if (VF.creature && VF.creature.active()) return;
+    if (Date.now() - sinceTry < 25000) return;
+    sinceTry = Date.now();
+    const l = tryHere(['creature']);
+    if (l) VF.bus.emit('lead:fired', l);
+  });
+
   VF.discovery = {
     clue: clue, has: hasClue,
     openLead: openLead, hasLead: hasLead, leadDone: leadDone,
