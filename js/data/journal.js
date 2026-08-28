@@ -107,6 +107,25 @@
     return true;
   }
 
+  /* An entry the table does not carry.
+
+     Everything written before this came out of ENTRIES, which is right for
+     the handful of authored notes and wrong for a clue, a creature or an
+     expedition — those are data in their own files and would otherwise have
+     to be copied in here to be writable. Same record shape, same list, same
+     save; the panel and the hint count cannot tell the difference. */
+  function addFree(id, title, text, kind, hint) {
+    const d = VF.state.data;
+    for (let i = 0; i < d.journal.length; i++) if (d.journal[i].id === id) return false;
+    d.journal.push({
+      id: id, title: title, text: text, kind: kind || 'find',
+      hint: hint || 0, at: Date.now()
+    });
+    if (d.journal.length > 300) d.journal.shift();
+    VF.bus.emit('journal:entry', { title: title, kind: kind });
+    return true;
+  }
+
   function has(id) {
     const d = VF.state.data;
     for (let i = 0; i < d.journal.length; i++) if (d.journal[i].id === id) return true;
@@ -121,5 +140,5 @@
     return n;
   }
 
-  VF.journal = { entries: ENTRIES, add: add, has: has, hintCount: hintCount };
+  VF.journal = { entries: ENTRIES, add: add, addFree: addFree, has: has, hintCount: hintCount };
 })(window.VF = window.VF || {});

@@ -1,0 +1,358 @@
+/* VOID FISHING — encounters, the boat, crossings and expeditions.
+
+   One sheet for the whole expansion, and it borrows every token from
+   css/base.css rather than inventing a second visual language. The rule the
+   whole thing follows: if a new panel does not look like it has always been
+   there, it is wrong, however good it looks on its own. */
+
+/* ============================================================== ENCOUNTER
+
+   Sits exactly where the fight bar sits and is built to the same measurements,
+   because it is the same job. */
+/* At the TOP, not where the fight bar is. The fight bar can sit over the water
+   because a fight is an abstraction — the bar IS the fish. An encounter puts
+   the thing you are acting on in the water itself, so the panel has to be
+   somewhere that is not the water. */
+.enc {
+  position: absolute;
+  left: 50%; top: clamp(78px, 11vh, 108px);
+  transform: translateX(-50%);
+  width: min(560px, calc(100vw - 32px));
+  padding: 13px 16px 12px;
+  border-radius: var(--r-lg);
+  background: var(--pane-2);
+  border: 1px solid var(--line-2);
+  box-shadow: 0 18px 44px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.05);
+  backdrop-filter: blur(9px);
+  -webkit-backdrop-filter: blur(9px);
+  pointer-events: none;
+  z-index: 6;
+}
+.enc.hidden { display: none; }
+.enc.enter { animation: enc-in 0.34s cubic-bezier(0.16, 1, 0.3, 1); }
+@keyframes enc-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-10px) scale(0.985); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+}
+/* A wrong guess. One shudder, no colour change — the water already told them. */
+.enc.wrong { animation: enc-no 0.32s ease; }
+@keyframes enc-no {
+  0%, 100% { transform: translateX(-50%); }
+  25% { transform: translateX(calc(-50% - 5px)); }
+  75% { transform: translateX(calc(-50% + 5px)); }
+}
+
+.enc-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 12px; margin-bottom: 7px;
+}
+.enc-name {
+  font-size: 13px; letter-spacing: 0.13em; text-transform: lowercase;
+  color: var(--ink);
+}
+.enc-state {
+  font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase;
+  color: var(--ink-3); white-space: nowrap;
+}
+.enc-text {
+  font-size: 12.5px; line-height: 1.55; color: var(--ink-2);
+  min-height: 2.4em;
+  animation: enc-line 0.42s ease;
+}
+@keyframes enc-line { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; } }
+
+.enc-meter {
+  position: relative; height: 6px; margin: 10px 0 2px;
+  border-radius: 3px; overflow: hidden;
+  background: rgba(255,255,255,0.06);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05);
+}
+.enc-meter.hidden { display: none; }
+.enc-meter-fill {
+  position: absolute; inset: 0; transform-origin: left center; transform: scaleX(0);
+  background: linear-gradient(90deg, rgba(120,190,230,0.55), var(--accent));
+  transition: transform 0.08s linear;
+}
+/* The one phase with a target rather than a goal: a band to stay inside and a
+   marker that rides it. Green only while it is actually in. */
+.enc-band {
+  position: absolute; top: -3px; bottom: -3px;
+  border-radius: 4px;
+  background: rgba(120,220,170,0.14);
+  box-shadow: inset 0 0 0 1px rgba(120,220,170,0.45);
+}
+.enc-band.hidden { display: none; }
+.enc.has-mark .enc-meter::after {
+  content: ''; position: absolute; top: -5px; bottom: -5px; width: 2px;
+  left: var(--enc-mark, 50%);
+  background: #fff;
+  box-shadow: 0 0 8px rgba(255,255,255,0.7);
+  transition: left 0.06s linear;
+}
+.enc.in-band .enc-meter::after { background: #8fe8bc; box-shadow: 0 0 10px rgba(143,232,188,0.9); }
+
+.enc-pips { display: flex; gap: 6px; margin-top: 9px; }
+.enc-pips:empty { display: none; }
+.enc-pip {
+  width: 18px; height: 3px; border-radius: 2px;
+  background: rgba(255,255,255,0.12);
+  transition: background 0.25s ease, box-shadow 0.25s ease;
+}
+.enc-pip.on { background: var(--accent); box-shadow: 0 0 8px rgba(120,190,230,0.55); }
+
+.enc-options {
+  display: flex; flex-wrap: wrap; gap: 8px; margin-top: 11px;
+  pointer-events: auto;
+}
+.enc-options:empty { display: none; }
+.enc-opt {
+  flex: 1 1 auto; min-width: 110px;
+  padding: 9px 12px; border-radius: 9px;
+  background: var(--fill);
+  border: 1px solid rgba(150,190,230,0.20);
+  color: var(--ink);
+  font: inherit; font-size: 12px; letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
+}
+.enc-opt:hover { background: rgba(255,255,255,0.09); border-color: rgba(150,200,240,0.42); }
+.enc-opt:active { transform: translateY(1px); }
+
+.enc-hint {
+  margin-top: 9px; font-size: 11px; letter-spacing: 0.08em;
+  color: var(--ink-3); min-height: 1.3em;
+}
+.enc-hint.said { color: var(--ink-2); font-style: italic; }
+
+@media (max-width: 700px) {
+  .enc { top: clamp(66px, 10vh, 92px); padding: 11px 13px 10px; }
+  .enc-text { font-size: 12px; }
+}
+
+/* ============================================================== THE CROSSING
+
+   A voyage takes over the screen the way the aquarium does, because it is a
+   place rather than a menu. */
+#voyage {
+  position: fixed; inset: 0; z-index: 40;
+  display: flex; flex-direction: column;
+  background: #04060a;
+  opacity: 1; transition: opacity 0.4s ease;
+}
+#voyage.hidden { display: none; }
+#voyage.out { opacity: 0; }
+#voyageCanvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+.vy-top {
+  position: relative; z-index: 2;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 14px; padding: clamp(14px, 3vh, 26px) 20px 12px;
+}
+.vy-where { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.vy-from, .vy-to {
+  font-size: 12px; letter-spacing: 0.12em; text-transform: lowercase;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.vy-from { color: var(--ink-3); }
+.vy-to { color: var(--ink); }
+.vy-arrow { color: var(--ink-3); font-size: 11px; }
+.vy-skip {
+  padding: 7px 13px; border-radius: 8px;
+  background: var(--fill-2);
+  border: 1px solid var(--line-2);
+  color: var(--ink-2); font: inherit; font-size: 11px;
+  letter-spacing: 0.10em; cursor: pointer;
+}
+.vy-skip:hover { background: rgba(255,255,255,0.10); color: var(--ink); }
+
+.vy-progress {
+  position: relative; z-index: 2; height: 2px; margin: 0 20px;
+  background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden;
+}
+.vy-progress-fill {
+  height: 100%; width: 0;
+  background: linear-gradient(90deg, rgba(120,190,230,0.5), var(--accent));
+  transition: width 0.2s linear;
+}
+
+/* the instruments, bottom left: what the boat can tell you about out here */
+.vy-instr {
+  position: relative; z-index: 2; margin-top: auto;
+  display: flex; gap: 10px; flex-wrap: wrap;
+  padding: 0 20px clamp(18px, 4vh, 34px);
+}
+.vy-gauge {
+  padding: 8px 12px; border-radius: 10px; min-width: 92px;
+  background: rgba(8,12,18,0.72);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+}
+.vy-gauge .k {
+  display: block; font-size: 9.5px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.vy-gauge .v { display: block; margin-top: 3px; font-size: 13px; color: var(--ink); }
+.vy-gauge.alert { border-color: rgba(255,140,120,0.42); }
+.vy-gauge.alert .v { color: #ffb0a0; }
+
+/* an event: the same card language as the encounter, centred */
+.vy-event {
+  position: relative; z-index: 3;
+  align-self: center; width: min(540px, calc(100vw - 40px));
+  margin: auto 0;
+  padding: 20px 22px;
+  border-radius: 16px;
+  background: var(--pane-2);
+  border: 1px solid var(--line-2);
+  box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+  animation: enc-in 0.42s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.vy-event.hidden { display: none; }
+.vy-event-kind {
+  font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase;
+  color: var(--accent); margin-bottom: 8px;
+}
+.vy-event-name {
+  font-size: 17px; letter-spacing: 0.04em; color: var(--ink); margin-bottom: 10px;
+}
+.vy-event-text { font-size: 13px; line-height: 1.65; color: var(--ink-2); }
+.vy-event-opts { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 16px; }
+
+/* ================================================================= THE BOAT */
+
+.boat-hero {
+  position: relative; height: 210px; border-radius: 14px; overflow: hidden;
+  margin-bottom: 14px;
+  background: radial-gradient(ellipse at 50% 76%, rgba(90,140,190,0.16), rgba(0,0,0,0) 70%);
+  border: 1px solid var(--line);
+}
+.boat-hero canvas { display: block; width: 100%; height: 100%; }
+.boat-tier {
+  display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px;
+}
+.boat-tier .n { font-size: 15px; color: var(--ink); letter-spacing: 0.05em; }
+.boat-tier .t { font-size: 11px; color: var(--ink-3); letter-spacing: 0.10em; }
+
+.mod-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(178px, 1fr));
+  gap: 10px;
+}
+.mod {
+  padding: 12px 13px; border-radius: 11px;
+  background: var(--fill);
+  border: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: 6px;
+  transition: border-color 0.18s ease, background 0.18s ease;
+}
+.mod.on { border-color: rgba(120,200,240,0.40); background: rgba(120,190,230,0.07); }
+.mod.locked { opacity: 0.45; }
+.mod-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.mod-name { font-size: 12.5px; color: var(--ink); }
+.mod-lv { font-size: 10px; letter-spacing: 0.14em; color: var(--ink-3); }
+.mod-desc { font-size: 11.5px; line-height: 1.5; color: var(--ink-3); }
+.mod-bar { display: flex; gap: 3px; margin-top: 2px; }
+.mod-seg {
+  flex: 1; height: 3px; border-radius: 2px; background: rgba(255,255,255,0.10);
+}
+.mod-seg.on { background: var(--accent); }
+.mod-buy {
+  margin-top: 4px; padding: 7px 10px; border-radius: 8px;
+  background: var(--fill-2);
+  border: 1px solid rgba(150,190,230,0.20);
+  color: var(--ink); font: inherit; font-size: 11px; cursor: pointer;
+}
+.mod-buy:hover:not(:disabled) { background: rgba(255,255,255,0.10); }
+.mod-buy:disabled { opacity: 0.4; cursor: default; }
+
+.paint-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.paint {
+  width: 30px; height: 30px; border-radius: 8px; cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.14);
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+.paint:hover { transform: translateY(-2px); }
+.paint.on { box-shadow: 0 0 0 2px var(--accent); }
+
+.trophy-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.trophy-pick {
+  padding: 7px 11px; border-radius: 9px; cursor: pointer;
+  background: var(--fill);
+  border: 1px solid var(--line);
+  color: var(--ink-2); font: inherit; font-size: 11.5px;
+}
+.trophy-pick.on { border-color: var(--accent); color: var(--ink); }
+
+/* ================================================================ LEADS
+
+   The chart and the journal both draw these, so they share one look: a rule
+   down the left in the accent, and the condition underneath in the quiet ink. */
+.lead {
+  padding: 10px 12px; border-radius: 10px; margin-bottom: 8px;
+  background: var(--fill);
+  border-left: 2px solid var(--accent);
+}
+.lead.ready { background: rgba(120,190,230,0.09); }
+.lead-name { font-size: 12.5px; color: var(--ink); margin-bottom: 3px; }
+.lead-note { font-size: 11.5px; line-height: 1.5; color: var(--ink-2); }
+.lead-need {
+  margin-top: 5px; font-size: 10.5px; letter-spacing: 0.10em;
+  color: var(--ink-3);
+}
+.lead-need.met { color: #8fe8bc; }
+
+/* ============================================================ EXPEDITIONS */
+
+.exp {
+  padding: 13px 14px; border-radius: 12px; margin-bottom: 10px;
+  background: var(--fill);
+  border: 1px solid var(--line);
+}
+.exp.running { border-color: rgba(120,200,240,0.34); background: rgba(120,190,230,0.06); }
+.exp-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.exp-name { font-size: 13.5px; color: var(--ink); letter-spacing: 0.04em; }
+.exp-stage { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); }
+.exp-obj { margin-top: 7px; font-size: 12px; line-height: 1.55; color: var(--ink-2); }
+.exp-legs { display: flex; gap: 4px; margin-top: 10px; }
+.exp-leg {
+  flex: 1; height: 3px; border-radius: 2px; background: rgba(255,255,255,0.10);
+}
+.exp-leg.done { background: var(--accent); }
+.exp-leg.now { background: rgba(255,255,255,0.55); }
+.exp-where {
+  margin-top: 9px; font-size: 11px; letter-spacing: 0.09em; color: var(--ink-3);
+}
+.exp-found { margin-top: 9px; display: flex; flex-wrap: wrap; gap: 6px; }
+.exp-chip {
+  padding: 4px 9px; border-radius: 20px; font-size: 10.5px;
+  background: var(--fill-2); color: var(--ink-3);
+  border: 1px solid rgba(255,255,255,0.07);
+}
+
+/* ============================================================ THE BOAT HUD
+
+   Two lines in the corner of the fishing view while a boat is under you.
+   It is instruments, not a menu, so it never takes a press. */
+.boat-hud {
+  position: absolute; left: 14px;
+  bottom: clamp(84px, 12vh, 132px);
+  display: flex; gap: 8px; pointer-events: none; z-index: 3;
+}
+.boat-hud.hidden { display: none; }
+.boat-chip {
+  padding: 6px 10px; border-radius: 9px;
+  background: rgba(8,12,18,0.62);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px);
+  font-size: 10.5px; letter-spacing: 0.09em; color: var(--ink-3);
+}
+.boat-chip b { color: var(--ink); font-weight: normal; }
+.boat-chip.ping { animation: chip-ping 0.9s ease; }
+@keyframes chip-ping {
+  0% { border-color: rgba(150,220,255,0.75); }
+  100% { border-color: rgba(150,190,230,0.10); }
+}
+
+@media (max-width: 700px) {
+  .boat-hud { bottom: clamp(76px, 11vh, 118px); left: 10px; }
+  .boat-chip { font-size: 10px; padding: 5px 8px; }
+}

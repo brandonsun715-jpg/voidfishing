@@ -88,6 +88,11 @@
      the only gate on it: once the finding fires the pool cache is thrown away,
      and after that it is simply a fish that lives where its `locs` say. */
   function exists(f) {
+    /* A species that is only ever met is never drawn. These reach the fishdex
+       through js/systems/creature.js putting one on the line at the end of an
+       encounter, and through nothing else — finding What Eats Them on an
+       ordinary cast would undo the entire point of it. */
+    if (f.encounter) return false;
     return !f.discover || !!(VF.state.data.discovered || {})[f.discover];
   }
 
@@ -261,6 +266,16 @@
       at: Date.now()
     };
   }
+
+  /* The record is finished; now anything living on the rod gets to change it.
+     Wrapped rather than inlined so `roll` stays the description of an ordinary
+     catch and the things that interfere with one stay outside it. */
+  const rollPlain = roll;
+  roll = function (opts) {
+    const c = rollPlain(opts);
+    if (VF.parasite) { try { VF.parasite.onRoll(c); } catch (e) { /* not worth a cast */ } }
+    return c;
+  };
 
   /* However slow a loadout asks the bar to be, it still has to be able to run
      the fish down. This is that guarantee, as a multiple of the fish's speed. */

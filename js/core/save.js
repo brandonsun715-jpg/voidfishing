@@ -44,7 +44,10 @@
         if (k === 'fishdex' || k === 'baitCounts' || k === 'achievements' || k === 'flags' ||
             k === 'mutations' || k === 'traits' || k === 'traitsSeen' || k === 'treasures' ||
             k === 'secrets' || k === 'npcs' || k === 'equipped' || k === 'cases' ||
-            k === 'quests' || k === 'discovered' || k === 'research' || k === 'seen') {
+            k === 'quests' || k === 'discovered' || k === 'research' || k === 'seen' ||
+            k === 'seas' || k === 'creatures' || k === 'clues' || k === 'leads' ||
+            k === 'expeditions' || k === 'zoneState' || k === 'modules' || k === 'trophies' ||
+            k === 'paint') {
           target[k] = sv;
         } else {
           merge(tv, sv);

@@ -2385,7 +2385,7 @@
     key: 0.30, sign: 0.72, ladder: 0.80, bench: 0.40, screen: 0.40,
     window: 0.62, umbrella: 0.52, cage: 0.66, bucket: 0.48, calendar: 0.52,
     hands: 0.44, pricetag: 0.40, cursor: 0.52, counter: 0.34, missing: 0.44,
-    angler: 0.62, viewer: 0.58, lamp: 0.70, cup: 0.42, stairs: 0.56
+    angler: 0.62, viewer: 0.58, lamp: 0.70, cup: 0.42, stairs: 0.56, boat: 0.46
   };
 
   /* Line weight that survives being drawn at 20px and at 300px. */
@@ -2396,6 +2396,20 @@
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
     switch (kind) {
+
+      /* Drawn by js/render/boatArt.js, which already knows how to draw a boat
+         and is the only place in the game that should. The guard is for the
+         Wardrobe's colour swatches, which run this with no boat module in
+         scope at all. */
+      case 'boat': {
+        if (VF.boatArt && VF.boatArt.silhouette) { VF.boatArt.silhouette(ctx, L, H, P); break; }
+        ctx.fillStyle = P.a;
+        ctx.beginPath();
+        ctx.moveTo(-L * 0.62, 0); ctx.lineTo(L * 0.62, 0);
+        ctx.lineTo(L * 0.44, H * 0.7); ctx.lineTo(-L * 0.44, H * 0.7);
+        ctx.closePath(); ctx.fill();
+        break;
+      }
 
       case 'hook': {
         // one hook: eye at the top, shank down, the bend under it, and the

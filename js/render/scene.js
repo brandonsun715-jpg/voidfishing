@@ -531,6 +531,7 @@
   let castLateral = 0.62;
 
   function update(dt) {
+    if (VF.creatureArt) VF.creatureArt.tick(dt);
     t += dt;
 
     computeLayout();
@@ -890,6 +891,10 @@
     mark('surface', function () { seedGlints(); drawSurface(P, q); drawSurfaceMist(P, q); });
     mark('skyfall', function () { drawSkyfall(); });
     mark('ripples', function () { if (P.void < 0.9) VF.fx.drawRipples(ctx, 0.26); });
+    /* An encounter draws under the line and over the surface: it is in the
+       water, not on the screen. Everything it puts there inherits the fog,
+       the palette and the shake because it is inside the same transform. */
+    mark('creature', function () { if (VF.creatureArt) VF.creatureArt.draw(ctx, L, P); });
     mark('line', function () { drawLineAndBobber(P); drawDeparture(P); });
     mark('particles', function () { VF.particles.draw(ctx); });
     mark('fore', function () { drawForeground(P); });

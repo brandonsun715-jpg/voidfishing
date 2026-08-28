@@ -81,6 +81,21 @@
          loot pool and by the Fishdex's idea of how many species there are. */
       discovered: {},
 
+      /* --- the boat, and everything downstream of it ---
+
+         All five of these are free-form maps or plain records, and all five
+         are in the wholesale-copy list in js/core/save.js. A save from before
+         any of this existed simply has none of them: the defaults land, the
+         first tick shapes them, and nothing has to be migrated. */
+      boat: null,             // shaped by js/systems/boat.js on first use
+      voyages: 0,             // how many crossings have been sailed
+      seas: {},               // voyage-event id -> times seen, for weighting
+      creatures: {},          // creature id -> { met, caught, escaped, state }
+      clues: {},              // clue id -> { at, spent }  — the things that point somewhere
+      leads: {},              // lead id -> { at, done }   — what a clue points at
+      expeditions: {},        // expedition id -> { started, leg, done, found: {} }
+      zoneState: {},          // per-zone progress: cradle sections, crystal charge, …
+
       cosmetics: [],          // owned cosmetic ids
       equipped: {},           // cosmetic slot -> id
       cases: {},              // case id -> times opened

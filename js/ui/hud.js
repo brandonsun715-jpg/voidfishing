@@ -69,31 +69,46 @@
     return el;
   }
 
+  /* Where on the water a press landed, in the coordinates the scene draws in.
+     The context carries the device ratio, so the rect maps straight across. */
+  function scenePoint(e, canvas) {
+    const r = canvas.getBoundingClientRect();
+    if (!r.width || !r.height) return null;
+    return { x: (e.clientX - r.left) * (VF.scene.L.w / r.width),
+             y: (e.clientY - r.top) * (VF.scene.L.h / r.height) };
+  }
+
   /* A click on the figure standing up the shore opens what he is carrying,
      rather than starting a cast into him. */
   function merchantPress(e, canvas) {
     if (!VF.merchant || !VF.merchant.here()) return false;
     if (VF.state.rt.panelOpen || VF.visit.active()) return false;
     if (VF.fishing.state() === 'reeling') return false;
-    // the scene draws in CSS pixels (the context carries the device ratio), so
-    // the rect maps straight onto scene coordinates
-    const r = canvas.getBoundingClientRect();
-    if (!r.width || !r.height) return false;
-    const px = (e.clientX - r.left) * (VF.scene.L.w / r.width);
-    const py = (e.clientY - r.top) * (VF.scene.L.h / r.height);
-    if (!VF.scene.merchantHit(px, py)) return false;
+    if (VF.creature && VF.creature.active()) return false;
+    const p = scenePoint(e, canvas);
+    if (!p || !VF.scene.merchantHit(p.x, p.y)) return false;
     VF.audio.click();
     VF.panels.open('merchant');
     return true;
   }
 
-  function pressStart(e) {
+  function pressStart(e, px, py) {
     // a sequence owns the input while it is running
     if (VF.cutscene && VF.cutscene.active()) { VF.cutscene.skip(); return; }
     if (VF.state.rt.panelOpen) return;
     if (e && e.type === 'pointerdown' && e.button !== undefined && e.button !== 0) return;
     // a conversation owns the input while it is running
     if (VF.visit.active()) { VF.visit.advance(); return; }
+    /* And so does an encounter, except while it has handed the rod back for
+       the fight — that half of it is an ordinary fight and takes the ordinary
+       press. `px`/`py` are scene coordinates when the press came from the
+       water and undefined when it came from a key, which is exactly the
+       difference between "press that patch of water" and "hold". */
+    if (VF.creature && VF.creature.holdsRod()) {
+      pressed = true;
+      VF.creature.press(px === undefined ? null : px, py === undefined ? null : py);
+      return;
+    }
     if (pressed) return;
     pressed = true;
     const st = VF.fishing.state();
@@ -109,6 +124,7 @@
   function pressEnd() {
     if (!pressed) return;
     pressed = false;
+    if (VF.creature && VF.creature.holdsRod()) { VF.creature.release(); return; }
     const st = VF.fishing.state();
     if (st === 'idle' || VF.fishing.S.charging) VF.fishing.releaseCharge();
     if (st === 'reeling') VF.fishing.setReeling(false);
@@ -121,7 +137,8 @@
       e.preventDefault();
       // the wanderer gets the press before the water does
       if (merchantPress(e, canvas)) return;
-      pressStart(e);
+      const p = scenePoint(e, canvas);
+      pressStart(e, p ? p.x : undefined, p ? p.y : undefined);
     });
     D.actionBtn.addEventListener('pointerdown', function (e) { e.preventDefault(); pressStart(e); });
     window.addEventListener('pointerup', pressEnd);
@@ -169,7 +186,8 @@
            halfway through a fight and also mean to press a menu button, and
            the cost of guessing that wrong is a panel over the top of the fish
            you are losing. */
-        const busy = VF.fishing.state() !== 'idle' || VF.fishing.S.charging;
+        const busy = VF.fishing.state() !== 'idle' || VF.fishing.S.charging ||
+                     (VF.creature && VF.creature.active());
         if (!busy && focusedControl()) return;
 
         /* Otherwise the game owns these two, and it owns them on EVERY keydown
@@ -908,6 +926,7 @@
   let chipTimer = 0;
 
   function tick(dt) {
+    if (VF.encounterUI) VF.encounterUI.tick();
     if (VF.conditions.current()) tickCondition();
     const d = VF.state.data;
     const S = VF.fishing.S;

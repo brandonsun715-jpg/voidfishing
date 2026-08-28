@@ -208,10 +208,50 @@
   function triggerBite(opts) {
     if (!S.pending) S.pending = rollBite(opts || S.pendingOpts);
     S.pendingOpts = null;
+    /* An encounter gets first refusal on the moment of the bite. Some of them
+       are the bite — the thief takes the bait instead of taking the hook —
+       and the only way for that to read as one event rather than two is for
+       it to happen here, before the ordinary bite is announced. */
+    if (VF.creature && VF.creature.tryOnBite(S.pending)) {
+      S.pending = null;
+      endApproach();
+      setState('waiting');
+      S.biteWait = 9999;         // the encounter owns the rod now
+      return;
+    }
     S.biteWindow = S.pending.wide ? BITE_WINDOW_BIG : BITE_WINDOW;
     endApproach();
     setState('bite');
     VF.bus.emit('fishing:bite', S.pending);
+  }
+
+  /* Put a named species on the line right now, hooked and fighting.
+
+     This is how an encounter hands the rod back: it has already done the
+     tracking, the chase and the choice, and what is left is the fight, which
+     the game already has and which there is no reason to write twice. The
+     catch that comes out the far end is an ordinary catch with a `creature`
+     tag on it, so the card, the fishdex, the wall and the aquarium need to
+     know nothing about any of this. */
+  function putOnLine(fishId, extra) {
+    const f = VF.fish.byId(fishId);
+    if (!f) return false;
+    const c = VF.loot.roll({ forceFish: fishId });
+    c.kind = 'fish';
+    if (extra) for (const k in extra) c[k] = extra[k];
+    if (c.fish && c.fish.trial) c.trial = c.fish.trial;
+    else if (VF.trials) { const t = VF.trials.forCatch(c); if (t) c.trial = t; }
+    c.wide = true;
+    S.pending = c;
+    S.biteWindow = BITE_WINDOW_BIG * 2;
+    endApproach();
+    setState('bite');
+    VF.bus.emit('fishing:bite', c);
+    /* Set for them. Making somebody react to a hookset they were not told was
+       coming, at the end of an encounter they have been playing for two
+       minutes, is a way to lose one to a keystroke. */
+    hook();
+    return true;
   }
 
   /* ---------------------------------------------------------------- the fight
@@ -366,12 +406,32 @@
 
   function updateFight(dt) {
     if (!S.fight) { hardReset(); return; }
+    /* Something can arrive under a fight already in progress and take it
+       over. Checked once a frame rather than once a step: the devourer is a
+       rare event, not a per-substep dice roll, and it must not become more
+       likely on a machine with a long frame. */
+    if (VF.creature && !VF.creature.active() && !S.fight.c.creature) {
+      const took = VF.creature.tryOnReel(S.fight.c, S.fight.progress);
+      if (took) { interrupt(S.fight.c); return; }
+    }
     let left = dt;
     while (left > 1e-6 && S.state === 'reeling' && S.fight) {
       const h = Math.min(MAX_STEP, left);
       left -= h;
       stepFight(h);
     }
+  }
+
+  /* A fight taken off the rod by something else. Not a loss: nothing is
+     recorded, no streak is broken and no line is snapped — what was on the
+     hook is now part of whatever is happening instead. */
+  function interrupt(c) {
+    S.fight = null;
+    S.pending = null;
+    S.encounterActive = false;
+    S.biteWait = 9999;
+    setState('waiting');
+    VF.bus.emit('fishing:interrupt', c);
   }
 
   function stepFight(dt) {
@@ -674,6 +734,11 @@
         break;
 
       case 'waiting':
+        /* An encounter has the rod. The bite timer, the nibbles and the
+           approach all stop where they are rather than running underneath it
+           — a second fish arriving in the middle of the Lurker would be a
+           bug the player would read as the game being broken. */
+        if (VF.creature && VF.creature.holdsRod()) break;
         S.biteWait -= dt;
         S.nibbleTimer -= dt;
         if (S.nibbleTimer <= 0) {
@@ -758,6 +823,7 @@
     S: S,
     hardReset: hardReset,
     arm: arm,
+    putOnLine: putOnLine,
     acceptCatch: acceptCatch,
     tick: tick,
     canCast: canCast,

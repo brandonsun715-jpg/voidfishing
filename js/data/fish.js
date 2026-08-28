@@ -1221,6 +1221,100 @@
     } },
 
 
+
+  /* ========================= MET, RATHER THAN CAUGHT =========================
+
+     Nine species that ordinary fishing never produces. `encounter` keeps them
+     out of every loot pool — js/systems/loot.js drops them the same way it
+     drops a species the aquarium has not found yet — so the only way any of
+     these reaches the fishdex is through js/systems/creature.js putting it on
+     the line at the end of an encounter.
+
+     They are otherwise entirely ordinary catalogue entries: same art, same
+     traits, same records, same aquarium, same wall. That is the point. The
+     new part of the game is the two minutes in front of the fight, and none
+     of it needed a second copy of everything behind one. */
+
+  { id: 'lurker', name: 'The Lurker', rarity: 'void', value: 240000, kg: [180, 2400], m: [3.4, 14], diff: 0.95,
+    encounter: 1,
+    desc: 'It does not swim from one place to another. It stops being in the first place and ' +
+          'starts being in the second, and the water in between is undisturbed. Whatever the ' +
+          'shape is for, it is not for travelling.',
+    locs: [], baits: [], time: [], weather: [],
+    art: { body: 'anomaly', fin: 'veil', eyes: 4, glow: 0.55,
+           c1: '#12202c', c2: '#04080e', c3: '#4fb8d0', ex: ['fracture', 'threads'] } },
+
+  { id: 'hookfinger', name: 'Hookfinger', rarity: 'mythic', value: 46000, kg: [1.2, 9.0], m: [0.4, 1.1], diff: 0.88,
+    encounter: 1,
+    desc: 'Six digits on each of the front pair, and one of them opposes. It does not bite bait ' +
+          'off a hook. It unties it, and it has never once been caught doing so.',
+    locs: [], baits: [], time: [], weather: [],
+    art: { body: 'crustacean', fin: 'spiky', eyes: 2, glow: 0.3,
+           c1: '#8a6a3e', c2: '#4a3520', c3: '#ffd08a', ex: ['antenna', 'teeth'] } },
+
+  { id: 'thecopy', name: 'The Copy', rarity: 'glitch', value: 180000, kg: [4, 120], m: [0.8, 3.2], diff: 0.93,
+    encounter: 1,
+    desc: 'A very good likeness of whatever you last caught, made by something that has only ' +
+          'ever seen one. The weight is wrong. The weight is always wrong, and it is the only ' +
+          'part it cannot copy.',
+    locs: [], baits: [], time: [], weather: [],
+    art: { body: 'mirror', fin: 'long', eyes: 2, glow: 0.7,
+           c1: '#c8d4e2', c2: '#5a6a80', c3: '#ff5c9e', ex: ['fracture', 'stars'] } },
+
+  { id: 'passenger', name: 'The Passenger', rarity: 'void', value: 30000, kg: [0.02, 0.4], m: [0.05, 0.22], diff: 0.99,
+    encounter: 1,
+    desc: 'It came up the line rather than on it. It is a third of the way up the blank and it ' +
+          'has not moved since, and the catches have been strange ever since as well. It does ' +
+          'not appear to eat and it does not appear to need to.',
+    locs: [], baits: [], time: [], weather: [],
+    art: { body: 'blob', fin: 'none', eyes: 6, glow: 0.85,
+           c1: '#3a1a52', c2: '#10061c', c3: '#c98aff', ex: ['tentacles', 'runes'] } },
+
+  { id: 'whateats', name: 'What Eats Them', rarity: 'unknown', value: 900000, kg: [9000, 160000], m: [18, 74], diff: 1,
+    encounter: 1,
+    desc: 'It does not hunt. It waits under the places where things are being pulled upward and ' +
+          'lets somebody else do the pulling, and it has been doing that for as long as anyone ' +
+          'here has been fishing. Everybody has been feeding it. Nobody has been paid.',
+    locs: [], baits: [], time: [], weather: [],
+    art: { body: 'whale', fin: 'wing', eyes: 1, glow: 0.5,
+           c1: '#1a2630', c2: '#050a0e', c3: '#7fe0c8', ex: ['teeth', 'spine', 'rings'] } },
+
+  { id: 'standing', name: 'The Standing Thing', rarity: 'unknown', value: 620000, kg: [70, 140], m: [2.1, 3.4], diff: 0.99,
+    encounter: 1,
+    desc: 'Eleven evenings of it being a rock at a distance. On the twelfth it was a hundred ' +
+          'metres closer and still a rock. It has hands, and it takes the hook in one of them ' +
+          'the way you would take an offered pen.',
+    locs: [], baits: [], time: [], weather: [],
+    art: { body: 'column', fin: 'none', eyes: 1, glow: 0.9,
+           c1: '#2c3240', c2: '#0a0d14', c3: '#ffe9a8', ex: ['halo', 'runes'] } },
+
+  { id: 'broodmother', name: 'The Brood Mother', rarity: 'unknown', value: 1400000, kg: [2000, 40000], m: [9, 32], diff: 1,
+    encounter: 1,
+    desc: 'The shoal is not a shoal. Every small thing in this water is an extension of one ' +
+          'animal much further down, in the way a hand is an extension of a person. Catching ' +
+          'them does nothing at all. She simply grows more of them.',
+    locs: [], baits: [], time: [], weather: [],
+    art: { body: 'jelly', fin: 'veil', eyes: 5, glow: 1,
+           c1: '#4a1c58', c2: '#12061e', c3: '#ff9ad8', ex: ['tentacles', 'swarm', 'halo'] } },
+
+  { id: 'otherboat', name: 'The Other Boat', rarity: 'glitch', value: 400000, kg: [600, 900], m: [4.6, 6.2], diff: 0.96,
+    encounter: 1,
+    desc: 'Same hull, same lamp, same list to port. It does what you do about four hundred ' +
+          'metres off and about a second and a half late, and the four hundred metres does not ' +
+          'change however hard either of you tries.',
+    locs: [], baits: [], time: [], weather: [],
+    art: { body: 'object', object: 'boat', glow: 0.6,
+           c1: '#6a5a44', c2: '#2a2218', c3: '#ffd08a' } },
+
+  { id: 'wakerider', name: 'The Wake Rider', rarity: 'void', value: 300000, kg: [400, 3800], m: [4, 19], diff: 0.94,
+    encounter: 1,
+    desc: 'It sits in the disturbed water behind a hull where the drag is lowest, the way a bird ' +
+          'sits behind a ship. There have not been boats here for very long. It must have been ' +
+          'doing this to something else.',
+    locs: [], baits: [], time: [], weather: [],
+    art: { body: 'shard', fin: 'long', eyes: 3, glow: 0.6,
+           c1: '#26405a', c2: '#08131e', c3: '#8fd8ff', ex: ['spine', 'bubbles'] } },
+
   /* ============================== ASTRAL ==============================
 
      Eight of them, and the tier is not "rarer". Every rung below this one
@@ -1534,7 +1628,10 @@
      so a player who has never landed one has no way to notice the gap. */
   function known(f) {
     /* A species the aquarium has not turned up yet is not in the world at all,
-       so it is not a gap in the collection either. */
+       so it is not a gap in the collection either. Nor is one that can only be
+       met: an empty row for a creature nobody has heard of is the encounter
+       spoiled before it happens. */
+    if (f.encounter && !VF.state.data.fishdex[f.id]) return false;
     if (f.discover && !(VF.state.data.discovered || {})[f.discover] &&
         !VF.state.data.fishdex[f.id]) return false;
     return !VF.rarities.hidden(f.rarity) || !!VF.state.data.fishdex[f.id];

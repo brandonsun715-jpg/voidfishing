@@ -15,6 +15,7 @@
 <link rel="stylesheet" href="css/hud.css">
 <link rel="stylesheet" href="css/panels.css">
 <link rel="stylesheet" href="css/aquarium.css">
+<link rel="stylesheet" href="css/voyage.css">
 <link rel="stylesheet" href="css/console.css">
 </head>
 <body>
@@ -125,6 +126,24 @@
         <span id="fightPct" class="fight-pct">&mdash;</span>
       </div>
     </div>
+
+    <!-- an encounter. Sits where the fight bar sits, because it is the same
+         part of the screen doing the same job: telling you what is on the
+         other end of the line and what to do about it. -->
+    <div id="encUI" class="enc hidden">
+      <div class="enc-head">
+        <span id="encName" class="enc-name">&nbsp;</span>
+        <span id="encState" class="enc-state"></span>
+      </div>
+      <div id="encText" class="enc-text"></div>
+      <div id="encMeterWrap" class="enc-meter hidden">
+        <div id="encMeterFill" class="enc-meter-fill"></div>
+        <div id="encBand" class="enc-band hidden"></div>
+      </div>
+      <div id="encPips" class="enc-pips"></div>
+      <div id="encOptions" class="enc-options"></div>
+      <div id="encHint" class="enc-hint"></div>
+    </div>
     </div>
 
     <!-- centred prompts -->
@@ -187,6 +206,8 @@
 <script src="js/data/treasure.js"></script>
 <script src="js/data/journal.js"></script>
 <script src="js/data/secrets.js"></script>
+<script src="js/data/discoveries.js"></script>
+<script src="js/data/creatures.js"></script>
 <script src="js/data/npcs.js"></script>
 <script src="js/data/quests.js"></script>
 <script src="js/data/cosmetics.js"></script>
@@ -205,6 +226,9 @@
 <script src="js/systems/catches.js"></script>
 <script src="js/systems/achievements.js"></script>
 <script src="js/systems/encounters.js"></script>
+<script src="js/systems/discovery.js"></script>
+<script src="js/systems/parasite.js"></script>
+<script src="js/systems/creature.js"></script>
 <script src="js/systems/wrong.js"></script>
 <script src="js/systems/caseOpen.js"></script>
 <script src="js/systems/visit.js"></script>
@@ -224,6 +248,7 @@
 <script src="js/render/fx.js"></script>
 <script src="js/render/fishArt.js"></script>
 <script src="js/render/astralArt.js"></script>
+<script src="js/render/creatureArt.js"></script>
 <script src="js/render/rodSignature.js"></script>
 <script src="js/render/rodFrame.js"></script>
 <script src="js/render/rodArt.js"></script>
@@ -242,6 +267,7 @@
 <script src="js/ui/hud.js"></script>
 <script src="js/ui/panels.js"></script>
 <script src="js/ui/catch.js"></script>
+<script src="js/ui/encounterUI.js"></script>
 <script src="js/ui/catchCard.js"></script>
 <script src="js/ui/aquarium.js"></script>
 <script src="js/ui/tutorial.js"></script>
