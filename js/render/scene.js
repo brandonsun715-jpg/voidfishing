@@ -620,11 +620,61 @@
      of the list lands near 2.2x instead of 3.2x. */
   const ROD_ANCHOR = 0.78, ROD_SPREAD = 0.435;
 
-  function rodTipPoint() {
-    const fh = L.figureH;
+  /* --------------------------------------------------------- the rod stage
+
+     Compressing the spread was not enough. The length still came out of the
+     rod and the figure, and the frame had no say in it, so on a 1440x860 the
+     endgame rod ran 563px from a hand at 0.20W and put its tip within twenty
+     pixels of the exact centre of the screen — straight through the horizon,
+     across whatever the zone had put out there, and over the water the player
+     is supposed to be reading.
+
+     So the frame decides, and the rod fits into it. The length falls out of
+     the geometry rather than the geometry falling out of the length, and every
+     rod at every viewport lands its tip in the same composed place.
+
+     Rod identity survives — a long rod is still visibly long — but as a band
+     around the stage rather than as an absolute, which is the difference
+     between a rod that reads as bigger and a rod that eats the frame.
+
+     The constraint that matters is horizontal. A rod tip crossing the skyline
+     is what a held rod does and is fine; a rod tip arriving at the exact
+     centre of the picture is not, because from there the blank is a diagonal
+     through everything behind it. So the stage is a reach — TIP_X across the
+     frame — and the vertical is left alone except for keeping the tip on it.
+
+     Floored against the figure so that a narrow viewport, where the angler is
+     width-capped and the reach to TIP_X is only a few dozen pixels, does not
+     end up with a rod the size of a pencil; and ceilinged at the length the
+     rod would have had anyway, so this can only ever make a rod smaller. */
+  const TIP_X = 0.46;        // how far across the frame the tip may reach
+  const TIP_TOP = 0.16;      // and how much sky it must leave above it
+  const ROD_BAND = 0.16;     // +-16% of the stage, across the whole ladder
+
+  /* Where the rod would reach if the frame had no opinion. Kept so the art can
+     be drawn at the weight it was tuned for. */
+  function rodNaturalLength() {
     const rl = VF.rods.get(VF.state.data.rod).art.len;
-    const len = fh * 1.85 * (ROD_ANCHOR + (rl - ROD_ANCHOR) * ROD_SPREAD);
+    return L.figureH * 1.85 * (ROD_ANCHOR + (rl - ROD_ANCHOR) * ROD_SPREAD);
+  }
+
+  function rodStageLength(a, k) {
+    const cos = Math.cos(a), sin = Math.sin(a);
+    let len = (W * TIP_X - L.rodHand.x) / Math.max(0.25, cos);
+    len *= U.lerp(1 - ROD_BAND, 1 + ROD_BAND, k);
+    len = U.clamp(len, L.figureH * 1.15, rodNaturalLength());
+    // and it stays on the frame, however far back the cast has pulled it
+    if (sin < -0.01) len = Math.min(len, (L.rodHand.y - H * TIP_TOP) / -sin);
+    return Math.max(L.figureH * 0.9, len);
+  }
+
+  function rodTipPoint() {
+    const rl = VF.rods.get(VF.state.data.rod).art.len;
     const a = rodState.angle + rodState.sway;
+    /* Where this rod sits in the ladder, 0 at the wooden one and 1 at the top,
+       mapped onto a band either side of the stage. */
+    const k = U.clamp((rl - ROD_ANCHOR) / 0.95, 0, 1);
+    const len = rodStageLength(a, k);
     const bend = rodState.bend;
     // quadratic curve: control point offset perpendicular to the rod line
     const ex = L.rodHand.x + Math.cos(a) * len;
@@ -945,8 +995,78 @@
     syncVignette();
 
     if (wrongK > 0.01) drawWrong(wrongK);
+    if (debugOn) drawDebug();
     if (prof) { prof.frames++; }
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+
+  /* ------------------------------------------------------------------ F9
+
+     The world with its working shown: the (u, d) lattice the water is
+     addressed by, where the camera is pointed, and — once there are any — the
+     landmark graph with its sightlines.
+
+     This is not a nicety. Placement that is planned rather than scattered is
+     invisible when it works, so the only way to tell a deliberate composition
+     from a lucky one is to be able to see the grid it was composed on. */
+  let debugOn = false;
+
+  function drawDebug() {
+    if (!VF.space || !VF.camera) return;
+    const cam = VF.camera.get();
+    ctx.save();
+    ctx.lineWidth = 1;
+
+    // lines of constant u, running out to the horizon
+    ctx.strokeStyle = 'rgba(120,220,255,0.22)';
+    for (let u = -3; u <= 3; u += 0.5) {
+      ctx.beginPath();
+      for (let d = 0; d <= 1.0001; d += 0.05) {
+        const x = VF.space.xAt(u, d), y = VF.space.yAt(d);
+        if (d === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+    // and of constant d, across it
+    ctx.strokeStyle = 'rgba(120,220,255,0.16)';
+    for (let d = 0; d <= 1.0001; d += 0.1) {
+      const y = VF.space.yAt(d);
+      ctx.beginPath();
+      ctx.moveTo(VF.space.xAt(-3, d), y);
+      ctx.lineTo(VF.space.xAt(3, d), y);
+      ctx.stroke();
+    }
+
+    // the edge of the world, which is what the camera is clamped to
+    const hw = VF.space.halfWorld();
+    ctx.strokeStyle = 'rgba(255,180,90,0.55)';
+    [-hw, hw].forEach(function (u) {
+      ctx.beginPath();
+      for (let d = 0; d <= 1.0001; d += 0.05) {
+        const x = VF.space.xAt(u, d), y = VF.space.yAt(d);
+        if (d === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    });
+
+    if (VF.landmarks && VF.landmarks.debugDraw) VF.landmarks.debugDraw(ctx);
+
+    // the rod stage, so the composition rule is visible rather than asserted
+    ctx.strokeStyle = 'rgba(255,90,120,0.5)';
+    ctx.beginPath();
+    ctx.moveTo(W * TIP_X, L.horizonY);
+    ctx.lineTo(W * TIP_X, H);
+    ctx.moveTo(0, H * TIP_TOP);
+    ctx.lineTo(W, H * TIP_TOP);
+    ctx.stroke();
+
+    ctx.fillStyle = 'rgba(230,245,255,0.9)';
+    ctx.font = '11px ui-monospace, monospace';
+    ctx.fillText('cam u ' + cam.u.toFixed(2) + '  zoom ' + cam.zoom.toFixed(2) +
+                 '  ' + cam.mode + (cam.enabled ? '' : ' (locked)') +
+                 '   air ' + VF.space.density().toFixed(2) +
+                 '   rod ' + Math.round(rodTipPoint().len) + 'px', 12, H - 14);
+    ctx.restore();
   }
 
   function drawSky(P) {
@@ -2523,13 +2643,19 @@
     const a = tip.a;
     const S = VF.fishing.S;
     const reeling = S.state === 'reeling' && S.fight && S.fight.reeling;
+    /* rodArt sizes its guides, bindings and reel off clamp(len / 300) — an
+       absolute pixel count. Shortening the rod to fit the stage would
+       therefore have thinned sixty rods' worth of hand-tuned detail as a side
+       effect of a composition change. So the weight is handed over separately:
+       draw at the stage length, detail at the length the art was tuned for. */
+    const weight = U.clamp(rodNaturalLength() / Math.max(1, tip.len), 0.85, 1.9);
     VF.rodArt.draw(ctx, rod, {
       bx: hand.x - Math.cos(a) * tip.len * 0.13,
       by: hand.y - Math.sin(a) * tip.len * 0.13,
       cx: tip.cx, cy: tip.cy,
       tx: tip.x, ty: tip.y,
       len: tip.len, angle: a
-    }, t, { spin: reeling ? t * 12 : t * 0.4 });
+    }, t, { spin: reeling ? t * 12 : t * 0.4, weight: weight });
   }
 
   /* The two sequences, drawn over the shore rather than instead of it: the
@@ -2700,6 +2826,8 @@
   VF.scene = {
     init: init, resize: resize, update: update, draw: draw,
     L: L, addShadow: addShadow, newCastLateral: newCastLateral,
+    debug: function (on) { debugOn = on === undefined ? !debugOn : !!on; return debugOn; },
+    rodLength: function () { return rodTipPoint().len; },
     /* what a lost fish is doing right now, for the tools */
     debugDeparture: function () {
       return departure ? { t: departure.t, x: departure.x, y: departure.y,

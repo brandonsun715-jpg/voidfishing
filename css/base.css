@@ -317,3 +317,37 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
    it should be: it is the only one a player may never see. */
 .bow-fg { text-shadow: 0 0 10px rgba(255,255,255,0.30); letter-spacing: 0.16em; }
 .bow-bg { box-shadow: 0 0 8px rgba(255,255,255,0.34); }
+
+/* ------------------------------------------------------------------ F8
+
+   The world with the interface taken away.
+
+   This is a development key rather than a screenshot mode, and it is here
+   because a scene can be carried entirely by the panels sitting on top of it
+   without anybody noticing. If the frame does not hold up with this on — a
+   silhouette you can name, one thing worth looking at, foreground and
+   distance that are different distances — then the environment is not
+   finished, whatever it looked like with a HUD over it.
+
+   Opacity rather than display, so nothing reflows, the canvas keeps its size,
+   and toggling back is instant. */
+body.cinema #hud,
+body.cinema #prompt,
+body.cinema #caption,
+body.cinema #toasts,
+body.cinema #encounter,
+body.cinema #overlay,
+body.cinema #modal,
+body.cinema #voyage .vy-top,
+body.cinema #voyage .vy-progress,
+body.cinema #voyage .vy-event,
+body.cinema #voyage .vy-instr {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity 220ms ease;
+}
+
+/* The film grain and the vignette stay: they are part of how the water looks,
+   not part of the interface. The edge glow goes, because it is a readability
+   aid for the HUD rather than anything in the world. */
+body.cinema #edgeGlow { opacity: 0 !important; }

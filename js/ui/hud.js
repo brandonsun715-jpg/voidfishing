@@ -153,6 +153,16 @@
     window.addEventListener('pointercancel', pressEnd);
     window.addEventListener('blur', pressEnd);
 
+    /* F8: take the interface away and look at the game.
+
+       Nothing here is saved and nothing is announced — a toast explaining that
+       the interface has been hidden would be an interface. It reads back off
+       the body class, so the stylesheet is the only thing that knows. */
+    function toggleCinema() {
+      document.body.classList.toggle('cinema');
+      VF.audio.click();
+    }
+
     window.addEventListener('keydown', function (e) {
       const tag = document.activeElement && document.activeElement.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
@@ -222,8 +232,18 @@
       if (VF.adminDoor && VF.adminDoor.key(e)) return;
 /* @end-admin */
 
+      /* The two development keys. They work with a panel open, because half
+         the point of F8 is being able to take the interface away while it is
+         in the way, and neither of them touches the save. */
+      if (e.code === 'F8') { e.preventDefault(); if (!e.repeat) toggleCinema(); return; }
+      if (e.code === 'F9') { e.preventDefault(); if (!e.repeat) VF.scene.debug(); return; }
+
       if (VF.state.rt.panelOpen) return;
       switch (e.code) {
+        /* Looking around. Arrows rather than A and D, which are the aquarium
+           and would have to be taken off somebody. */
+        case 'ArrowLeft': e.preventDefault(); VF.camera.steer(-0.14); break;
+        case 'ArrowRight': e.preventDefault(); VF.camera.steer(0.14); break;
         case 'KeyQ': e.preventDefault(); VF.panels.open('shop'); break;
         case 'KeyF': e.preventDefault(); VF.panels.open('fishdex'); break;
         case 'KeyB': e.preventDefault(); VF.panels.open('bag'); break;

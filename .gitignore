@@ -3,6 +3,7 @@ package-lock.json
 
 # generated screenshots from the tools/ scripts
 tools/*.png
+tools/sc-world/
 
 # generated build output
 dist/
