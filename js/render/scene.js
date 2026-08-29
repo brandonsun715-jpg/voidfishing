@@ -555,7 +555,6 @@
 
   /* ---------------------------------------------------------------- update */
 
-  let castLateral = 0.62;
 
   function update(dt) {
     if (VF.creatureArt) VF.creatureArt.tick(dt);
@@ -695,15 +694,15 @@
     L.rodTip.x = tip.x; L.rodTip.y = tip.y;
 
     const b = L.bobber;
-    const vd = VF.palette.P.void || 0;
-    const near = L.horizonY + L.waterH * 0.80;
-    const far = L.horizonY + L.waterH * 0.09;
-    /* Distance is how far out across the water the throw reaches. Where there
-       is no water to reach across, the same power puts the hook straight down
-       instead, so the range collapses toward the near end. */
-    const distT = U.clamp(S.castDist / 1.5, 0, 1) * (1 - vd * 0.55);
-    L.castTarget.x = W * castLateral;
-    L.castTarget.y = U.lerp(near, far, distT);
+    /* The rig goes where the cast said it went. This used to be a random
+       lateral times the width of the screen, thrown away and re-rolled on
+       every throw — which is why nothing downstream could ever ask where the
+       line was. How far out it reaches, including the collapse in water there
+       is nothing to reach across, is settled in fishing.resolveCast now: it is
+       a question about the cast rather than about the picture. */
+    const pr = VF.space.project(S.castU, S.castD);
+    L.castTarget.x = pr.x;
+    L.castTarget.y = pr.y;
 
     const out = S.state === 'casting' || S.state === 'waiting' ||
                 S.state === 'bite' || S.state === 'reeling';
@@ -722,7 +721,8 @@
          higher than that — the first moments, leaving a raised tip — no lift
          is added at all. */
       const straight = U.lerp(tip.y, L.castTarget.y, k);
-      const arc = Math.sin(S.flight * Math.PI) * L.waterH * 0.42 * (0.35 + distT * 0.65);
+      // a longer throw carries a higher arc, and distance is how far out it went
+      const arc = Math.sin(S.flight * Math.PI) * L.waterH * 0.42 * (0.35 + S.castD * 0.65);
       const ceiling = Math.min(straight, L.horizonY + L.waterH * 0.05);
       b.y = Math.max(ceiling, straight - arc);
       b.scale = U.lerp(1.0, scaleAt(L.castTarget.y), k);
@@ -776,19 +776,10 @@
     return U.lerp(0.34, 1.0, Math.pow(k, 0.85));
   }
 
-  function newCastLateral() {
-    /* Out across the water on the shore. In the last water there is nothing to
-       cast across, so the throw shortens and the line goes down instead — but
-       it goes down off the edge of the slab rather than through it, so however
-       short the throw is it never lands nearer than where the slab stops.
-       Read off the location and not off the palette: the palette catches up a
-       frame later, and the first cast after arriving used the old number. */
-    const vd = U.clamp(VF.locations.current().void || 0, 0, 1);
-    const near = U.clamp((vd - 0.5) / 0.5, 0, 1);
-    const raw = (0.54 + VF.rng.g() * 0.22) * (1 - vd * 0.30);
-    const edge = (L.seatX + (L.figureH || W * 0.2) * 1.16) / Math.max(1, W);
-    castLateral = Math.max(raw, U.lerp(0, edge, near));
-  }
+  /* newCastLateral used to live here: it re-rolled the bobber's lateral to
+     0.54 + rnd() * 0.22 of the screen width on every cast and threw it away
+     afterwards. The cast has a world position now and the renderer reads it,
+     so there is nothing left to randomise. */
 
   /* ------------------------------------------------- weather particles */
 
@@ -998,6 +989,7 @@
       if (VF.landmarkArt) VF.landmarkArt.drawOn(ctx, L, P);
     });
     mark('creature', function () { if (VF.creatureArt) VF.creatureArt.draw(ctx, L, P); });
+    mark('aim', function () { drawAim(P); });
     mark('line', function () { drawLineAndBobber(P); drawDeparture(P); });
     mark('particles', function () { VF.particles.draw(ctx); });
     mark('fore', function () { drawForeground(P); });
@@ -1009,6 +1001,62 @@
     if (debugOn) drawDebug();
     if (prof) { prof.frames++; }
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+
+  /* Where the line is going, while the meter is filling.
+
+     Two marks rather than one, and the gap between them is the whole lesson:
+     the ring is what the player pointed at, and the cross is where the rig
+     will actually land — short of it on a soft throw, and short of it however
+     hard it is thrown if the rod cannot reach that far. Nothing has to explain
+     that a longer rod reaches further once you have watched the gap close.
+
+     It is drawn on the water rather than over it: a flat ellipse on the
+     surface, sized by the perspective, so it reads as a place rather than as a
+     cursor. */
+  function drawAim(P) {
+    const S = VF.fishing.S;
+    if (!S.charging || !VF.space) return;
+    const landD = Math.min(U.clamp(S.aimD, 0.04, 1), VF.fishing.reach()) *
+                  (0.62 + 0.38 * S.charge);
+
+    const want = VF.space.project(S.aimU, S.aimD);
+    const wx = want.x, wy = want.y, ws = want.scale;
+    const land = VF.space.project(S.aimU, landD);
+
+    ctx.save();
+    ctx.lineWidth = 1.2;
+
+    /* The ring reports the water under it. Deep water draws it heavier, and on
+       the trench that is the only reading the player gets of where the seam
+       is between one sonar sweep and the next — so the mark is an instrument
+       as well as a cursor, and the zone's navigation problem is something the
+       hand can solve rather than something the interface announces. */
+    const deep = VF.zones && VF.zones.depthAt ? VF.zones.depthAt(S.aimU, S.aimD) : S.aimD;
+    const r = Math.max(5, W * 0.016 * ws);
+    ctx.strokeStyle = U.rgbToCss(P.glow, 0.18 + deep * 0.34);
+    ctx.lineWidth = 1 + deep * 1.1;
+    ctx.beginPath();
+    ctx.ellipse(wx, wy, r, r * 0.30, 0, 0, TAU);
+    ctx.stroke();
+    ctx.lineWidth = 1.2;
+
+    // and where it is actually going to go
+    const short = Math.abs(land.y - wy) > 2;
+    if (short) {
+      ctx.strokeStyle = U.rgbToCss(P.glow, 0.5);
+      const c = Math.max(3, W * 0.008 * land.scale);
+      ctx.beginPath();
+      ctx.moveTo(land.x - c, land.y); ctx.lineTo(land.x + c, land.y);
+      ctx.moveTo(land.x, land.y - c * 0.42); ctx.lineTo(land.x, land.y + c * 0.42);
+      ctx.stroke();
+      // the shortfall, drawn as the distance it is
+      ctx.strokeStyle = U.rgbToCss(P.glow, 0.14);
+      ctx.beginPath();
+      ctx.moveTo(land.x, land.y); ctx.lineTo(wx, wy);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   /* ------------------------------------------------------------------ F9
@@ -2836,7 +2884,7 @@
 
   VF.scene = {
     init: init, resize: resize, update: update, draw: draw,
-    L: L, addShadow: addShadow, newCastLateral: newCastLateral,
+    L: L, addShadow: addShadow,
     debug: function (on) { debugOn = on === undefined ? !debugOn : !!on; return debugOn; },
     rodLength: function () { return rodTipPoint().len; },
     /* what a lost fish is doing right now, for the tools */

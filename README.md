@@ -22,7 +22,9 @@ them since about 2015.
 
 | Input | Does |
 | --- | --- |
-| Hold **Space**, or press and hold on the water | Charge a cast — release to send it. Filling the meter into the gold band improves the cast. |
+| Press and hold **on a patch of water** | Aim there, and charge. Release to send it — the mark shows where you pointed, the cross where the rig will actually land. |
+| Hold **Space** | The same, aimed at whatever the frame is centred on. |
+| **← →** | Walk the aim along while the meter is filling; turn and look along the water when it is not. |
 | Press again when the bobber goes under | Set the hook. |
 | Hold | Drive the white bar right; let go and it runs back left. Keep the fish inside the bar and the meter fills. |
 | **R** | Reel the line back in |
@@ -30,6 +32,7 @@ them since about 2015.
 | **Q F B T M** | Shop, Fishdex, Bag, Record, the Chart |
 | **J C** | Journal, Wardrobe |
 | **Esc** | Close a menu |
+| **F8 F9** | Hide the interface; show the world's working (development keys) |
 
 Catches can be sold for Jias, kept for the collection, or released for
 reputation — which quietly raises your luck, and occasionally earns you
@@ -174,8 +177,10 @@ js/systems/           time, weather, progression, economy, loot, fishing,
                       catches, quests, merchant, cutscenes, achievements,
                       encounters, daily, bounties, wall, away, returning,
                       charter
+js/world/             world coordinates and the camera, the shapes a place is
+                      built from, and the landmark graph
 js/render/            palette, particles, screen effects, fish art, the chart,
-                      scene
+                      landmark art, scene
 js/audio/             procedural WebAudio engine
 js/ui/                toast, HUD and input, panels, catch card, tutorial,
                       console (owner build only)
@@ -188,6 +193,68 @@ fishing loop does not know the UI exists and the renderer does not know about
 the economy.
 
 ## Notes on the design
+
+**The water has coordinates.** Everything used to be drawn in screen space
+against one horizon line, which is why the big light sat at 0.70 of the way
+across the frame in all nine zones, why the pylons on the Glass Flats were a
+table of constants, and why nothing could be looked at: there was nowhere for a
+thing to *be*. The water is now a plane addressed as `(u, d)` — how far along,
+how far out — projected on the same depth ramp the wave lines and the moonpath
+were already spaced on, so anything placed through it lands on the surface the
+water renderer is drawing rather than near it. The camera translates rather
+than rotates, which is where the parallax comes from for free: a world unit is
+1.45 half-screens wide at the hull and 0.55 at the horizon, so sliding the
+frame slides near water further than it slides the sky.
+
+**A zone is a graph, not a list of positions.** One macro landmark you can
+know the place by, three to five meso landmarks placed *by sightline* — each
+where an earlier one can see it, so the set reads as a route — micro detail
+scattered against the influence field of everything larger, so debris collects
+around a wreck instead of evenly over a sea, and a secret placed off the
+bearing you start on but in view of something else, so it is found by looking
+at one thing and noticing another. Every zone also declares how much of itself
+must stay **empty**, and generation backs off until it does. The reflex when a
+frame looks thin is to put another rock in it; that number is what says no.
+
+**The identity matrix is a test.** Each zone declares a shape language, how its
+water moves, where its light comes from, the navigation problem it poses and
+the mechanic that only exists there — and `tools/zonecheck.js` fails if two
+zones share a navigation problem, a mechanic or a whole look, or if one is
+missing something to know it by, something that is not obvious, a question it
+does not answer, or the empty water it promised. Two zones may share a shape
+if they do something different with it; the Basin's rings and the Cradle's arcs
+are both round and are not the same place.
+
+**Where you cast is a decision.** The bobber used to land at
+`0.54 + random() * 0.22` of the screen width, thrown away and re-rolled every
+throw, and nothing downstream ever saw it — which is why no zone could make
+"where do I put the line" into a question. Pointing at water aims there; the
+rod's reach decides whether it can get that far and the meter decides how close
+to the mark it lands, so a longer rod is a visible gap closing rather than a
+number. Where it lands is then read for depth, cover and light, and those feed
+the bite timer and a fourth species-preference axis alongside bait, hour and
+weather. The Deepwater Trench is the case the system exists for: its deep water
+is a narrow seam, nothing on the surface says where, and the sonar sweep that
+shows it fades — so the answer has to be remembered rather than read off a
+marker, and a rod dropped over the shelf waits nearly twice as long as one
+dropped over the seam.
+
+**F8 is the acceptance test.** It takes the whole interface away. A scene can
+be carried entirely by the panels sitting on top of it without anyone noticing,
+and the only way to find that out is to look; if the frame does not hold up
+with the HUD gone — a silhouette you can name, one thing worth looking at,
+foreground and distance that are different distances — the environment is not
+finished, whatever it looked like with a cast meter over it. F9 draws the
+working underneath: the `(u, d)` lattice, the landmark graph and its
+sightlines, the edge of the world and the rod's stage.
+
+**The rod is composed into the frame rather than sized by itself.** Its length
+used to come out of the rod and the angler with the picture getting no say, so
+the endgame blank ran 557px from a hand at 0.26W and put its tip past the
+centre of the screen. The frame now decides: the tip reaches a fixed fraction
+across at whatever angle the rod is held, and rod identity survives as a band
+either side of that. The art is still drawn at the weight it was tuned for, so
+shortening the blank did not thin sixty rods' worth of detail as a side effect.
 
 **Fight model.** One control, one job. Hold and the white bar drives right; let
 go and it runs back left. Keep the fish inside the bar and the meter fills, let
@@ -250,6 +317,10 @@ node tools/ui-audit.js     clicks every control in every menu
 node tools/responsive.js   layout overflow across viewport sizes
 node tools/perf.js         per-stage render timings at each quality level
 node tools/tour.js         screenshots every location and menu
+node tools/world.js       every zone with the interface off, two times of day
+node tools/zonecheck.js   the identity matrix, and the landmark graph's shape
+node tools/space.js       the projection's invariants: round-trip, parallax,
+                          scale agreement, and that a cast lands where aimed
 node tools/gallery.js      renders the whole catalogue to one sheet
 node tools/closeup.js      renders a few species large, to judge surface detail
 node tools/rods.js         renders every rod preview to one sheet

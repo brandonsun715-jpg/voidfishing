@@ -556,8 +556,102 @@
     return null;
   }
 
+  /* ------------------------------------------------- what the water is like
+
+     The four questions the cast asks of wherever it landed. A zone that does
+     not answer one gets the sensible default, so adding a rule to a zone is
+     adding a case here rather than touching the fishing loop.
+
+     This is where a zone stops being a backdrop with a mechanic bolted on and
+     starts being water with properties: the trench is deep in the middle and
+     shelving at the sides, the flats are the same depth everywhere, the
+     nowhere sea does not put the rig where it was pointed. */
+
+  /* How much lateral slop there is between the aim and the landing, in frames.
+     Only ever non-zero where being unable to trust it is the point. */
+  function castScatter() {
+    switch (rule()) {
+      /* The chart lies, and so does the throw. Enough to miss a mark you were
+         aiming at, never enough to land somewhere you were not looking. */
+      case 'drift': return 0.16;
+      /* Down is a direction rather than a depth, and a throw into it does not
+         travel in a straight line either. */
+      case 'inverted': return 0.09;
+      default: return 0;
+    }
+  }
+
+  /* 0 at the surface, 1 as deep as this zone goes. */
+  function depthAt(u, d) {
+    const r = rule();
+    if (r === 'sonar') {
+      /* The trench is a seam, not a bowl: a narrow band of very deep water
+         with the shelf coming up hard either side of it. Where that band lies
+         is the zone's one navigation problem, and it is not on the surface to
+         be seen. */
+      const s = seamU();
+      const off = Math.abs(u - s) / Math.max(0.05, VF.space.uSpan(d) * 0.30);
+      return U.clamp(1 - Math.pow(U.clamp(off, 0, 1), 1.6) * 0.86, 0.10, 1);
+    }
+    /* Flat water: the flats are the same depth everywhere, which is the whole
+       joke about them. */
+    if (r === 'clearwater') return 0.72;
+    /* Everywhere else shelves away from the bank, which is the shape of nearly
+       every real piece of coast and is what makes a long cast worth making. */
+    return U.clamp(Math.pow(d, 0.7), 0, 1);
+  }
+
+  /* How lit that patch of water is, 0 dark to 1 bright. */
+  function lightAt(u, d) {
+    const L = VF.scene.L;
+    if (!L || !VF.space) return 0.5;
+    if (rule() === 'sonar') {
+      /* The light stops about nine metres down. Nothing out here is lit by
+         anything except what is already down there. */
+      return U.clamp(0.34 - depthAt(u, d) * 0.30, 0, 1);
+    }
+    /* Otherwise: how near the moonpath it is. The path is where the light on
+       the water actually is, so this is not a proxy for it, it is it. */
+    const x = VF.space.xAt(u, d);
+    const off = Math.abs(x - L.glowX) / Math.max(1, L.w * 0.30);
+    return U.clamp(1 - off, 0, 1) * U.clamp(VF.palette.P.bright, 0, 1.4);
+  }
+
+  /* A multiplier on how long the bite takes, given where the rig went. Lower
+     is faster. */
+  function biteAt(ctx) {
+    if (!ctx) return 1;
+    const r = rule();
+    if (r === 'sonar') {
+      /* Over the shelf there is very little; over the seam there is
+         everything, and you cannot see which is which. */
+      return U.lerp(1.45, 0.62, ctx.depth);
+    }
+    if (r === 'bottles') {
+      /* The shore teaches the depth field: the shallows are quick and small,
+         the channel past the islands is slower and worth it. */
+      return U.lerp(0.78, 1.12, ctx.depth);
+    }
+    if (r === 'moon') {
+      // what lives here answers to the light
+      return U.lerp(1.20, 0.78, ctx.lit);
+    }
+    return 1;
+  }
+
+  /* Where the seam runs. Fixed per zone rather than per visit — a trench that
+     moved between casts would not be a place, and finding it once has to be
+     worth something. */
+  function seamU() {
+    const w = VF.landmarks && VF.landmarks.world();
+    if (w && w.seam !== undefined) return w.seam;
+    return -0.28;
+  }
+
   VF.zones = {
     tick: tick, press: press, view: view, stats: stats,
+    castScatter: castScatter, depthAt: depthAt, lightAt: lightAt,
+    biteAt: biteAt, seamU: seamU,
     moonPhase: moonPhase, moonK: moonK,
     onRoll: onRoll,
     driftTo: driftTo, forceContact: forceContact, excavate: excavate,

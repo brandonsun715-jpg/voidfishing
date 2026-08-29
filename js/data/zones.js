@@ -149,6 +149,36 @@
         question: 'what is moving below the range of the set?',
         air: 0.92, width: 2.2, empty: 0.72
       },
+
+      /* The trench is a seam, and the whole zone is about not being able to
+         see where it is. Everything here is vertical — walls that leave the
+         top of the frame, pinnacles standing off them — because the shape
+         language is the other half of knowing where you are, and it is the
+         half that survives the dark.
+
+         Six things in a very large amount of nothing. The empty budget is
+         0.72 and it is the highest in the game: a trench that is furnished is
+         not a trench, and the moment where a single light appears eight
+         hundred metres out does not work if there are already nine of them. */
+      landmarks: {
+        seed: 23,
+        /* The seam runs down the frame rather than across it, so the macro is
+           the wall on the far side of it: close enough to loom, far enough
+           that the water in front of it is the water you fish. */
+        seam: { sMin: -0.45, sMax: 0.30 },
+        macro: { art: 'trenchwall', side: 1, sMin: 0.70, sMax: 1.00,
+                 dMin: 1.30, dMax: 1.75, tall: 1, scale: 1 },
+        meso: [
+          { art: 'pinnacle', count: 2, dMin: 0.55, dMax: 0.95, sMin: -1.1, sMax: 1.1 },
+          /* The chain: a cable going down, and the thing at the top of it that
+             nobody came back for. Neither is explained anywhere. */
+          { art: 'cablehead', dMin: 0.40, dMax: 0.66, sMin: -0.9, sMax: 0.2 },
+          { art: 'station', dMin: 0.46, dMax: 0.72, sMin: 0.1, sMax: 1.0 }
+        ],
+        micro: { arts: ['spark', 'debris'], count: 9, dMin: 0.15, dMax: 0.95 },
+        /* And past the range of the set, one light. */
+        secret: { art: 'farlight', dMin: 0.88, dMax: 1.0, scale: 1 }
+      },
       /* Without a set, this zone is genuinely harder to fish: you cannot see
          an approach coming and you get no warning at all. With one, contacts
          appear and can be investigated, which is the only way to reach two of

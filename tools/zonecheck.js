@@ -96,7 +96,8 @@ const path = require('path');
       const byId = {};
       w.all.forEach(l => { byId[l.id] = l; });
       w.meso.forEach(l => {
-        const seenBy = w.all.some(o => o !== l && o.edges.some(e => e.to === l.id));
+        const seenBy = l.fromEye ||
+          w.all.some(o => o !== l && o.edges.some(e => e.to === l.id));
         if (!seenBy) fail.push(id + ': ' + l.art + ' is not in sight of anything');
       });
 

@@ -241,6 +241,180 @@
     g.restore();
   };
 
+  /* ============================================================ THE TRENCH
+
+     Everything here is vertical, and everything here is nearly invisible.
+     The zone's air density is 0.92 against the shore's 0.20, so an object at
+     the same distance arrives with four times as much water in front of it —
+     which is the point, and is why these shapes are built to read as an
+     outline against a slightly less black background rather than as an object
+     with detail on it. */
+
+  /* The far wall of the seam. It leaves the top of the frame and it does not
+     have a bottom, because the bottom is eleven hundred metres down. */
+  ART.trenchwall = function (g, l, p, P, L) {
+    const w = unit(p, L) * 0.55 * l.scale;
+    const hy = L.horizonY;
+    const top = -L.h * 0.06;
+    const x = p.x;
+    const sea = l.u < 0 ? 1 : -1;
+    const off = x - sea * w * 2.6;
+
+    /* Ridged noise rather than smooth: a trench wall is fractured, and the
+       creases are the only thing at this contrast that says rock rather than
+       cloud. */
+    const pts = [];
+    for (let i = 0; i <= 13; i++) {
+      const k = i / 13;
+      const y = U.lerp(top, hy + 2, k);
+      const crease = (G.ridged(k * 5.5 + l.u * 3, 8801, 4) - 0.45) * w * 0.44;
+      pts.push({ x: x + sea * (w * 0.18 + crease), y: y });
+    }
+
+    g.save();
+    g.beginPath();
+    g.moveTo(off, top - 20);
+    g.lineTo(pts[0].x, top - 20);
+    G.path(g, pts, false);
+    g.lineTo(off, hy + 2);
+    g.closePath();
+    const grad = g.createLinearGradient(0, top, 0, hy);
+    grad.addColorStop(0, tone(P, l, p, 0.66));
+    grad.addColorStop(1, tone(P, l, p, 0.96));
+    g.fillStyle = grad;
+    g.fill();
+
+    /* Long descending lines down the face. Not strata — this is a wall that
+       goes down, and what the eye needs is verticals. */
+    g.clip();
+    g.strokeStyle = U.rgbToCss(P.glow, 0.05 * p.contrast);
+    g.lineWidth = 1;
+    for (let i = 0; i < 9; i++) {
+      const fx = U.lerp(off, x + sea * w * 0.2, (i + 0.5) / 9);
+      g.beginPath();
+      g.moveTo(fx + w * 0.04, top);
+      g.lineTo(fx - w * 0.04, hy);
+      g.stroke();
+    }
+    g.restore();
+  };
+
+  /* A pinnacle: tall, narrow, standing off the wall. These are the zone's
+     scale references — a thing you can see the top and bottom of, next to a
+     thing you cannot. */
+  ART.pinnacle = function (g, l, p, P, L) {
+    const h = p.scale * L.h * 0.30 * l.scale;
+    const w = Math.max(2, h * 0.085);
+    const x = p.x, y = p.y;
+    const lean = (G.hash1(Math.round(l.u * 800), 13) - 0.5) * w * 2.2;
+    g.beginPath();
+    g.moveTo(x - w, y);
+    g.quadraticCurveTo(x - w * 0.5 + lean * 0.4, y - h * 0.55, x + lean, y - h);
+    g.quadraticCurveTo(x + w * 0.55 + lean * 0.4, y - h * 0.5, x + w, y);
+    g.closePath();
+    g.fillStyle = tone(P, l, p, 0.94);
+    g.fill();
+    /* One light on it, most of the way up. It is the only thing in this zone
+       that is ever lit, and it does not move. */
+    if (G.hash1(Math.round(l.d * 900), 7) > 0.45) {
+      const ly = y - h * 0.78;
+      g.fillStyle = lit(P, p, 0.55);
+      g.beginPath();
+      g.arc(x + lean * 0.78, ly, Math.max(0.9, w * 0.16), 0, TAU);
+      g.fill();
+    }
+  };
+
+  /* A cable going over the side and down. What is on the end of it is not
+     drawn, because it is eleven hundred metres away. */
+  ART.cablehead = function (g, l, p, P, L) {
+    const s = p.scale * L.h * 0.035 * l.scale;
+    const x = p.x, y = p.y;
+    g.save();
+    g.strokeStyle = tone(P, l, p, 0.92);
+    g.lineWidth = Math.max(1, s * 0.10);
+    // the frame it runs over
+    g.beginPath();
+    g.moveTo(x - s * 0.7, y);
+    g.lineTo(x - s * 0.5, y - s * 0.9);
+    g.lineTo(x + s * 0.5, y - s * 0.9);
+    g.lineTo(x + s * 0.7, y);
+    g.stroke();
+    // and the cable, going down into water rather than stopping at it
+    g.beginPath();
+    g.moveTo(x, y - s * 0.86);
+    g.quadraticCurveTo(x + s * 0.25, y + s * 0.4, x + s * 0.1, y + s * 1.5);
+    g.stroke();
+    g.restore();
+  };
+
+  /* An observation station on legs. Nobody is on it. The only detail it gets
+     is the one that says so: a door left open. */
+  ART.station = function (g, l, p, P, L) {
+    const s = p.scale * L.h * 0.045 * l.scale;
+    const x = p.x, y = p.y;
+    g.save();
+    g.fillStyle = tone(P, l, p, 0.93);
+    // legs, into the water
+    const lw = Math.max(1, s * 0.07);
+    [-0.62, -0.2, 0.2, 0.62].forEach(function (k) {
+      g.fillRect(x + s * k - lw * 0.5, y - s * 0.55, lw, s * 0.75);
+    });
+    // the box
+    g.fillRect(x - s * 0.78, y - s * 1.16, s * 1.56, s * 0.62);
+    // a rail along the top
+    g.strokeStyle = tone(P, l, p, 0.88);
+    g.lineWidth = Math.max(1, s * 0.05);
+    g.beginPath();
+    g.moveTo(x - s * 0.8, y - s * 1.16);
+    g.lineTo(x + s * 0.8, y - s * 1.16);
+    g.stroke();
+    // the door, open, and nothing behind it
+    g.fillStyle = 'rgba(0,0,0,0.85)';
+    g.fillRect(x + s * 0.18, y - s * 1.10, s * 0.22, s * 0.48);
+    g.restore();
+  };
+
+  /* Bioluminescence: a point of light that is not lighting anything. */
+  ART.spark = function (g, l, p, P, L) {
+    const r = Math.max(0.8, p.scale * L.h * 0.004 * l.scale);
+    const tw = 0.45 + 0.55 * Math.sin(VF.state.rt.t * (0.6 + l.scale) + l.u * 9);
+    g.save();
+    g.globalCompositeOperation = 'lighter';
+    const gr = g.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 5);
+    gr.addColorStop(0, lit(P, p, 0.55 * tw));
+    gr.addColorStop(1, U.rgbToCss(P.glow, 0));
+    g.fillStyle = gr;
+    g.fillRect(p.x - r * 5, p.y - r * 5, r * 10, r * 10);
+    g.restore();
+  };
+
+  ART.debris = function (g, l, p, P, L) {
+    const s = Math.max(1.5, p.scale * L.h * 0.008 * l.scale);
+    g.save();
+    g.translate(p.x, p.y);
+    g.rotate((G.hash1(Math.round(l.u * 610), 29) - 0.5) * 1.4);
+    g.fillStyle = tone(P, l, p, 0.9);
+    g.fillRect(-s, -s * 0.22, s * 2, s * 0.44);
+    g.restore();
+  };
+
+  /* And the one out past the range of the set. A light, and nothing around it
+     to say how big whatever is carrying it might be. */
+  ART.farlight = function (g, l, p, P, L) {
+    const r = Math.max(1.2, p.scale * L.h * 0.005 * l.scale);
+    const slow = Math.sin(VF.state.rt.t * 0.13 + l.u * 3);
+    const a = U.clamp(0.16 + slow * 0.16, 0, 0.36);
+    g.save();
+    g.globalCompositeOperation = 'lighter';
+    const gr = g.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 9);
+    gr.addColorStop(0, U.rgbToCss(P.glow, a));
+    gr.addColorStop(1, U.rgbToCss(P.glow, 0));
+    g.fillStyle = gr;
+    g.fillRect(p.x - r * 9, p.y - r * 9, r * 18, r * 18);
+    g.restore();
+  };
+
   /* --------------------------------------------------------------- micro
 
      Small things, and the rule for all of them is the same: below about four
@@ -351,9 +525,55 @@
     const w = VF.landmarks.world();
     if (!w) return;
     const cam = VF.camera.get();
+    drawSeam(ctx, L, P);
     const list = w.all.filter(function (l) { return l.d < 1; });
     list.sort(function (a, b) { return b.d - a.d; });
     for (let i = 0; i < list.length; i++) drawOne(ctx, list[i], L, P, cam);
+  }
+
+  /* The seam, when the set is up.
+
+     The trench's whole navigation problem is that the deep water is a narrow
+     band and there is no way to see where it is. With a sonar there is: a
+     sweep that fades, so the answer has to be remembered rather than read off
+     a permanent marker. Without one, nothing is drawn and the zone is
+     genuinely harder — which is what the module is for.
+
+     It is drawn on the water in perspective, converging with everything else,
+     because a band that ignored the projection would read as a HUD element
+     laid over the sea rather than as a place in it. */
+  function drawSeam(ctx, L, P) {
+    const w = VF.landmarks.world();
+    if (!w || w.seam === undefined) return;
+    if (!VF.boat || !VF.boat.has('sonar')) return;
+    const cam = VF.camera.get();
+    const t = VF.state.rt.t;
+    /* One sweep every eight seconds, bright for about one of them. */
+    const ping = Math.pow(Math.max(0, Math.sin(t * 0.78)), 8);
+    if (ping < 0.01) return;
+
+    const level = VF.boat.level ? VF.boat.level('sonar') : 1;
+    const a = (0.10 + level * 0.035) * ping;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 2; i++) {
+      const half = (i ? 0.30 : 0.14);
+      ctx.beginPath();
+      for (let d = 0.08; d <= 0.98; d += 0.06) {
+        const sp = VF.space.uSpan(d) * half;
+        const x = VF.space.xAt(w.seam - sp, d, cam);
+        const y = VF.space.yAt(d);
+        if (d < 0.09) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      for (let d = 0.98; d >= 0.08; d -= 0.06) {
+        const sp = VF.space.uSpan(d) * half;
+        ctx.lineTo(VF.space.xAt(w.seam + sp, d, cam), VF.space.yAt(d));
+      }
+      ctx.closePath();
+      ctx.fillStyle = U.rgbToCss(P.glow, a * (i ? 0.35 : 1));
+      ctx.fill();
+    }
+    ctx.restore();
   }
 
   function drawOne(ctx, l, L, P, cam) {

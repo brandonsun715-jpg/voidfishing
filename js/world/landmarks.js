@@ -108,6 +108,28 @@
     return l.kind === 'macro' ? 0.55 : l.kind === 'meso' ? 0.16 : 0.05;
   }
 
+  /* What can hide what.
+
+     Only the big things occlude, and only things their own size or smaller. A
+     floating spark does not hide a pinnacle and a pinnacle does not hide a
+     trench wall — getting this wrong made the trench's macro landmark
+     unreachable from the chair, which is the one thing a macro landmark must
+     never be. */
+  const RANK = { macro: 3, meso: 2, micro: 1, secret: 2 };
+
+  function blockersFor(list, target) {
+    const tr = RANK[target] || 1;
+    const out = [];
+    for (let i = 0; i < list.length; i++) {
+      const l = list[i];
+      const r = RANK[l.kind] || 1;
+      if (r < 2) continue;            // micro detail hides nothing
+      if (r < tr) continue;           // and nothing hides something bigger
+      out.push({ u: l.u, d: l.d, block: radiusOf(l) * 0.7 });
+    }
+    return out;
+  }
+
   function build(id) {
     const gr = grammarFor(id);
     if (!gr) return null;
@@ -168,11 +190,24 @@
         if (!cand.length) continue;
 
         const placed = all.slice();
-        const blockers = all.map(function (l) {
-          return { u: l.u, d: l.d, block: radiusOf(l) * 0.7 };
-        });
+        const blockers = blockersFor(all, 'meso');
 
-        const pick = G.best(cand, [
+        /* Being in sight of something is a requirement, not a preference.
+           Scoring it and taking the best still places a landmark nothing can
+           see when every candidate happens to be blocked — which is how the
+           trench ended up with a pinnacle that no other object in the zone,
+           and no viewer, could ever have seen. Filter first; fall back to the
+           unfiltered set only if the zone genuinely has nowhere to put it. */
+        const reachable = cand.filter(function (c) {
+          if (G.visible(EYE, c, blockers)) return true;
+          for (let k = 0; k < placed.length; k++) {
+            if (G.visible(placed[k], c, blockers)) return true;
+          }
+          return false;
+        });
+        const from = reachable.length ? reachable : cand;
+
+        const pick = G.best(from, [
           /* seen from the seat — the first thing a landmark has to be */
           { fn: function (c) { return G.visible(EYE, c, blockers) ? 1 : 0; }, weight: 2.4 },
           /* and seen from something already here, so one leads to the next */
@@ -293,10 +328,14 @@
 
     /* --- the edges. Typed, and computed once: which of these can see which
        other, which is what the composition and the discovery both read. --- */
-    const blockers = all.map(function (l) {
-      return { u: l.u, d: l.d, block: radiusOf(l) * 0.7 };
-    });
     for (let i = 0; i < all.length; i++) {
+      const blockers = blockersFor(all, all[i].kind);
+      /* The most important sightline in the zone is the one from the chair,
+         and it is not an edge because the player is not a landmark. It still
+         has to be recorded, or a thing standing in plain view of the angler
+         reads as unreachable simply because no other object happens to face
+         it. */
+      all[i].fromEye = G.visible(EYE, all[i], blockers);
       for (let j = 0; j < all.length; j++) {
         if (i === j) continue;
         if (all[i].kind === 'micro' && all[j].kind === 'micro') continue;
@@ -306,7 +345,17 @@
       }
     }
 
-    const world = { zone: id, seed: seed, all: all, macro: macro,
+    /* Where the deep water runs, for the zones that have a seam rather than a
+       slope. Fixed per zone rather than per visit: a trench that moved between
+       casts would not be a place, and finding it once has to be worth
+       something. */
+    let seam;
+    if (gr.seam) {
+      seam = toU(U.lerp(gr.seam.sMin === undefined ? -0.5 : gr.seam.sMin,
+                        gr.seam.sMax === undefined ? 0.5 : gr.seam.sMax, rnd()), 0.6);
+    }
+
+    const world = { zone: id, seed: seed, all: all, macro: macro, seam: seam,
                     meso: meso, micro: micro, secret: secret, halfW: halfW };
     world.empty = emptyFraction(world);
     return world;

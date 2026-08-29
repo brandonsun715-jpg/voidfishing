@@ -28,6 +28,21 @@
     castDist: 0,
     flight: 0,
 
+    /* Where the line is going, in world coordinates.
+
+       The cast used to have no position at all: the renderer picked a random
+       lateral every time and threw it away afterwards, and nothing downstream
+       ever saw it. That is why no zone could make "where do I put the bobber"
+       into a question — there was no answer to give.
+
+       `aimU`/`aimD` are what the player is pointing at; `castU`/`castD` are
+       where it actually went, which is short of the aim on a weak throw, past
+       the rod's reach never, and somewhere else entirely in water that does
+       not agree with charts. */
+    aimU: 0, aimD: 0.55,
+    castU: 0, castD: 0.55,
+    castCtx: null,       // what the water is like where it landed
+
     biteWait: 0,
     nibble: 0,           // small pre-bite bobber twitches
     nibbleTimer: 0,
@@ -89,13 +104,83 @@
     S.castPower = U.clamp(power, 0, 1);
     S.sweet = S.castPower >= SWEET_FROM;
     S.castDist = U.clamp(rod.cast * (0.55 + 0.45 * S.castPower), 0.05, 1.6);
+    resolveCast(rod);
     S.flight = 0;
     S.pending = null;
     S.fight = null;
     d.stats.casts++;
 
     setState('casting');
-    VF.bus.emit('fishing:cast', { power: S.castPower, sweet: S.sweet, dist: S.castDist });
+    VF.bus.emit('fishing:cast', { power: S.castPower, sweet: S.sweet, dist: S.castDist,
+                                  u: S.castU, d: S.castD });
+  }
+
+  /* Where the throw lands.
+
+     The rod's `cast` is a reach now rather than an abstract number: point at
+     something further out than the rod can manage and the rig falls short of
+     it, which is a far better argument for the next rod than a percentage.
+     The meter is accuracy on top of that — a weak throw drops in early — so
+     the gold band is worth hitting for a reason you can see.
+
+     A zone gets the last word through `castScatter`, because the one place
+     where the line does not go where it was pointed should be the one that
+     tells you the chart is wrong. */
+  /* How far out this rod can put the rig, as a distance across the water.
+
+     `rod.cast` runs 0.22 on the wooden one to 1.84 at the top of the ladder,
+     so the mapping has to give the starter rod somewhere useful to fish — a
+     third of the way out — and the best rod the horizon. Treating cast as a
+     fraction directly put every rod's limit at a tenth of the water and made
+     aiming pointless, which is the sort of thing that looks like a design
+     problem and is arithmetic.
+
+     Lives here rather than in the renderer so the mark the player is shown and
+     the place the rig lands cannot disagree. */
+  function reach() {
+    const rod = VF.rods.get(VF.state.data.rod);
+    /* Where there is no water to reach across — the last water, and Beneath —
+       the same throw puts the hook straight down instead, so the range
+       collapses toward the near end however good the rod is. */
+    const vd = U.clamp(VF.palette.P.void || 0, 0, 1);
+    return U.clamp((0.26 + rod.cast * 0.42) * (1 - vd * 0.55), 0.12, 1.0);
+  }
+
+  function resolveCast(rod) {
+    const r = reach();
+    const want = U.clamp(S.aimD, 0.04, 1.0);
+    const got = Math.min(want, r) * (0.62 + 0.38 * S.castPower);
+    S.castD = U.clamp(got, 0.03, 1.0);
+    S.castU = S.aimU;
+
+    const rule = VF.zones && VF.zones.castScatter ? VF.zones.castScatter() : 0;
+    if (rule > 0) {
+      const sp = VF.space ? VF.space.uSpan(S.castD) : 1;
+      S.castU += (VF.rng.g() * 2 - 1) * rule * sp;
+      S.castD = U.clamp(S.castD + (VF.rng.g() * 2 - 1) * rule * 0.30, 0.03, 1.0);
+    }
+    S.castCtx = null;
+  }
+
+  /* What the water is like where the rig went down. Resolved once, on the
+     splash, and read by the bite timer and the species roll — so a cast beside
+     a wreck is a different cast from one into open water, in a way the player
+     can see the reason for before they make it. */
+  function readWater() {
+    if (!VF.space || !VF.landmarks) { S.castCtx = null; return; }
+    const near = VF.landmarks.nearest(S.castU, S.castD);
+    const inf = VF.landmarks.influenceAt(S.castU, S.castD);
+    S.castCtx = {
+      u: S.castU, d: S.castD,
+      /* depth reads off the zone's own profile where it has one, and off the
+         distance from the bank where it does not */
+      depth: VF.zones && VF.zones.depthAt ? VF.zones.depthAt(S.castU, S.castD) : S.castD,
+      cover: U.clamp(inf, 0, 2),
+      landmark: near && near.dist < VF.landmarks.radiusOf(near.landmark) * 1.4
+        ? near.landmark : null,
+      lit: VF.zones && VF.zones.lightAt ? VF.zones.lightAt(S.castU, S.castD) : 0.5
+    };
+    VF.bus.emit('fishing:water', S.castCtx);
   }
 
   /* ---------------------------------------------------------------- waiting */
@@ -114,7 +199,12 @@
               (cond ? cond.bite : 1) *
               (VF.mods ? VF.mods.stats().bite : 1) *
               (1 - U.clamp(rod.cast * 0.12, 0, 0.22)) *
-              (1 - U.clamp(S.castPower * 0.10, 0, 0.10));
+              (1 - U.clamp(S.castPower * 0.10, 0, 0.10)) *
+              /* and where it went. Structure holds fish: dropping the rig
+                 beside something is worth about a third off the wait, and
+                 open water in the middle of nowhere is worth a penalty. */
+              (S.castCtx ? U.clamp(1 - S.castCtx.cover * 0.34, 0.55, 1.25) : 1) *
+              (VF.zones && VF.zones.biteAt ? VF.zones.biteAt(S.castCtx) : 1);
     S.biteWait = U.clamp(base * k, 1.6, 22);
     // it is already there. it has been there for four hundred years.
     if (VF.quests && VF.quests.anyArmed()) S.biteWait = Math.min(S.biteWait, 2.6);
@@ -728,7 +818,8 @@
       case 'casting':
         S.flight = U.clamp(S.t / CAST_FLIGHT_TIME, 0, 1);
         if (S.t >= CAST_FLIGHT_TIME) {
-          VF.bus.emit('fishing:splash', { dist: S.castDist });
+          readWater();
+          VF.bus.emit('fishing:splash', { dist: S.castDist, u: S.castU, d: S.castD });
           beginWaiting();
         }
         break;
@@ -819,6 +910,15 @@
     if (S.state !== 'idle') setState('idle');
   }
 
+  /* The input layer points; this is where it says so. Clamped to the water so
+     that a press on the sky, or on the far side of the world, still means the
+     nearest sensible patch of sea. */
+  function aimAt(u, d) {
+    if (!VF.space) return;
+    S.aimU = VF.space.clampU(u);
+    S.aimD = U.clamp(d, 0.04, 1.0);
+  }
+
   VF.fishing = {
     S: S,
     hardReset: hardReset,
@@ -826,7 +926,7 @@
     putOnLine: putOnLine,
     acceptCatch: acceptCatch,
     tick: tick,
-    canCast: canCast,
+    canCast: canCast, aimAt: aimAt, readWater: readWater, reach: reach,
     beginCharge: beginCharge,
     releaseCharge: releaseCharge,
     hook: hook,

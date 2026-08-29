@@ -23,11 +23,17 @@ const path = require('path');
     const out = { fail: [] };
     const L = VF.scene.L;
 
-    /* 1. The light lands where it always did. The whole of phase 0 is meant to
-          be invisible, and this is the number that would show. */
+    /* 1. With the frame square on, the light lands where it always did.
+
+          The light is a world position now and follows the camera, which is
+          the point of it — so this pins the thing that must not have changed
+          rather than the thing that must: at rest, dead centre, every zone
+          still puts its one big light at 0.70 of the way across. */
     out.lightRatio = {};
     VF.locations.list.slice(0, 9).forEach(l => {
       VF.state.data.location = l.id;
+      VF.scene.update(0.016);
+      VF.camera.set(0);
       VF.scene.update(0.016);
       const k = VF.scene.L.glowX / VF.scene.L.w;
       out.lightRatio[l.id] = +k.toFixed(5);
@@ -36,6 +42,7 @@ const path = require('path');
 
     /* 2. project/unproject round-trip. If this drifts, aimed casting lands
           somewhere other than where the player pressed. */
+    VF.camera.set(0);
     for (const u of [-2.0, -0.4, 0, 0.6, 1.9]) {
       for (const d of [0.05, 0.3, 0.62, 0.95]) {
         const p = VF.space.project(u, d);
@@ -75,6 +82,32 @@ const path = require('path');
     if (!(nearShift > farShift * 1.5)) out.fail.push('near/far parallax too flat');
     if (!(farShift > skyShift)) out.fail.push('sky drifts more than the horizon');
 
+    /* 5b. And the cast has to land where it was pointed. This is the claim the
+           whole spatial half of the game rests on: if it drifts, every zone's
+           navigation problem quietly stops being one. */
+    VF.state.data.location = 'shore';
+    VF.camera.set(0);
+    VF.scene.update(0.016);
+    VF.fishing.hardReset();
+    for (const [u, d] of [[-0.6, 0.35], [0, 0.55], [0.7, 0.8]]) {
+      VF.fishing.aimAt(u, d);
+      VF.fishing.beginCharge();
+      VF.fishing.S.charge = 1;
+      VF.fishing.releaseCharge();
+      const S = VF.fishing.S;
+      if (Math.abs(S.castU - u) > 1e-9) {
+        out.fail.push('cast bearing drifted: aimed ' + u + ' went ' + S.castU.toFixed(3));
+      }
+      /* Distance is allowed to fall short — that is the rod's reach and the
+         meter — but never to overshoot what was asked for. */
+      if (S.castD > d + 1e-9) {
+        out.fail.push('cast overshot: aimed ' + d + ' went ' + S.castD.toFixed(3));
+      }
+      out.cast = out.cast || [];
+      out.cast.push({ aim: d, got: +S.castD.toFixed(3) });
+      VF.fishing.hardReset();
+    }
+
     /* 6. Atmospheric perspective must actually attenuate with distance and
           must not depend on how dark the zone is. */
     out.fade = [0.1, 0.5, 1, 2].map(d => +VF.space.fadeAt(d).toFixed(3));
@@ -87,6 +120,7 @@ const path = require('path');
   console.log('light ratio per zone:', JSON.stringify(r.lightRatio));
   console.log('parallax px per world unit:', JSON.stringify(r.parallax));
   console.log('fade at d=0.1/0.5/1/2:', JSON.stringify(r.fade));
+  console.log('cast aim vs landing:', JSON.stringify(r.cast));
   console.log('page errors:', errors.length ? errors : 'none');
   if (r.fail.length) {
     console.log('\nFAIL:');
