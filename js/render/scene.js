@@ -520,6 +520,30 @@
     L.landPoint.y = L.horizonY + L.waterH * U.lerp(0.90, 0.72, nearEdge);
   }
 
+  /* The one big light — moon, ring, arch, monolith, crystal, tear, eye — was
+     nailed to W * 0.70 in all nine zones, which is a large part of why they
+     read as one place: the brightest thing on screen never moved. It is a
+     world position now, out past the horizon where a celestial object belongs,
+     and everything keyed off L.glowX — the moonpath, the horizon seam, the
+     tilt on the water gradient — follows it for nothing.
+
+     The default u is solved rather than typed, so with the camera centred the
+     light lands exactly where it always did and the change is invisible until
+     a zone asks for somewhere else. */
+  const LIGHT_D = 6;
+
+  function placeLight() {
+    if (!VF.space) return;
+    const loc = VF.locations.current();
+    const z = VF.zoneData && VF.zoneData.get(loc.id);
+    const lw = (z && z.spatial && z.spatial.light) || null;
+    const d = lw && lw.d !== undefined ? lw.d : LIGHT_D;
+    // 0.4 / spread(d) puts it at 0.70 W with the camera at rest
+    const u = lw && lw.u !== undefined ? lw.u : 0.4 / VF.space.spread(d);
+    L.glowX = VF.space.xAt(u, d);
+    L.glowY = L.horizonY - H * (lw && lw.h !== undefined ? lw.h : 0.145);
+  }
+
   function seedAmbient() {
     VF.particles.clearKind(VF.particles.KIND.MOTE);
     // nothing drifts in the last water, because there is nothing to drift in
@@ -539,6 +563,12 @@
     t += dt;
 
     computeLayout();
+    /* The world learns where the horizon is, then the camera moves, then the
+       light is projected through both — in that order, or the frame is drawn
+       against last frame's geometry. */
+    if (VF.space) VF.space.sync(L, VF.palette.P);
+    if (VF.camera) VF.camera.tick(dt);
+    placeLight();
     updateRod(dt);
     updateBobber(dt);
     VF.rodArt.tick(dt);
