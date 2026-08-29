@@ -185,9 +185,14 @@
             { label: 'cast at it', good: 1, then: 'next', win: 'the line lands short. it picks the line up.' }
           ] },
         { verb: 'watch', dur: 3.4, far: 0.10, text: 'it acknowledges you.' },
-        { verb: 'hook', text: 'and then it takes the hook, carefully, in its hand.' },
-        { verb: 'land' }
+        /* This used to end on a hook and a fight, like everything else, and
+           the fight was the worst thing about it. Thirteen evenings of a
+           rock getting closer, and then a health bar. It stands there, it
+           looks at you, and it is still standing there when you leave. */
+        { verb: 'watch', dur: 5.0, far: 0.06, text: 'it does not do anything else. it is not going to.' },
+        { verb: 'leave', text: 'you are the one who leaves.' }
       ],
+      encounterOnly: 1,
       onEscape: { text: 'it went back to being a rock, at the distance a rock is.', keepLead: 1 } },
 
     /* ================================================================= THE QUEEN
@@ -233,9 +238,17 @@
             { label: 'sail at it', good: 1, then: 'next', win: 'the gap does not close. it is exactly four hundred metres.' }
           ] },
         { verb: 'watch', dur: 3.0, far: 0.24, text: 'both lines go tight at the same moment.' },
-        { verb: 'hook', text: 'something is on both of them.' },
-        { verb: 'land' }
+        { verb: 'choose', text: 'both lines are still tight.',
+          options: [
+            { label: 'reel', good: 1, then: 'next', win: 'it reels. whatever is on your line comes up empty and whatever is on its line does not.' },
+            { label: 'cut the line', good: 1, then: 'next', win: 'it cuts. you both watch the two ends go down.' }
+          ] },
+        /* There is no version of this where you land it. It is your boat.
+           Hooking it was always the wrong ending — you cannot bring your own
+           boat aboard your own boat. It goes back into the fog. */
+        { verb: 'leave', text: 'it puts its lamp out. you are alone on the water, which you were.' }
       ],
+      encounterOnly: 1,
       onEscape: { text: 'the fog took it, in the direction you were not looking.' } },
 
     /* ============================================================== THE FOLLOWER

@@ -182,6 +182,7 @@
       VF.palette.update();
 
       if (started) {
+        if (VF.pace) VF.pace.tick(dt);
         VF.visit.tick(dt);
         VF.fishing.tick(dt);
         VF.conditions.tick(dt);

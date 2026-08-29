@@ -57,8 +57,14 @@
 
     if (D.encName.textContent !== v.title) D.encName.textContent = v.title;
 
-    const state = stateLabel(v);
-    if (D.encState.textContent !== state) D.encState.textContent = state;
+    /* There used to be a label here reading "TRACKING · 1 OF 3" or "IT IS
+       CHANGING". That is the phase machine in js/systems/creature.js reading
+       its own variable names out loud to the player, and it did two bad
+       things: it turned every creature into the same creature wearing a
+       different noun, and it explained the thing while the thing was
+       happening. The dots below already say how many rounds are left. What
+       it is doing is on the water. */
+    if (D.encState.textContent !== '') D.encState.textContent = '';
 
     if (v.text !== lastText) {
       lastText = v.text;
@@ -78,21 +84,6 @@
     if (D.encHint.textContent !== hint) D.encHint.textContent = hint;
     D.encHint.classList.toggle('said', !!v.pickMsg);
     D.encUI.classList.toggle('wrong', v.shake > 0.4);
-  }
-
-  function stateLabel(v) {
-    switch (v.verb) {
-      case 'watch': return 'observing';
-      case 'track': return 'tracking · ' + Math.min(v.round + 1, Math.max(1, v.rounds)) +
-                           ' of ' + Math.max(1, v.rounds);
-      case 'chase': return 'pursuit';
-      case 'hold': return 'holding';
-      case 'swarm': return 'clearing · ' + v.cleared + ' of ' + v.total;
-      case 'choose': return 'your call';
-      case 'reveal': return 'it is changing';
-      case 'hook': return 'on the line';
-      default: return '';
-    }
   }
 
   function meter(v) {

@@ -124,13 +124,22 @@ const path = require('path');
         VF.state.rt.panelOpen = null;
         const began = VF.creature.begin(def.id);
         if (!began) { out.push({ id: def.id, win: win, error: 'would not begin' }); continue; }
-        const before = ((d.creatures || {})[def.id] || {}).caught | 0;
+        /* Two of these are ENCOUNTERED rather than caught — they end on a
+           'leave' phase, record d.creatures[id].seen instead of .caught, and
+           never enter the fishdex. The harness has to know which counter it
+           is watching or it reads a working encounter as a dead one. */
+        const only = !!def.encounterOnly;
+        const cnt = function () {
+          const r = (d.creatures || {})[def.id] || {};
+          return (only ? r.seen : r.caught) | 0;
+        };
+        const before = cnt();
         let steps = play(win), tries = 1;
         /* Three of these branch on a dice roll by design — "cut it off" is a
            72% option, not a correct answer — so playing well is allowed to
            lose. Retried rather than seeded, because seeding the roll would
            test a path the player never takes. */
-        while (win && tries < 6 && (((d.creatures || {})[def.id] || {}).caught | 0) === before) {
+        while (win && tries < 6 && cnt() === before) {
           VF.creature.abort();
           VF.fishing.hardReset();
           if (VF.catchUI.isOpen()) VF.catchUI.close();
@@ -144,7 +153,8 @@ const path = require('path');
         out.push({
           id: def.id, win: win, steps: steps,
           stuck: VF.creature.active(),
-          caught: r.caught | 0, escaped: r.escaped | 0, tries: r.tries || 1,
+          caught: r.caught | 0, seen: r.seen | 0, only: only,
+          escaped: r.escaped | 0, tries: r.tries || 1,
           dex: !!d.fishdex[def.fish],
           rod: VF.fishing.state()
         });
@@ -164,13 +174,19 @@ const path = require('path');
       return;
     }
     const tag = r.win ? 'landed ' : 'escaped';
-    const ok = !r.error && !r.stuck && (r.win ? r.caught > 0 : r.escaped > 0);
+    /* An encounter you cannot catch is also one you cannot lose: every path
+       through the Watcher and the Other Boat resolves, on purpose, so the
+       losing run is scored on it having ended cleanly rather than on an
+       escape that no longer exists. */
+    const ok = !r.error && !r.stuck &&
+               (r.only ? r.seen > 0 : (r.win ? r.caught > 0 : r.escaped > 0));
     if (!ok) bad++;
     console.log('  ' + r.id.padEnd(10), tag,
                 (r.error ? 'ERROR ' + r.error : ''),
                 r.stuck ? 'STUCK' : '',
                 'steps ' + String(r.steps).padStart(3),
-                'caught ' + r.caught + '/esc ' + r.escaped,
+                (r.only ? 'seen ' + r.seen + '/esc ' + r.escaped
+                        : 'caught ' + r.caught + '/esc ' + r.escaped),
                 r.tries > 1 ? '(' + r.tries + ' attempts)' : '',
                 'rod ' + r.rod,
                 ok ? '' : ' <-- FAILED');

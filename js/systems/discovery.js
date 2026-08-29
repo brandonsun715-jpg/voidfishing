@@ -45,12 +45,12 @@
 
     if (def.opens) openLead(def.opens);
     VF.bus.emit('clue:found', { id: id, def: def });
-    if (!quiet) {
-      VF.audio.discover();
-      VF.toast.show('<strong>' + U.esc(def.title) + '</strong><br>' +
-                    '<span style="color:var(--ink-3)">written down in the journal</span>',
-                    'good', 5200);
-    }
+    /* addFree already emits journal:entry, and the HUD already turns that
+       into one line and a flash on the journal button. This used to raise a
+       SECOND, larger toast underneath it saying "written down in the
+       journal" — two notifications, stacked, for one sentence being added to
+       a list. The clue is a note in a book. It gets a note in a book. */
+    if (!quiet) VF.audio.discover();
     VF.save.save();
     return true;
   }
@@ -143,13 +143,24 @@
      plays the sting and writes it down — one code path, so a new species and
      a new stretch of water feel like the same size of event. */
   function found(kind, name, line) {
-    VF.audio.discover();
-    VF.fx.flash('rgba(200,230,255,0.22)', 0.5, 1.6);
-    VF.fx.pulse(0.5);
+    /* Restraint is the whole mechanism here. A flash and a shake for every
+       small thing spends the flash and the shake, and then the one that
+       matters arrives and costs the same as a shell. So the ceremony is for
+       things that change the map — a place, a species — and everything else
+       gets a line and nothing else. */
+    const big = kind === 'place' || kind === 'species' || kind === 'water';
     VF.state.data.stats.discoveries++;
-    VF.toast.show('<strong>' + U.esc(kind) + ' — ' + U.esc(name) + '</strong>' +
-                  (line ? '<br><span style="color:var(--ink-3)">' + U.esc(line) + '</span>' : ''),
-                  'good', 6000);
+    if (big) {
+      VF.audio.discover();
+      VF.fx.flash('rgba(200,230,255,0.22)', 0.5, 1.6);
+      VF.fx.pulse(0.5);
+      VF.toast.show('<strong>' + U.esc(name) + '</strong>' +
+                    (line ? '<br><span style="color:var(--ink-3)">' + U.esc(line) + '</span>' : ''),
+                    'good', 6000);
+    } else {
+      VF.audio.nibble();
+      VF.toast.show(U.esc(name), null, 3600);
+    }
     VF.bus.emit('discovery:found', { kind: kind, name: name });
   }
 
@@ -163,8 +174,11 @@
     if (VF.creature && VF.creature.active()) return;
     if (Date.now() - sinceTry < 25000) return;
     sinceTry = Date.now();
+    /* A lead firing is a whole encounter starting. It waits its turn like
+       everything else — see js/systems/pace.js. */
+    if (VF.pace && !VF.pace.allow(3)) return;
     const l = tryHere(['creature']);
-    if (l) VF.bus.emit('lead:fired', l);
+    if (l) { if (VF.pace) VF.pace.spend(3); VF.bus.emit('lead:fired', l); }
   });
 
   VF.discovery = {

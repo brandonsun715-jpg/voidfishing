@@ -229,7 +229,12 @@
     if (!d.seas || typeof d.seas !== 'object') d.seas = {};
     d.seas[def.id] = (d.seas[def.id] | 0) + 1;
 
-    D.vyKind.textContent = def.kind;
+    /* The card used to carry a category in caps above the name — ANOMALY,
+       DERELICT, SONAR, ORDINARY. It made every sighting an entry in a
+       catalogue somebody else had already compiled, which is the opposite of
+       coming across something. The word still exists in the data because the
+       stinger below picks the sound off it; it is not shown to anybody. */
+    D.vyKind.textContent = '';
     D.vyName.textContent = def.name;
     D.vyText.textContent = def.text;
     U.clear(D.vyOpts);
@@ -270,24 +275,22 @@
 
   /* --------------------------------------------------------- instruments */
 
+  /* This was a row of four gauges — speed to two decimal places, hull
+     percentage, sonar state, bearing — sitting under a crossing that already
+     shows you the water going past, the boat you are in and the name of the
+     place you are headed at the top of the screen. It was a dashboard on a
+     view out of a window.
+
+     What is left is the one thing the crossing cannot show you: a hull that
+     is not going to make many more of these. */
   function instruments() {
     if (!D.vyInstr) return;
     U.clear(D.vyInstr);
-    const rows = [
-      ['speed', VF.boat.speed().toFixed(2) + ' kn', 0],
-      ['hull', Math.round(VF.boat.integrity() * 100) + '%', VF.boat.integrity() < 0.4 ? 1 : 0]
-    ];
-    if (VF.boat.has('sonar')) {
-      rows.push(['sonar', S.contact > 0.66 ? 'CONTACT' : S.contact > 0 ? 'return' : 'clear',
-                 S.contact > 0.66 ? 1 : 0]);
-    }
-    rows.push(['bearing', S.to ? S.to.name.toLowerCase() : '—', 0]);
-    rows.forEach(function (r) {
-      const g = U.el('div', 'vy-gauge' + (r[2] ? ' alert' : ''));
-      g.appendChild(U.el('span', 'k', r[0]));
-      g.appendChild(U.el('span', 'v', r[1]));
-      D.vyInstr.appendChild(g);
-    });
+    if (VF.boat.integrity() >= 0.4) return;
+    const g = U.el('div', 'vy-gauge alert');
+    g.appendChild(U.el('span', 'k', 'hull'));
+    g.appendChild(U.el('span', 'v', Math.round(VF.boat.integrity() * 100) + '%'));
+    D.vyInstr.appendChild(g);
   }
 
   /* A press anywhere during a crossing takes the first option if a card is

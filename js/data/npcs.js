@@ -335,6 +335,132 @@
                   'sixteen useless things in your wardrobe. you understand the appeal now, which means i can part with it without feeling that it has gone somewhere unappreciative.',
                   'take it. do not put it back together in front of me.'],
           quest: { id: 'heavens', flag: 'compass_collector' } }
+      ] },
+
+    /* ------------------------------------------------------------------
+       Three people who exist because the water got bigger and nobody on the
+       shore had noticed. Every line one of them has is about something the
+       player has actually done — a hull they bought, a thing that surfaced,
+       a crossing that went somewhere else — and none of them explains a
+       mechanic. If a line could be a tooltip, it is cut. */
+
+    { id: 'cartographer', name: 'The Cartographer', role: 'lore', color: '#c0b088',
+      where: 'a table by the window, covered edge to edge',
+      blurb: 'Has drawn all of it. Twice.',
+      stages: [
+        { at: function (d) { return (d.voyages | 0) >= 1; },
+          lines: ['do not lean on it. the ink is forty years old and it has opinions.',
+                  'you have started crossing, then. good. the ones who stay on the shore only ever see the one edge of it.',
+                  'ten places. i have them all here. you will want the shore, the basin, the flats — work down the sheet, they are in order.'] },
+
+        /* The whole of her, in one exchange. She is not confused and she is
+           not lying: she counts ten, there are nine, and she will not be
+           moved off it. Nothing in the game ever resolves this. */
+        { at: function (d) { return d.unlockedLocations.length >= 3; },
+          lines: ['nine? no. ten.',
+                  'count them with me. shore. basin. flats. trench. abyss. cradle. nowhere. beneath. heavens.',
+                  '...',
+                  'ten.'] },
+
+        { at: function (d) { return d.unlockedLocations.indexOf('trench') >= 0; },
+          lines: ['the trench. yes. i have sounded it four times.',
+                  'the first three came back at eleven hundred fathoms, near enough. the fourth came back at eleven hundred fathoms and the line was still going out.',
+                  'i wrote down eleven hundred. what else was i going to write down.'],
+          journal: 'sounding' },
+
+        { at: function (d) { return d.unlockedLocations.indexOf('nowhere') >= 0; },
+          lines: ['ah. you have been out where the chart is wrong.',
+                  'it is not wrong. i want to be clear. every bearing on that sheet is correct and i have checked them at sea.',
+                  'they are simply also correct for somewhere else.'] },
+
+        { at: function (d) { return (d.stats.discoveries | 0) >= 8; },
+          lines: ['i redraw it every winter. same table, same ink, from the notes.',
+                  'and every winter it comes out the same except for one thing, and it is never the same one thing.',
+                  'this year it was a bay on the north side of the basin. i have never been to a bay on the north side of the basin. my hand knows it is there.'],
+          journal: 'redraw' },
+
+        { at: function (d) { return d.unlockedLocations.indexOf('beneath') >= 0; },
+          lines: ['you want the tenth.',
+                  'i am not being coy with you. i have drawn it nine times and i have never once been able to say where it is.',
+                  'it is on the sheet. look — there. no. there.',
+                  'it moves when you are not the one holding the paper.'] }
+      ] },
+
+    { id: 'mechanic', name: 'The Boat Mechanic', role: 'boat', color: '#a89078',
+      where: 'under a hull, mostly',
+      blurb: 'Fixes them. Writes down what did it.',
+      stages: [
+        { at: function () { return VF.boat && VF.boat.hull().id !== 'skiff'; },
+          lines: ['it floats. that is not a compliment, that is the whole specification.',
+                  'bring it back when it stops doing that and i will have a look.'] },
+
+        { at: function (d) { return (d.voyages | 0) >= 6; },
+          lines: ['you are wearing the port side. always the port side, with everybody.',
+                  'i used to think it was how people sit. it is not how people sit.'] },
+
+        { at: function () { return VF.boat && VF.boat.integrity() < 0.7; },
+          lines: ['right. hold that lamp still.',
+                  'see the edge of it? rock does not do that. rock crushes. this is opened.',
+                  'i can plate it. i can plate it as many times as you like.'],
+          journal: 'plating' },
+
+        { at: function (d) { return (d.stats.encounters | 0) >= 3; },
+          lines: ['i keep a book. every hull that comes back, what came back on it.',
+                  'four hundred and some entries. mostly weed, paint, a gull.',
+                  'nineteen of them say the same three words and i did not write them in the same year or in the same hand.'],
+          journal: 'theledger' },
+
+        { at: function (d) { return d.unlockedLocations.indexOf('cradle') >= 0; },
+          lines: ['you have been under the ring.',
+                  'do not tell me what it is made of. i asked a man once and he told me and i have not had a good winter since.',
+                  'just — if you scrape it, do not bring the scrapings here.'] },
+
+        /* The one everybody remembers. It is a safety instruction with the
+           reason removed, and then the reason. */
+        { at: function (d) { return (d.voyages | 0) >= 20; },
+          lines: ['one thing, since you are out there at all hours now.',
+                  'do not cast after midnight.',
+                  '...',
+                  'because that is when they start casting back.'],
+          journal: 'midnight' }
+      ] },
+
+    { id: 'child', name: 'The Child', role: 'strange', color: '#9fd0d8',
+      where: 'the end of the dock, feet over',
+      blurb: 'Nobody knows whose.',
+      stages: [
+        { at: function (d) { return (d.stats.casts | 0) >= 30; },
+          lines: ['you are the one with the rod.',
+                  'i am not allowed a rod.',
+                  'i can still hear them though.'] },
+
+        { at: function (d) { return (d.stats.catches | 0) >= 60; },
+          lines: ['do you want to know what the big one is called?',
+                  'no. i said do you WANT to know.',
+                  'ok.'] },
+
+        /* Said before it happens, in a game where it does happen. */
+        { at: function (d) { return d.unlockedLocations.indexOf('trench') >= 0; },
+          lines: ['there is a boat down there with its light still on.',
+                  'i have not been down there.',
+                  'i just know which ones are still on.'] },
+
+        { at: function (d) { return (d.stats.encounters | 0) >= 5; },
+          lines: ['you keep bringing them up.',
+                  'that is fine. i am not telling you off.',
+                  'it is just that now they know the way.'] },
+
+        { at: function (d) { return d.unlockedLocations.indexOf('nowhere') >= 0; },
+          lines: ['did you see me out there?',
+                  'you did. it is all right. i was not there.',
+                  'you can sit down if you like. i do not mind.'],
+          journal: 'thechild' },
+
+        { at: function (d) { return d.unlockedLocations.indexOf('beneath') >= 0; },
+          lines: ['...',
+                  'you went all the way down.',
+                  'my mother went all the way down.',
+                  'she is at the counter. she has been at the counter since. you have bought things off her.'] }
       ] }
   ];
 

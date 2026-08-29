@@ -1,6 +1,10 @@
 /* VOID FISHING — fishing spots.
    Colours are base tones; js/render/palette.js layers time-of-day and weather on top.
    horizon/silhouette pick which procedural backdrop the scene renderer draws.
+   `silhouette: 'none'` is not an omission: four of these have a composition of
+   their own in js/render/zoneArt.js, and the generic ridgeline behind a
+   colossal trench wall is the thing that made every zone look like every
+   other zone.
    `void` is how far out of the world this water is, 0 at the shore and 1 at
    the bottom. It is not a colour: the renderer reads it directly and takes the
    place apart with it — the far shore goes, then the horizon, then the surface
@@ -38,7 +42,7 @@
       rarityBoost: 1.30, valueBoost: 1.35, xpBoost: 3.4, biteBoost: 0.96,
       sky: ['#101a24', '#3a5a68'], water: ['#22414c', '#08151c'], glow: '#9fe8e0',
       fog: '#2e4e58', fogAmt: 0.22, stars: 0.9, starTint: '#dffaff',
-      horizon: 'arch', silhouette: 'spires', depth: 0.38, void: 0.14,
+      horizon: 'arch', silhouette: 'none', depth: 0.38, void: 0.14,
       weather: ['clear', 'fog', 'aurora', 'meteor', 'overcast'],
       music: { root: 57, scale: [0, 2, 4, 7, 11], tempo: 0.12, pad: 0.7 } },
 
@@ -49,7 +53,7 @@
       rarityBoost: 1.55, valueBoost: 1.70, xpBoost: 6.2, biteBoost: 0.92,
       sky: ['#0a1018', '#1b2c3a'], water: ['#0e1d28', '#01040a'], glow: '#5fa8c0',
       fog: '#16303f', fogAmt: 0.48, stars: 0.5, starTint: '#b8d8e8',
-      horizon: 'monolith', silhouette: 'rocks', depth: 0.52, void: 0.26,
+      horizon: 'monolith', silhouette: 'none', depth: 0.52, void: 0.26,
       weather: ['overcast', 'rain', 'storm', 'fog', 'eclipse'],
       music: { root: 48, scale: [0, 1, 5, 7, 8], tempo: 0.10, pad: 0.8 } },
 
@@ -60,7 +64,7 @@
       rarityBoost: 1.90, valueBoost: 2.30, xpBoost: 11.0, biteBoost: 0.94,
       sky: ['#120c22', '#2e2050'], water: ['#1d1440', '#050318'], glow: '#c8a0ff',
       fog: '#2c1f52', fogAmt: 0.40, stars: 0.85, starTint: '#efe0ff',
-      horizon: 'crystal', silhouette: 'crystals', depth: 0.48, void: 0.38,
+      horizon: 'crystal', silhouette: 'none', depth: 0.48, void: 0.38,
       weather: ['clear', 'fog', 'aurora', 'eclipse', 'meteor'],
       music: { root: 50, scale: [0, 3, 5, 6, 10], tempo: 0.11, pad: 0.85 } },
 
@@ -71,7 +75,7 @@
       rarityBoost: 2.35, valueBoost: 2.50, xpBoost: 20.0, biteBoost: 0.98,
       sky: ['#0d1226', '#3a3060'], water: ['#1a2050', '#04061a'], glow: '#ffd08a',
       fog: '#2a2c5e', fogAmt: 0.32, stars: 1.0, starTint: '#fff2d8',
-      horizon: 'ring', silhouette: 'ruins', depth: 0.40, void: 0.52,
+      horizon: 'ring', silhouette: 'none', depth: 0.40, void: 0.52,
       weather: ['clear', 'aurora', 'meteor', 'eclipse', 'storm'],
       music: { root: 52, scale: [0, 2, 5, 7, 9], tempo: 0.13, pad: 0.75 } },
 
@@ -82,7 +86,7 @@
       rarityBoost: 3.10, valueBoost: 3.40, xpBoost: 36.0, biteBoost: 0.90,
       sky: ['#08060f', '#1a1030'], water: ['#100a24', '#020106'], glow: '#9f7fff',
       fog: '#1c1236', fogAmt: 0.55, stars: 0.68, starTint: '#d8c8ff',
-      horizon: 'tear', silhouette: 'bones', depth: 0.55, void: 0.74,
+      horizon: 'tear', silhouette: 'none', depth: 0.55, void: 0.74,
       weather: ['fog', 'eclipse', 'voidsurge', 'storm', 'aurora'],
       music: { root: 46, scale: [0, 1, 3, 7, 8], tempo: 0.08, pad: 0.95 } },
 

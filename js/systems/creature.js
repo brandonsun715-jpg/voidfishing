@@ -49,7 +49,7 @@
   function rec(id) {
     const d = VF.state.data;
     if (!d.creatures || typeof d.creatures !== 'object') d.creatures = {};
-    if (!d.creatures[id]) d.creatures[id] = { met: 0, caught: 0, escaped: 0 };
+    if (!d.creatures[id]) d.creatures[id] = { met: 0, caught: 0, seen: 0, escaped: 0 };
     return d.creatures[id];
   }
 
@@ -64,7 +64,8 @@
     S.id = id; S.def = def; S.i = -1; S.t = 0; S.phase = null;
     S.lead = opts.lead || null;
     S.fromCatch = opts.c || null;
-    S.ending = null; S.waiting = 0; S.shake = 0;
+    S.ending = null;
+    if (VF.pace) VF.pace.spend(3); S.waiting = 0; S.shake = 0;
     S.disguise = null; S.revealed = 0;
 
     const r = rec(id);
@@ -118,6 +119,12 @@
       case 'reveal': S.revealed = 0; break;
       case 'hook': doHook(ph); break;
       case 'land': return finish(true);
+      /* Not everything out here is a fight. Two of these end with the thing
+         going away again while you sit there — nothing hooked, nothing
+         landed, nothing in the fishdex, and it still counts, because what
+         happened was that you were there and it looked at you. `leave` is
+         how a phase list says so. */
+      case 'leave': return finish(true);
       case 'escape': return finish(false);
       default: break;
     }
@@ -218,10 +225,16 @@
     const r = rec(def.id);
 
     if (won) {
-      r.caught = (r.caught | 0) + 1;
+      /* An encounter that ended without a catch is still an encounter, and
+         it is recorded as one — separately, because "seen it three times"
+         and "landed it three times" are not the same sentence and the ones
+         you cannot land are the ones where the difference matters. */
+      const met = def.encounterOnly;
+      if (met) r.seen = (r.seen | 0) + 1;
+      else r.caught = (r.caught | 0) + 1;
       grantReward(def);
       VF.journal.addFree('creature:' + def.id, def.name, def.journal, 'creature', 0);
-      if (r.caught === 1) {
+      if ((met ? r.seen : r.caught) === 1) {
         VF.discovery.found('creature', def.name, def.blurb);
         VF.bus.emit('creature:first', def);
       }
@@ -461,6 +474,11 @@
   function tryOnBite(c) {
     if (S.id || cooldown > 0) return null;
     if (VF.state.rt.panelOpen) return null;
+    /* The per-creature cooldown above stops the same one twice. It does not
+       stop a different one landing forty seconds after the last, and with
+       nine of these plus the zones plus the crossings that is what happened.
+       js/systems/pace.js is the shared clock. */
+    if (VF.pace && !VF.pace.allow(3)) return null;
     const list = VF.creatureData.eligible('bite', { rank: VF.rarities.rank(c && c.rarity) });
     for (let i = 0; i < list.length; i++) {
       const def = list[i];
@@ -476,6 +494,7 @@
   function tryOnReel(c, progress) {
     if (S.id || cooldown > 0) return null;
     if (progress < 0.45 || progress > 0.85) return null;
+    if (VF.pace && !VF.pace.allow(3)) return null;
     const list = VF.creatureData.eligible('reel', { rank: VF.rarities.rank(c && c.rarity) });
     for (let i = 0; i < list.length; i++) {
       const def = list[i];

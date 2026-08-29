@@ -6,7 +6,9 @@
    number, it is a short scene with a question in it.
 
    An event is:
-     kind      the word on the card. ANOMALY, CONTACT, DERELICT, …
+     kind      what family of thing it is. Used to pick the stinger. It is
+               NOT shown on the card — a category printed above a sighting
+               turns it into a catalogue entry somebody else compiled.
      name      what it is
      text      what you can see
      options   two or three answers, each with an outcome
@@ -159,7 +161,7 @@
           } }
       ] },
 
-    { id: 'island', kind: 'LANDFALL', weight: 7, name: 'Land, Where There Is None',
+    { id: 'island', kind: 'LANDFALL', weight: 7, name: 'An Island',
       text: 'A low island about two miles off with a stand of something on it. It is not on ' +
             'the chart and the chart is otherwise correct about this whole stretch.',
       test: function (d) { return VF.locations.index(d.location) >= 3; },
@@ -191,7 +193,7 @@
           } }
       ] },
 
-    { id: 'unknownmass', kind: 'SONAR', weight: 13, name: 'Unknown Object Detected',
+    { id: 'unknownmass', kind: 'SONAR', weight: 13, name: 'A Return At Two Thousand Metres',
       text: 'The set has put a return on the screen the size of a building at a depth the ' +
             'chart calls the bottom, and the bottom here is eleven hundred metres.',
       test: function (d) { return VF.boat && VF.boat.has('sonar'); },

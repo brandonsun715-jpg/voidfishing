@@ -43,6 +43,20 @@
       text: 'the water stopped. not calmed — stopped, entirely, like a held frame. it lasted under a minute and then went back to being water. nothing was on the line before or after.' },
     stillness: { title: 'on dead calm', kind: 'event',
       text: 'the old fisherman says the water goes flat like that when something large is holding still underneath it, and that the flatness is the shape of its back.' },
+    /* --- what the three of them said --- */
+    sounding: { title: 'eleven hundred fathoms', kind: 'lore',
+      text: 'the cartographer has sounded the trench four times. three of them came back at eleven hundred fathoms. on the fourth the lead reached eleven hundred fathoms and the line kept going out. she wrote down eleven hundred.' },
+    redraw: { title: 'the winter copy', kind: 'lore',
+      text: 'she redraws the whole chart every winter from the same notes, and every winter one thing on it is different, and it is never the same thing twice. this year it was a bay on the north side of the basin that she has never visited.' },
+    plating: { title: 'not rock', kind: 'lore',
+      text: 'the mechanic held the lamp against the damage and pointed at the edge of it. rock crushes a hull. this was opened. he says he can plate it as many times as you like.' },
+    theledger: { title: 'the ledger', kind: 'lore',
+      text: 'four hundred entries for four hundred hulls and what came back on them. weed, paint, a gull. nineteen of them say the same three words, in different hands, in different years. he did not say what the three words were.' },
+    midnight: { title: 'after midnight', kind: 'lore',
+      text: 'do not cast after midnight. he waited a long time before he gave the reason, and the reason was that that is when they start casting back.' },
+    thechild: { title: 'the child on the dock', kind: 'lore',
+      text: 'asked whether you saw her out on the nowhere sea, and did not seem troubled either way. she was not there. she said so herself.' },
+
     thinplace: { title: 'thin places', kind: 'event',
       text: 'the water gets uncommitted. you can see through it to somewhere that is not the bottom. the drifter calls these thin places and says they move, and that they are looking for something too.' },
 

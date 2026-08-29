@@ -526,9 +526,14 @@
       }, 1500);
       setTimeout(function () {
         D.hud.classList.remove('dimmed');
+        /* "one ancient power has awakened. something beneath the ocean has
+           noticed." — the exact register this game spends the rest of its
+           writing not being. Elias has just handed over a rod that fell out
+           of the sky and told you the ocean will come looking for you and
+           that it is a schedule. That is the tone. */
         VF.toast.show('<strong>' + U.esc(def.name) + '</strong> — complete<br>' +
-          '<span style="color:var(--ink-3)">one ancient power has awakened. something beneath ' +
-          'the ocean has noticed.</span>', 'good', 12000);
+          '<span style="color:var(--ink-3)">something registered that. you will find out ' +
+          'what, and it will not be at a time of your choosing.</span>', 'good', 12000);
         flashMenu('journal');
         refreshGear();
       }, 3400);
@@ -948,6 +953,17 @@
     if (line) showPrompt(line, VF.locations.current().glow, 3.4);
   }
 
+  /* This used to be a row of instruments that were on the screen the whole
+     time you were on the water: the boat's name, the moon phase, a resonance
+     percentage, a depth percentage, and the word "clear" next to the sonar.
+     Four of those five were readouts of things the player could already see
+     or could not act on, and the fifth told them nothing was happening.
+
+     What is left is only state you are CARRYING and would otherwise not know
+     about — a parasite with a count on it, and a sonar return while there
+     actually is one. The moon is the largest object in the sky. The abyss
+     charges its own crystals in front of you. The descent darkens the water.
+     None of them need a number. */
   let boatKey = '';
   function tickBoatHud() {
     if (!D.boatHud || !VF.boat) return;
@@ -956,17 +972,12 @@
     if (!show) return;
 
     const rows = [];
-    const hull = VF.boat.hull();
     const sound = Math.round(VF.boat.integrity() * 100);
-    rows.push([hull.name.toLowerCase(), sound < 100 ? sound + '%' : '']);
+    if (sound < 70) rows.push(['hull', sound + '%']);
 
     const z = VF.zones ? VF.zones.view() : null;
-    if (z) {
-      if (z.moon) rows.push(['moon', z.moon.name.toLowerCase()]);
-      if (z.rule === 'resonance') rows.push(['resonance', Math.round(z.charge * 100) + '%']);
-      if (z.rule === 'inverted') rows.push(['depth', Math.round(z.depth * 100) + '%']);
-      if (z.rule === 'sonar') rows.push(['sonar', z.blind ? 'not fitted' : z.contact ? 'CONTACT' : 'clear']);
-    }
+    if (z && z.rule === 'sonar' && z.contact) rows.push(['sonar', 'CONTACT']);
+
     const par = VF.parasite && VF.parasite.current();
     if (par) rows.push([par.def.name.toLowerCase(), par.left + ' left']);
 

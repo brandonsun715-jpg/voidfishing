@@ -474,7 +474,10 @@
     ctx = cv.getContext('2d', { alpha: false });
     buildGrain();
     resize();
-    VF.bus.on('location:changed', function () { backdropKey = ''; buildStars(); seedAmbient(); departure = null; shoalKey = ''; });
+    VF.bus.on('location:changed', function () {
+      backdropKey = ''; buildStars(); seedAmbient(); departure = null; shoalKey = '';
+      if (VF.zoneArt) VF.zoneArt.invalidate();
+    });
     VF.bus.on('fishing:lost', function (e) { beginDeparture(e.catch); });
     VF.bus.on('settings:quality', function () { backdropKey = ''; buildStars(); VF.particles.clearAll(); seedAmbient(); });
   }
@@ -883,6 +886,10 @@
     mark('clouds', function () { buildClouds(); drawClouds(P); });
     mark('horizon', function () { drawHorizonFeature(P); });
     mark('land', function () { drawLand(P); });
+    /* The zone's landmarks go in here, behind the fog and the water, so they
+       sit in the weather with the ridgeline instead of on top of the frame.
+       Half of what makes a place a place. */
+    mark('zoneback', function () { if (VF.zoneArt) VF.zoneArt.drawBack(ctx, L, P); });
     mark('aurora', function () { drawAurora(P); });
     mark('lightning', function () { drawLightning(P); });
     mark('fog', function () { drawFog(P, q); });
@@ -898,7 +905,7 @@
     /* What is on the water HERE and nowhere else, under the encounter layer
        and over the surface: the gulls, the panes, the crystals, the contacts,
        the bottle drifting in. Half of what makes a zone a zone. */
-    mark('zone', function () { if (VF.zoneArt) VF.zoneArt.draw(ctx, L, P); });
+    mark('zone', function () { if (VF.zoneArt) VF.zoneArt.drawFront(ctx, L, P); });
     mark('creature', function () { if (VF.creatureArt) VF.creatureArt.draw(ctx, L, P); });
     mark('line', function () { drawLineAndBobber(P); drawDeparture(P); });
     mark('particles', function () { VF.particles.draw(ctx); });

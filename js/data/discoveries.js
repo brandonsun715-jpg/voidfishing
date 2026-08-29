@@ -125,6 +125,13 @@
        'expedition' begin that expedition
        'place'     hand over a secret location                                */
 
+  /* A note is what somebody wrote down after seeing something, and it stops
+     there. Half of these used to end on an instruction — find out what the
+     second one is, work out where it is, be there when it does, put something
+     worth eating on the line — which is a task list wearing a journal's
+     clothes and tells the player the answer in the same breath as the
+     question. The `need` line beside it is the only place the game is
+     allowed to be practical. */
   const LEADS = {
     offshore_shadow: {
       name: 'something offshore',
@@ -139,14 +146,14 @@
     trench_contact: {
       name: 'the second echo',
       where: 'trench', kind: 'sonar', target: 'trench_echo',
-      note: 'the trench answers a ping twice. find out what the second one is.',
+      note: 'the trench answers a ping twice. the second one is further away than the bottom.',
       need: 'a sonar array on the boat',
       test: function () { return VF.boat && VF.boat.has('sonar'); }
     },
     lurker_hunt: {
       name: 'whatever is under the trench',
       where: 'trench', kind: 'creature', target: 'lurker',
-      note: 'it is down there and it knows where you are. work out where it is.',
+      note: 'it is down there, and it moves when the set is not looking at it.',
       need: null, test: function () { return true; }
     },
     thief_hunt: {
@@ -158,20 +165,20 @@
     deep_hunt: {
       name: 'the second shape',
       where: 'abyss', kind: 'creature', target: 'devourer',
-      note: 'something eats what you catch. put something worth eating on the line.',
+      note: 'twice now something has taken a fish off the line on the way up. it left the head.',
       need: null, test: function () { return true; }
     },
     queen_hunt: {
       name: 'what the small ones are following',
       where: 'abyss', kind: 'creature', target: 'queen',
-      note: 'the swarm turns because something below it turned. be there when it does.',
+      note: 'the swarm turns all at once, and it turns a half second before it has a reason to.',
       need: 'during a crystal resonance',
       test: function () { return VF.conditions && VF.conditions.has('resonance'); }
     },
     sunken_city: {
       name: 'the tile that was a scale',
       where: 'trench', kind: 'expedition', target: 'sunken_city',
-      note: 'somebody built something down there. find out how much of it is left.',
+      note: 'somebody built something down there. the tile in the bag is glazed on one side.',
       need: 'a research vessel or better',
       test: function () { return VF.boat && VF.boat.tierRank() >= 2; }
     },

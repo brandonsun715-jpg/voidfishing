@@ -91,13 +91,20 @@
       ambient: 'crystals',
       line: 'the structures are warm, and they are still growing',
       /* A charge that builds while you fish and discharges into whatever the
-         player has tuned it to. The tuning is the mechanic: shards are picked
-         up off the water and spent to point the next resonance at a trait. */
+         last shard you picked up was.
+
+         It used to be "spend three shards to tune the resonance toward a
+         trait", which had a shard counter, a percentage readout and a choice
+         of three named modes — and no interface anywhere in the game to make
+         the choice with, so in practice it was a system the player was told
+         about and could not touch. Now the shards come up in three colours,
+         you take the one you want, and the water comes back that colour.
+         Nothing explains this. Doing it twice explains it. */
       chargePer: 0.055,
       tunes: [
-        { id: 'size', name: 'Toward Size', trait: 'massive', note: 'the next ones come up bigger.' },
-        { id: 'colour', name: 'Toward Colour', trait: 'shimmering', note: 'the next ones come up lit.' },
-        { id: 'void', name: 'Toward The Dark', trait: 'voidtouched', note: 'the next ones come up wrong.' }
+        { id: 'size',   colour: [255, 216, 150], trait: 'massive',     note: 'bigger' },
+        { id: 'colour', colour: [150, 236, 255], trait: 'shimmering',  note: 'lit' },
+        { id: 'void',   colour: [196, 148, 255], trait: 'voidtouched', note: 'wrong' }
       ]
     },
 

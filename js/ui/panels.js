@@ -1432,10 +1432,13 @@
       b.appendChild(expCard({ def: run.def, started: 1, done: 0, leg: run.rec.leg, open: 1 }, run));
     }
 
-    b.appendChild(U.el('div', 'panel-note', 'leads'));
     if (!leads.length) {
-      b.appendChild(U.el('div', 'empty',
-        'nothing is pointing anywhere yet. strange catches leave clues, and clues point somewhere.'));
+      /* Only when this is the whole of what the panel has to say. Inside the
+         threads list an empty leads section is just an empty section. */
+      if (!b.childElementCount) {
+        b.appendChild(U.el('div', 'empty',
+          'nothing is pointing anywhere yet. strange catches leave clues, and clues point somewhere.'));
+      }
     } else {
       leads.forEach(function (l) {
         const card = U.el('div', 'lead' + (l.ready ? ' ready' : ''));
@@ -1458,11 +1461,9 @@
       b.appendChild(U.el('div', 'panel-note', 'expeditions'));
       offer.forEach(function (x) { b.appendChild(expCard(x, null)); });
     }
-    const done = VF.expedition ? VF.expedition.offered().filter(function (x) { return x.done; }) : [];
-    if (done.length) {
-      b.appendChild(U.el('div', 'panel-note', 'finished'));
-      done.forEach(function (x) { b.appendChild(expCard(x, null)); });
-    }
+    /* Finished expeditions used to be listed underneath the open ones. A
+       list of things you are doing should not be mostly things you have
+       already done — they are on the field tab, with the rest of the record. */
   }
 
   function expCard(x, run) {
@@ -1536,20 +1537,32 @@
   }
 
   function buildJournal(tab) {
+    /* Saved state and old deep links can still name the tab that used to
+       exist. It is the threads list now. Redirected here rather than in the
+       body below, so nothing renders twice. */
+    if (tab === 'leads') tab = 'quests';
     const d = VF.state.data;
     const p = shell('Journal', d.journal.length + ' entries · ' +
                     Object.keys(d.secrets).length + ' hidden places found');
     const qn = VF.quests.activeCount();
     const bn = VF.bounties.list().length;
-    /* Three new tabs, in the journal rather than in three new panels: a lead,
-       a creature and an expedition are all the same thing to the player —
-       something written down that they have not finished. */
+    /* A lead, a creature and an expedition are all the same thing to the
+       player — something written down that they have not finished — so they
+       live in the journal rather than in panels of their own. */
     const leads = VF.discovery ? VF.discovery.open() : [];
     const ready = leads.filter(function (l) { return l.ready; }).length;
     const cc = VF.creatureData ? VF.creatureData.counts() : { met: 0, caught: 0 };
+    /* This had seven tabs. Three of them — quests, leads, field — were three
+       lists of the same sentence: a thing you are part way through and have
+       not finished. A player looking for "what am I supposed to be doing"
+       had to check three places and hold the difference between a quest, a
+       lead and an expedition in their head, and the difference is an
+       implementation detail of this codebase. They are one list now, in the
+       order you would want them: what is ready, then what is open, then what
+       is waiting on somebody. */
+    const openN = qn + leads.length;
     p.appendChild(tabs([
-      { id: 'quests', label: 'quests' + (qn ? ' ' + qn : '') },
-      { id: 'leads', label: 'leads' + (ready ? ' •' : (leads.length ? ' ' + leads.length : '')) },
+      { id: 'quests', label: 'threads' + (ready ? ' •' : (openN ? ' ' + openN : '')) },
       { id: 'field', label: 'field' + (cc.met ? ' ' + cc.met : '') },
       { id: 'board', label: 'board' + (VF.bounties.anyReady() ? ' •' : (bn ? ' ' + bn : '')) },
       { id: 'entries', label: 'entries' },
@@ -1559,7 +1572,6 @@
     const b = body();
 
     if (tab === 'board') { b.appendChild(boardView()); p.appendChild(b); return p; }
-    if (tab === 'leads') { leadsView(b, leads); p.appendChild(b); return p; }
     if (tab === 'field') { fieldView(b); p.appendChild(b); return p; }
 
     if (tab === 'quests') {
@@ -1568,13 +1580,18 @@
          this a quest becomes available in silence and the only way to find out
          is to go round talking to everybody again on the off chance. */
       const soon = VF.quests.locked();
-      if (!open.length && !soon.length) {
+      if (!open.length && !soon.length && !leads.length) {
         b.appendChild(U.el('div', 'empty',
           'nothing is asking anything of you yet. keep fishing, and talk to people.'));
       } else {
         open.forEach(function (v) { b.appendChild(questCard(v)); });
+        if (leads.length) {
+          if (open.length) b.appendChild(U.el('div', 'quest-sep', 'and these'));
+          leadsView(b, leads);
+        }
         if (soon.length) {
-          const h = U.el('div', 'quest-sep', open.length ? 'not yet' : 'somebody has something to say');
+          const h = U.el('div', 'quest-sep',
+                         (open.length || leads.length) ? 'not yet' : 'somebody has something to say');
           b.appendChild(h);
           soon.forEach(function (l) { b.appendChild(lockedCard(l)); });
         }

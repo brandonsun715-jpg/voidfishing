@@ -27,7 +27,7 @@
     contact: null, contactT: 40,
     shards: [], shardT: 20,
     echoT: 60, passT: 50,
-    prompt: '', promptT: 0,
+    prompt: '', promptT: 0, ghosts: null, receding: null, recedeT: 90,
     at: null
   };
 
@@ -113,7 +113,8 @@
   function arrive(id) {
     R.at = id;
     R.bottle = null; R.marks = []; R.contact = null; R.shards = [];
-    R.prompt = ''; R.promptT = 0;
+    R.prompt = ''; R.promptT = 0; R.ghosts = null;
+    R.receding = null; R.recedeT = VF.rng.g.range(70, 180);
     const z = VF.zoneData.get(id);
     if (!z) return;
     R.bottleT = z.bottle ? VF.rng.g.range(z.bottle[0], z.bottle[1]) * 0.4 : 999;
@@ -125,6 +126,13 @@
     VF.bus.emit('zone:arrive', id);
   }
 
+  /* The prompt is for things the player would otherwise be confused by —
+     a refusal, a rule they have just hit. It is NOT for announcing that
+     something has appeared: a line saying "something is drifting in on the
+     tide" over a bottle that is visibly drifting in on the tide turns a
+     thing you noticed into a thing you were told, and the noticing was the
+     whole point. Almost every call to this was doing exactly that, and
+     almost every call to this is gone. */
   function say(text, secs) { R.prompt = text; R.promptT = secs || 5; }
 
   /* ------------------------------------------------- shore: things wash in */
@@ -137,14 +145,40 @@
       R.bottleT -= dt;
       if (R.bottleT <= 0) {
         R.bottleT = VF.rng.g.range(z.bottle[0], z.bottle[1]);
+        if (VF.pace && !VF.pace.take(1)) return;
         R.bottle = { x: 1.05, y: VF.rng.g.range(0.62, 0.82), t: 0 };
         VF.audio.nibble();
-        say('something is drifting in on the tide', 6);
       }
     } else {
       R.bottle.t += dt;
       R.bottle.x -= dt * 0.035;
       if (R.bottle.x < -0.1) R.bottle = null;
+    }
+
+    /* Once in a long while, one more island. It sits on the horizon where an
+       island sits, at the size an island is, and then over about half a
+       minute it gets further away — smaller, and lower, and sliding toward
+       the vanishing point — until there is nothing there.
+
+       There is no sound. Nothing is written down. It is not a clue, it does
+       not open a lead, it does not count toward anything and there is no
+       achievement for having seen it. If the player happens to be looking at
+       the horizon, they will spend the rest of the evening wondering. If they
+       are looking at the bag, it did not happen. That asymmetry is the point
+       and it is the reason this one is silent: the moment a toast fires, the
+       game has taken the noticing away and done it on the player's behalf. */
+    if (R.receding) {
+      R.receding.t += dt;
+      if (R.receding.t > R.receding.dur) R.receding = null;
+    } else {
+      R.recedeT -= dt;
+      if (R.recedeT <= 0) {
+        R.recedeT = VF.rng.g.range(240, 620);
+        if (VF.rng.g() < 0.34 && (!VF.pace || VF.pace.quiet() > 0.85)) {
+          R.receding = { t: 0, dur: 34, x: VF.rng.g.range(0.40, 0.88) };
+          if (VF.pace) VF.pace.spend(1);
+        }
+      }
     }
 
     /* And, once, early on, something that does not belong in ankle-deep
@@ -155,8 +189,12 @@
       VF.scene.addShadow({ x: -0.3, y: 0.22, sp: 0.030, size: 6.5, alpha: 0.55, life: 26, max: 26 });
       VF.audio.wrongShape();
       VF.fx.pulse(0.4);
-      say('something the size of a house just went past, in three feet of water', 8);
-      setTimeout(function () { VF.discovery.clue('wrongwater'); }, 5200);
+      /* No line. Something the size of a house goes past in three feet of
+         water and the game does not remark on it — it is on screen for
+         twenty-six seconds and either you looked up or you did not. The
+         journal entry lands well afterwards, so it reads as a memory of
+         something rather than a caption on it. */
+      setTimeout(function () { VF.discovery.clue('wrongwater', true); }, 14000);
     }
   }
 
@@ -170,7 +208,8 @@
       const first = lastPhase !== null;
       lastPhase = p.id;
       if (first) {
-        say(p.name.toLowerCase() + ' — ' + p.note, 8);
+        /* The moon is enormous and directly in front of you. Captioning it
+           is telling somebody what colour the sky is. */
         VF.audio.stinger(p.id === 'eclipse' ? 'void' : 'soft', 3);
         VF.bus.emit('moon:phase', p);
       }
@@ -207,12 +246,13 @@
 
     // and, rarely, it stops being water
     const s = st('flats');
-    if (!s.cracked && VF.rng.g() < z.crackAt * dt) {
+    if (!s.cracked && VF.rng.g() < z.crackAt * dt && (!VF.pace || VF.pace.take(3))) {
       s.cracked = Date.now();
       VF.fx.shake(6, 3);
       VF.audio.snap();
-      say('the water cracked. there is a line in it and the line is staying', 9);
-      VF.discovery.clue('glass_crack');
+      /* It is a crack across the whole zone and it never goes away. It does
+         not need a sentence; it needs to still be there tomorrow. */
+      VF.discovery.clue('glass_crack', true);
     }
   }
 
@@ -230,7 +270,6 @@
       R.marks.splice(i, 1);
       VF.fx.ripple(mx, my, L.w * 0.05, 2);
       VF.audio.click();
-      say('that one. cast at it.', 5);
       return true;
     }
     return false;
@@ -248,9 +287,24 @@
       if (R.contact.life <= 0) { R.contact = null; }
       return;
     }
+    if (R.ghosts) {
+      let alive = 0;
+      R.ghosts.forEach(function (gh) { gh.t += dt; if (gh.t < gh.life) alive++; });
+      if (!alive) R.ghosts = null;
+    }
+
     R.contactT -= dt;
     if (R.contactT > 0) return;
     R.contactT = VF.rng.g.range(z.contact[0], z.contact[1]);
+    /* Roughly one sweep in thirty is not a contact, and it wants a long
+       quiet in front of it — a screen full of returns is only frightening
+       if the set has been showing you an empty ocean for twenty minutes. */
+    if (!R.ghosts && VF.rng.g() < 0.034 && (!VF.pace || VF.pace.quiet() > 0.9)) {
+      manyContacts();
+      if (VF.pace) VF.pace.spend(2);
+      return;
+    }
+    if (VF.pace && !VF.pace.take(2)) return;
     R.contact = {
       x: VF.rng.g.range(0.2, 0.85), y: VF.rng.g.range(0.24, 0.58),
       t: 0, life: 26,
@@ -258,8 +312,22 @@
     };
     VF.audio.nibble();
     VF.bus.emit('zone:contact', R.contact);
-    say(R.contact.big ? 'the set has something the size of a building on it'
-                      : 'a return, out to the left, holding still', 7);
+  }
+
+  /* Once in a long while the set returns more than one, and then more, and
+     then more — six or seven of them spread right across the sweep, holding
+     station, none of them moving. They are gone in about four seconds and
+     nothing is written down about it anywhere. There is no popup, no clue,
+     no journal line and no achievement: the only record that it happened is
+     that you were looking at the screen. */
+  function manyContacts() {
+    const n = 5 + Math.floor(VF.rng.g() * 3);
+    R.ghosts = [];
+    for (let i = 0; i < n; i++) {
+      R.ghosts.push({ x: 0.10 + (i / n) * 0.82 + VF.rng.g() * 0.05,
+                      y: VF.rng.g.range(0.22, 0.60), t: -i * 0.34, life: 4.6 });
+    }
+    VF.audio.nibble();
   }
 
   /* Investigate what the sonar found. This is the only route to two of the
@@ -285,7 +353,6 @@
   function forceContact() {
     if (rule() !== 'sonar') return false;
     R.contact = { x: 0.62, y: 0.36, t: 0, life: 40, big: true };
-    say('the set has it. it has had it for some time.', 8);
     return true;
   }
 
@@ -301,17 +368,22 @@
     R.shardT -= dt;
     if (R.shardT <= 0 && R.shards.length < 4) {
       R.shardT = VF.rng.g.range(16, 40);
-      R.shards.push({ x: VF.rng.g.range(0.18, 0.9), y: VF.rng.g.range(0.30, 0.70), t: 0 });
+      R.shards.push({ x: VF.rng.g.range(0.18, 0.9), y: VF.rng.g.range(0.30, 0.70), t: 0,
+                      k: Math.floor(VF.rng.g() * 3) });
     }
 
-    if ((s.charge || 0) >= 1) {
+    if ((s.charge || 0) >= 1 && (!VF.pace || VF.pace.allow(3))) {
       s.charge = 0;
+      if (VF.pace) VF.pace.spend(3);
       const tune = z.tunes.filter(function (x) { return x.id === s.tune; })[0] || z.tunes[0];
+      s.lit = tune.colour;
       s.pending = tune.trait;
       VF.fx.flash('rgba(200,160,255,0.24)', 0.7, 2);
       VF.fx.shake(4, 2.4);
       VF.audio.stinger('void', 5);
-      say('resonance — ' + tune.note, 9);
+      /* The pillars go up and the water lights. That IS the announcement —
+         it is the largest thing that happens in the zone and it happens in
+         the frame rather than in a box in the corner of it. */
       if (VF.conditions) VF.conditions.start('glowwater');
       VF.bus.emit('zone:resonance', tune);
     }
@@ -324,30 +396,21 @@
       const x = R.shards[i];
       const sx = L.w * x.x, sy = L.horizonY + L.waterH * x.y;
       if (Math.hypot(px - sx, py - sy) > L.w * 0.045) continue;
+      const z = VF.zoneData.get('abyss');
+      const tune = z.tunes[x.k | 0] || z.tunes[0];
       R.shards.splice(i, 1);
       const s = st('abyss');
       s.shards = (s.shards | 0) + 1;
+      /* Taking a shard IS the tuning. No menu, no spend, no confirmation. */
+      s.tune = tune.id;
       s.charge = Math.min(1, (s.charge || 0) + 0.16);
-      VF.fx.ripple(sx, sy, L.w * 0.04, 1.8, [200, 160, 255], 1.2);
+      VF.fx.ripple(sx, sy, L.w * 0.04, 1.8, tune.colour, 1.2);
       VF.audio.nibble();
-      say('a shard. ' + s.shards + ' of them now.', 4);
       return true;
     }
     return false;
   }
 
-  /* The player's standing choice of what the next discharge does. Spent from
-     the shard count, so tuning is something you fish for. */
-  function tune(id) {
-    const z = VF.zoneData.get('abyss');
-    const s = st('abyss');
-    if (!z || !z.tunes.some(function (x) { return x.id === id; })) return false;
-    if ((s.shards | 0) < 3) return false;
-    s.shards -= 3;
-    s.tune = id;
-    VF.save.save();
-    return true;
-  }
 
   /* Applied to a catch by js/systems/loot.js's parasite hook's neighbour —
      see the call in roll(). One catch, then it is spent. */
@@ -376,10 +439,16 @@
         VF.scene.addShadow({ x: -0.2, y: 0.34, sp: 0.048, size: 1.8, alpha: 0.42, life: 18, max: 18 });
       }, i * 4200);
     }
-    say('that has already happened once this evening', 6);
     const s = st('nowhere');
     s.echoes = (s.echoes | 0) + 1;
-    if (s.echoes === 3) VF.discovery.clue('nowhere_double');
+    /* The first two of these are silent. The same shadow goes past twice and
+       the game does not remark on it, so noticing is the player's. The third
+       time, and only the third, it says the thing they have been thinking —
+       which reads as agreement rather than as narration. */
+    if (s.echoes === 3) {
+      say('that has already happened once this evening', 6);
+      VF.discovery.clue('nowhere_double');
+    }
   }
 
   /* Called by the crossing when it leaves the Nowhere Sea. Returns the place
@@ -403,7 +472,6 @@
     if (VF.fishing.state() === 'waiting') s.depth = U.clamp((s.depth || 0) + z.depthPer * dt / 60, 0, 1);
     if ((s.depth || 0) > 0.99 && !s.deep) {
       s.deep = Date.now();
-      say('the reading has stopped changing. you are as far down as the reading goes.', 9);
       VF.discovery.clue('beneath_way');
     }
   }
@@ -417,7 +485,6 @@
     R.passT = VF.rng.g.range(z.passAt[0], z.passAt[1]);
     VF.scene.spawnMeteor();
     VF.fx.flash('rgba(255,240,200,0.16)', 0.8, 1.6);
-    say('something went over, above the cloud you are standing on', 6);
   }
 
   /* ---------------------------------------------------------- the press
@@ -454,6 +521,8 @@
       id: R.at, rule: rule(),
       bottle: R.bottle, marks: R.marks, contact: R.contact, shards: R.shards,
       prompt: R.prompt,
+      ghosts: R.ghosts,
+      receding: R.receding,
       moon: rule() === 'moon' ? moonPhase() : null,
       charge: rule() === 'resonance' ? (st('abyss').charge || 0) : 0,
       depth: rule() === 'inverted' ? (st('beneath').depth || 0) : 0,
@@ -479,7 +548,7 @@
       if (score < sec.need) break;
       s.open.push(sec.id);
       VF.journal.addFree('cradle:' + sec.id, sec.name, sec.text, 'lore', i === 3 ? 1 : 0);
-      VF.discovery.found('the cradle', sec.name, 'a section of the ring has opened');
+      VF.discovery.found('place', sec.name, 'a section of the ring has opened');
       if (sec.id === 'shaft') VF.discovery.openLead('beneath_way');
       VF.save.save();
       return sec;
@@ -490,7 +559,7 @@
   VF.zones = {
     tick: tick, press: press, view: view, stats: stats,
     moonPhase: moonPhase, moonK: moonK,
-    tune: tune, onRoll: onRoll,
+    onRoll: onRoll,
     driftTo: driftTo, forceContact: forceContact, excavate: excavate,
     state: st,
     prompt: function () { return R.prompt; }
