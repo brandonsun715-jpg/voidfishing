@@ -34,13 +34,21 @@
 
     pending: null,       // rolled catch waiting to be hooked
     pendingOpts: null,   // forced roll options from an encounter
+    armed: null,         // a species the owner console put on the next cast
     biteWindow: BITE_WINDOW,
     fight: null,
 
     lastResult: null,
     lastFight: null,     // how the last fight went, for anything watching
+    approach: null,      // { rank, rarity, t, dur } while something rare closes in
     encounterActive: false
   };
+
+  /* How long before the bite the roll happens. Anything from the void tier up
+     is visible on its way in, so what is on the end of the line has to be
+     decided before the line knows about it. */
+  const APPROACH_LEAD = 5.5;
+  const APPROACH_MIN = 4.2;    // and the wait stretches so there is time to see it
 
   /* ---------------------------------------------------------------- casting */
 
@@ -69,7 +77,12 @@
 
   function cast(power) {
     const d = VF.state.data;
-    S.pendingOpts = null;
+    /* Ordinarily this clears whatever the last cast left armed. If the owner
+       console has named a species for the next cast, that is not leftovers —
+       it is the instruction — so it survives into pendingOpts and is spent
+       here rather than lingering into the cast after. */
+    S.pendingOpts = S.armed ? { forceFish: S.armed } : null;
+    S.armed = null;
     if (!VF.bait.consume(d.bait)) { d.bait = 'worm'; VF.bait.consume('worm'); }
 
     const rod = VF.rods.get(d.rod);
@@ -99,6 +112,7 @@
     const k = bait.bite * loc.biteBoost * VF.weather.bite() *
               (build ? build.bite / bait.bite : 1) *
               (cond ? cond.bite : 1) *
+              (VF.mods ? VF.mods.stats().bite : 1) *
               (1 - U.clamp(rod.cast * 0.12, 0, 0.22)) *
               (1 - U.clamp(S.castPower * 0.10, 0, 0.10));
     S.biteWait = U.clamp(base * k, 1.6, 22);
@@ -112,7 +126,11 @@
     if (VF.secrets) VF.secrets.tryFind();
   }
 
-  function triggerBite(opts) {
+  /* What is on the end of the line. Decided here rather than at the moment of
+     the bite, because something rare enough is seen coming before it arrives
+     and that is only possible if the roll has already happened. Returns the
+     record and changes nothing. */
+  function rollBite(opts) {
     opts = opts || {};
 
     /* A quest that has put something specific in the water gets first refusal:
@@ -120,13 +138,20 @@
        trial to a slow hand on the hookset would be a poor way to lose it. */
     const armed = VF.quests && VF.quests.anyArmed();
     if (armed && armed.trial && !opts.minRank) {
-      S.pending = VF.loot.roll({ forceFish: armed.trial.fish });
-      S.pending.kind = 'fish';
-      S.pending.trial = armed.trial;
-      S.biteWindow = BITE_WINDOW_BIG;
-      setState('bite');
-      VF.bus.emit('fishing:bite', S.pending);
-      return;
+      const c = VF.loot.roll({ forceFish: armed.trial.fish });
+      c.kind = 'fish';
+      c.trial = armed.trial;
+      c.wide = true;
+      return c;
+    }
+
+    /* And then the one that comes back, if it is due. Ahead of the treasure
+       roll and the ordinary draw, behind the quest, because a thread already
+       running outranks a story that has waited this long and can wait another
+       cast. */
+    if (!opts.minRank && VF.returning) {
+      const back = VF.returning.offer();
+      if (back) return back;
     }
 
     if (S.sweet && !opts.minRank) opts = Object.assign({}, opts, { rareBoost: 1.12 });
@@ -135,30 +160,98 @@
     if (!opts.minRank && VF.rng.g() < VF.treasureData.chance()) {
       const t = VF.treasureData.roll();
       if (t) {
-        S.pending = { kind: 'treasure', treasure: t, rarity: t.rarity,
-                      rarityDef: VF.rarities.get(t.rarity), traits: [],
-                      fish: { name: t.name, diff: 0.2, art: null } };
-        S.biteWindow = BITE_WINDOW;
-        setState('bite');
-        VF.bus.emit('fishing:bite', S.pending);
-        return;
+        return { kind: 'treasure', treasure: t, rarity: t.rarity,
+                 rarityDef: VF.rarities.get(t.rarity), traits: [],
+                 fish: { name: t.name, diff: 0.2, art: null } };
       }
     }
 
-    S.pending = VF.loot.roll(opts);
-    S.pending.kind = 'fish';
-    S.biteWindow = opts.minRank ? BITE_WINDOW_BIG : BITE_WINDOW;
+    const c = VF.loot.roll(opts);
+    c.kind = 'fish';
+    if (opts.minRank) c.wide = true;
     /* A species can carry its own scripted fight. It runs on exactly the same
        machinery the heaven's trial does, so the phase announcements and the
        loadout maths come along with it and nothing here has to know which
        species it is. Losing one of these to a slow hand on the hookset would
        be a miserable way to lose it, so the window opens wide. */
-    if (S.pending.fish && S.pending.fish.trial) {
-      S.pending.trial = S.pending.fish.trial;
-      S.biteWindow = BITE_WINDOW_BIG;
+    if (c.fish && c.fish.trial) { c.trial = c.fish.trial; c.wide = true; }
+    /* And above Legendary, the tier writes one if the species did not. A rare
+       fish used to be a slightly longer version of a common one; now it is a
+       different fight, which is what all the machinery in front of it — the
+       shadow coming in, the ducked audio, the prompt — was announcing. */
+    else if (VF.trials) {
+      const t = VF.trials.forCatch(c);
+      if (t) { c.trial = t; c.wide = true; }
     }
+    return c;
+  }
+
+  /* The shadow crossing the water toward the hook. Only the top of the
+     catalogue gets one — below that a bite should still be a surprise. */
+  function beginApproach(c) {
+    if (!c || c.kind !== 'fish') return false;
+    const rank = VF.rarities.rank(c.rarity);
+    if (rank < 6) return false;
+    // stretch the wait if there is not enough of it left to see anything
+    S.biteWait = Math.max(S.biteWait, APPROACH_MIN);
+    S.approach = { rank: rank, rarity: c.rarity, t: 0, dur: S.biteWait };
+    VF.bus.emit('fishing:approach', S.approach);
+    return true;
+  }
+
+  function endApproach() {
+    if (!S.approach) return;
+    S.approach = null;
+    VF.bus.emit('fishing:approach:end');
+  }
+
+  function triggerBite(opts) {
+    if (!S.pending) S.pending = rollBite(opts || S.pendingOpts);
+    S.pendingOpts = null;
+    /* An encounter gets first refusal on the moment of the bite. Some of them
+       are the bite — the thief takes the bait instead of taking the hook —
+       and the only way for that to read as one event rather than two is for
+       it to happen here, before the ordinary bite is announced. */
+    if (VF.creature && VF.creature.tryOnBite(S.pending)) {
+      S.pending = null;
+      endApproach();
+      setState('waiting');
+      S.biteWait = 9999;         // the encounter owns the rod now
+      return;
+    }
+    S.biteWindow = S.pending.wide ? BITE_WINDOW_BIG : BITE_WINDOW;
+    endApproach();
     setState('bite');
     VF.bus.emit('fishing:bite', S.pending);
+  }
+
+  /* Put a named species on the line right now, hooked and fighting.
+
+     This is how an encounter hands the rod back: it has already done the
+     tracking, the chase and the choice, and what is left is the fight, which
+     the game already has and which there is no reason to write twice. The
+     catch that comes out the far end is an ordinary catch with a `creature`
+     tag on it, so the card, the fishdex, the wall and the aquarium need to
+     know nothing about any of this. */
+  function putOnLine(fishId, extra) {
+    const f = VF.fish.byId(fishId);
+    if (!f) return false;
+    const c = VF.loot.roll({ forceFish: fishId });
+    c.kind = 'fish';
+    if (extra) for (const k in extra) c[k] = extra[k];
+    if (c.fish && c.fish.trial) c.trial = c.fish.trial;
+    else if (VF.trials) { const t = VF.trials.forCatch(c); if (t) c.trial = t; }
+    c.wide = true;
+    S.pending = c;
+    S.biteWindow = BITE_WINDOW_BIG * 2;
+    endApproach();
+    setState('bite');
+    VF.bus.emit('fishing:bite', c);
+    /* Set for them. Making somebody react to a hookset they were not told was
+       coming, at the end of an encounter they have been playing for two
+       minutes, is a way to lose one to a keystroke. */
+    hook();
+    return true;
   }
 
   /* ---------------------------------------------------------------- the fight
@@ -207,6 +300,8 @@
       outsideT: 0,
       lastEdge: -9,        // when grip/slip last spoke, so it cannot chatter
       perfect: true,
+      saved: false,          // whether a rod has already pulled this one back
+      penalty: null,         // and what that cost the fish, if it has
       elapsed: 0,
 
       /* derived each frame for the scene, the angler and the audio */
@@ -228,18 +323,17 @@
   /* Objects do not fight back. They are heavy and awkward and they sit still,
      so the bar is generous and the thing on the end of it barely moves. */
   function treasureFight() {
-    const rod = VF.rods.get(VF.state.data.rod);
-    const b = (VF.build ? VF.build.stats() : null) ||
-              { line: 1, reel: 1, barSize: 1, barSpeed: 1 };
-    const q = VF.util.clamp((rod.reel * b.reel - 0.40) / 2.70, 0, 1.25);
+    // the same loadout as any other fight: salvage was the one place the rod's
+    // own bar stats did nothing while the charms' identical stats still worked
+    const L = VF.loot.loadout();
     return {
       diff: 0.12,
-      barW: U.clamp(0.34 * b.barSize, 0.12, 0.52),
-      barSpeed: 0.78 * U.clamp(b.barSpeed * (1 - 0.20 * q), 0.30, 2.2),
-      barTau: 0.170 / (1 + 0.60 * q),
+      barW: U.clamp(0.34 * L.rodBar * L.barSize, 0.12, 0.52),
+      barSpeed: 0.78 * L.barMul,
+      barTau: 0.170 / (1 + 0.60 * L.q),
       fishSpeed: 0.16, fishStiff: 6, fishDrag: 1.10 * Math.sqrt(6),
       fishTurn: 1.5, dart: 0.05, evade: 0, wobble: 0.015,
-      fill: 0.42 * (1 + 0.35 * q), drain: 0.20, start: 0.40
+      fill: 0.42 * L.fillMul, drain: 0.20, start: 0.40
     };
   }
 
@@ -286,6 +380,15 @@
   /* Phases are gated on the meter rather than on a clock, so the fight is as
      long as the player makes it, and they only ever go one way — losing ground
      inside the void does not put you back in the storm. */
+  /* Whatever the fish learned on its way off the hook, re-applied to the
+     numbers currently in force. */
+  function applyPenalty(f) {
+    if (!f.penalty) return;
+    f.p.fishSpeed *= f.penalty.speed;
+    f.p.dart = Math.min(0.95, f.p.dart * f.penalty.dart);
+    f.p.drain *= f.penalty.drain;
+  }
+
   function advancePhase(f) {
     const ph = f.trial.spec.phases;
     let want = f.trial.i;
@@ -294,6 +397,7 @@
     f.trial.i = want;
     const np = VF.loot.trialParams(ph[want]);
     f.p = np;
+    applyPenalty(f);
     f.barW = np.barW;
     // the walls move; the bar stays where the player left it
     f.bar = U.clamp(f.bar, np.barW / 2, 1 - np.barW / 2);
@@ -302,12 +406,32 @@
 
   function updateFight(dt) {
     if (!S.fight) { hardReset(); return; }
+    /* Something can arrive under a fight already in progress and take it
+       over. Checked once a frame rather than once a step: the devourer is a
+       rare event, not a per-substep dice roll, and it must not become more
+       likely on a machine with a long frame. */
+    if (VF.creature && !VF.creature.active() && !S.fight.c.creature) {
+      const took = VF.creature.tryOnReel(S.fight.c, S.fight.progress);
+      if (took) { interrupt(S.fight.c); return; }
+    }
     let left = dt;
     while (left > 1e-6 && S.state === 'reeling' && S.fight) {
       const h = Math.min(MAX_STEP, left);
       left -= h;
       stepFight(h);
     }
+  }
+
+  /* A fight taken off the rod by something else. Not a loss: nothing is
+     recorded, no streak is broken and no line is snapped — what was on the
+     hook is now part of whatever is happening instead. */
+  function interrupt(c) {
+    S.fight = null;
+    S.pending = null;
+    S.encounterActive = false;
+    S.biteWait = 9999;
+    setState('waiting');
+    VF.bus.emit('fishing:interrupt', c);
   }
 
   function stepFight(dt) {
@@ -391,6 +515,11 @@
     /* --- resolution --- */
     if (f.progress >= 1) { land(); return; }
     if (f.progress <= 0) { lose(gap > half + 0.20 ? 'snap' : 'slack'); return; }
+    /* One fight in the game is written to be lost, and a meter that only ever
+       falls does not fall while the player is holding it — so somebody good
+       enough could hold a hopeless fight open indefinitely. It ends on a clock
+       instead. Nothing else sets this. */
+    if (p.maxTime && f.elapsed >= p.maxTime) { lose('slack'); return; }
   }
 
   /* ---------------------------------------------------------------- outcomes */
@@ -398,7 +527,6 @@
   function land() {
     const f = S.fight;
     const c = f.c;
-    const d = VF.state.data;
 
     // the fight is about to be thrown away; anything that wants to know how it
     // went — the quest trials, mostly — reads it from here
@@ -406,11 +534,32 @@
                     elapsed: f.elapsed, trial: !!f.trial };
 
     if (c.kind === 'treasure') { landTreasure(c, f); return; }
+    record(c);
+  }
+
+  /* A catch that arrived without a fight. There is exactly one of these — the
+     line left out overnight — and it has to be written down the same way
+     everything else is, or it is a fish that did not happen: no fishdex entry,
+     no record broken, no experience, no achievement.
+
+     So the recording is its own function and both doors reach it. It is also
+     the only sane place to put it: duplicating sixty lines of bookkeeping for
+     one feature is how the two copies start disagreeing. */
+  function acceptCatch(c) {
+    if (!c || S.state === 'reeling') return false;
+    S.fight = null;
+    S.lastFight = null;
+    record(c);
+    return true;
+  }
+
+  function record(c) {
+    const d = VF.state.data;
 
     d.stats.catches++;
     d.streak++;
     if (d.streak > d.records.bestStreak) d.records.bestStreak = d.streak;
-    if (f.perfect) d.stats.perfectReels++;
+    if (S.lastFight && S.lastFight.perfect) d.stats.perfectReels++;
 
     const rank = VF.rarities.rank(c.rarity);
     if (rank >= 4) d.stats.legendaryCatches++;
@@ -491,20 +640,59 @@
   }
 
   function lose(reason) {
-    const c = S.fight ? S.fight.c : null;
+    const f = S.fight;
+
+    /* A rod may be allowed to not have lost. The line goes, and then it has
+       not gone: the fish is still on, the meter restarts partway down and the
+       fight carries on from there. Once per fish, and it costs the clean-fight
+       flag, because whatever that was it was not clean. */
+    if (f && !f.saved && VF.rods.get(VF.state.data.rod).secondChance) {
+      f.saved = true;
+      /* It costs, or it is not a perk, it is a better rod with a nicer name.
+         The meter restarts well down rather than partway, and whatever that was
+         has learned something on its way off the hook: for the rest of this
+         fight it is quicker, it runs more often, and it takes the meter back
+         faster when it is out of the bar. */
+      f.progress = Math.max(0.10, f.p.start * 0.45);
+      /* Kept on the fight rather than burned into the current params, because
+         a scripted fight replaces those wholesale at the next phase boundary
+         and the penalty went with them — refunding the cost of the save on
+         precisely the fights where it is worth taking. */
+      f.penalty = { speed: 1.22, dart: 1.30, drain: 1.18 };
+      applyPenalty(f);
+      f.bar = 0.5; f.barV = 0;
+      f.fish = 0.5; f.fishV = 0; f.target = 0.5;
+      f.inside = true; f.outsideT = 0;
+      f.lastEdge = -9;
+      f.perfect = false;
+      f.held = false;
+      const d0 = VF.state.data;
+      d0.stats.secondChances = (d0.stats.secondChances | 0) + 1;
+      VF.bus.emit('fishing:saved', { reason: reason, catch: f.c });
+      return;
+    }
+
+    const c = f ? f.c : null;
+    /* What the run was worth, read before it is taken away. Losing a fish
+       costs the fish and the run, and the second one is the part nobody sees
+       happen — so it goes out with the event and gets said out loud. */
+    const hadStreak = VF.state.data.streak | 0;
+    const lostBonus = Math.round((VF.progression.streakMult() - 1) * 100);
     VF.state.data.stats.escapes++;
     VF.state.data.streak = 0;
     if (reason === 'snap') VF.state.data.stats.linesSnapped++;
     S.fight = null;
     S.encounterActive = false;
     setState('idle');
-    VF.bus.emit('fishing:lost', { reason: reason, catch: c });
+    VF.bus.emit('fishing:lost', { reason: reason, catch: c,
+                                  streak: hadStreak, bonus: lostBonus });
   }
 
   /* Player reels in without a fish on (cancel a cast). */
   function reelIn() {
     if (S.state === 'waiting' || S.state === 'bite') {
       S.pending = null;
+      endApproach();
       setState('idle');
       VF.bus.emit('fishing:reelin');
       return true;
@@ -546,6 +734,11 @@
         break;
 
       case 'waiting':
+        /* An encounter has the rod. The bite timer, the nibbles and the
+           approach all stop where they are rather than running underneath it
+           — a second fish arriving in the middle of the Lurker would be a
+           bug the player would read as the game being broken. */
+        if (VF.creature && VF.creature.holdsRod()) break;
         S.biteWait -= dt;
         S.nibbleTimer -= dt;
         if (S.nibbleTimer <= 0) {
@@ -554,11 +747,16 @@
           VF.bus.emit('fishing:nibble');
         }
         S.nibble = Math.max(0, S.nibble - dt * 1.8);
-        if (S.biteWait <= 0) {
-          const opts = S.pendingOpts;
+        /* The roll happens a few seconds early so anything from the void tier
+           up can be watched on its way in. Everything else is rolled and
+           bitten in the same breath, exactly as before. */
+        if (!S.pending && S.biteWait <= APPROACH_LEAD) {
+          S.pending = rollBite(S.pendingOpts);
           S.pendingOpts = null;
-          triggerBite(opts);
+          beginApproach(S.pending);
         }
+        if (S.approach) S.approach.t += dt;
+        if (S.biteWait <= 0) triggerBite(null);
         break;
 
       case 'bite':
@@ -586,9 +784,24 @@
   /* Encounters force the next bite to be something enormous. */
   function queueEncounter(opts) {
     if (S.state !== 'waiting') return false;
+    // whatever was already rolled for this cast is not what is coming now
+    S.pending = null;
+    endApproach();
     S.encounterActive = true;
     S.pendingOpts = opts;
     S.biteWait = Math.min(S.biteWait, opts.delay || 3.2);
+    return true;
+  }
+
+  /* Put a species on the next cast, whatever the water would have given you.
+     Only the owner console calls this. It arms rather than spawning, because
+     the interesting part of a rare catch is not the card at the end — it is
+     the shadow coming in, the fight and the sequence, and a catch conjured
+     straight onto the stone skips all three. */
+  function arm(id) {
+    const f = VF.fish.byId(id);
+    if (!f) return false;
+    S.armed = f.id;
     return true;
   }
 
@@ -597,7 +810,9 @@
     S.charging = false;
     S.charge = 0;
     S.pending = null;
+    endApproach();
     S.pendingOpts = null;
+    S.armed = null;
     S.fight = null;
     S.lastResult = null;
     S.encounterActive = false;
@@ -607,6 +822,9 @@
   VF.fishing = {
     S: S,
     hardReset: hardReset,
+    arm: arm,
+    putOnLine: putOnLine,
+    acceptCatch: acceptCatch,
     tick: tick,
     canCast: canCast,
     beginCharge: beginCharge,

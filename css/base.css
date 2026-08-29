@@ -34,8 +34,33 @@ html, body { height: 100%; margin: 0; padding: 0; }
   --mono: ui-monospace, "SF Mono", SFMono-Regular, "JetBrains Mono", Menlo,
           Consolas, "Liberation Mono", monospace;
 
-  --ease: cubic-bezier(0.22, 0.68, 0.28, 1);
-  --dur: 220ms;
+  /* --------------------------------------------------------------- motion
+
+     One curve and one duration used to run the entire interface, so a two-pixel
+     hover tint and a whole panel arriving moved at exactly the same speed.
+     Neither was wrong on its own; together they read as an interface with no
+     weight, because weight in motion IS the difference between how long a small
+     change takes and how long a large one does.
+
+     Five durations, scaled to how much of the screen is actually changing, and
+     three curves for the only three things motion does here: arrive, leave, or
+     travel between two places. Exits are deliberately quicker than entrances —
+     something you have already dismissed should be most of the way gone before
+     you have finished thinking about it. */
+
+  --e-out:  cubic-bezier(0.17, 0.84, 0.24, 1);   /* arriving: quick, then settles */
+  --e-in:   cubic-bezier(0.50, 0.00, 0.78, 0.35); /* leaving: gathers speed and goes */
+  --e-move: cubic-bezier(0.32, 0.72, 0.20, 1);   /* travelling from one place to another */
+
+  --t-tap:  90ms;    /* a press — it has to land under the finger */
+  --t-tint: 140ms;   /* a colour, a border, a hover */
+  --t-item: 220ms;   /* one row, one chip, one control changing state */
+  --t-pane: 320ms;   /* a whole panel arriving */
+  --t-exit: 170ms;   /* anything on its way out */
+
+  /* the old pair, kept as aliases so nothing asking for them by name breaks */
+  --ease: var(--e-move);
+  --dur:  var(--t-item);
 }
 
 body {
@@ -49,6 +74,15 @@ body {
   text-transform: lowercase;
   overflow: hidden;
   overscroll-behavior: none;
+  /* On a touchscreen every tap was painting a grey rectangle over whatever was
+     tapped, a frame before anything the interface itself does. It is the single
+     most visible piece of unpolish on a phone and it is not ours. */
+  -webkit-tap-highlight-color: transparent;
+  /* The whole interface is a game surface: dragging across it should charge a
+     cast, not select the word under the finger and put a magnifier over it.
+     Panels opt back in below — they are documents, and their text is meant to
+     be read and copied. */
+  -webkit-user-select: none; user-select: none;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -102,7 +136,7 @@ body.q-low #grain { display: none; }
   pointer-events: none; z-index: 3;
   box-shadow: inset 0 0 160px -20px var(--accent-dim);
   opacity: 0.34;
-  transition: box-shadow 900ms var(--ease), opacity 600ms var(--ease);
+  transition: box-shadow 900ms var(--e-move), opacity 600ms var(--e-move);
 }
 
 .hidden { display: none !important; }
@@ -115,11 +149,11 @@ body.q-low #grain { display: none; }
   display: flex; align-items: center; justify-content: center;
   background: radial-gradient(ellipse at 50% 58%, rgba(6,9,16,0.38), rgba(2,3,6,0.86) 74%);
   backdrop-filter: blur(2px);
-  transition: opacity 700ms var(--ease), visibility 700ms;
+  transition: opacity 700ms var(--e-in), visibility 700ms;
 }
 #boot.gone { opacity: 0; visibility: hidden; pointer-events: none; }
 
-.boot-inner { text-align: center; animation: bootIn 1100ms var(--ease) both; }
+.boot-inner { text-align: center; animation: bootIn 1100ms var(--e-out) both; }
 @keyframes bootIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 
 .title {
@@ -143,28 +177,69 @@ button, input, select, textarea {
   font: inherit; color: inherit; text-transform: inherit;
   background: none; border: none;
 }
-button { cursor: pointer; }
-button:focus-visible, [tabindex]:focus-visible { outline: 1px solid var(--line-3); outline-offset: 2px; }
+/* `manipulation` drops the browser's wait-and-see for a double-tap zoom, which
+   is a third of a second of nothing between the tap and the button answering. */
+button { cursor: pointer; touch-action: manipulation; }
+/* Where the text is genuinely text: a save string has to be selectable, and so
+   does a line of lore or a fish's name inside a panel. A button never is —
+   double-clicking one should press it twice, not highlight its label. */
+input, textarea, .panel, .catch-card { -webkit-user-select: text; user-select: text; }
+button, .btn, .tab, .seg button { -webkit-user-select: none; user-select: none; }
+/* The focus ring was a hairline in the same grey as every border, which on a
+   dark interface is indistinguishable from a hover. It is the accent now, and
+   thick enough to find without hunting. */
+button:focus-visible, [tabindex]:focus-visible,
+input:focus-visible, textarea:focus-visible, select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
 
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   padding: 8px 16px;
   border: 1px solid var(--line-2);
   border-radius: var(--r);
-  background: var(--fill);
+  /* A control has a top and a bottom. One hairline of light along the upper
+     edge is the whole difference between a button and a coloured rectangle. */
+  background: linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.012));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), 0 1px 2px rgba(0,0,0,0.28);
   color: var(--ink-2);
   font-size: 12px; letter-spacing: 0.10em; text-transform: lowercase;
-  transition: background var(--dur) var(--ease), color var(--dur) var(--ease),
-              border-color var(--dur) var(--ease), transform 90ms var(--ease);
+  /* the shadow changes on hover and on press and was the one property not
+     transitioning, so the light on the control snapped while its colour eased */
+  transition: background var(--t-tint) var(--e-move),
+              color var(--t-tint) var(--e-move),
+              border-color var(--t-tint) var(--e-move),
+              box-shadow var(--t-tint) var(--e-move),
+              transform var(--t-tap) var(--e-out);
   white-space: nowrap;
 }
-.btn:hover { background: var(--fill-2); color: var(--ink); border-color: var(--line-3); }
-.btn:active { transform: translateY(1px); }
+.btn:hover {
+  background: linear-gradient(180deg, rgba(255,255,255,0.11), rgba(255,255,255,0.035));
+  color: var(--ink); border-color: var(--line-3);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 2px 8px rgba(0,0,0,0.34);
+}
+.btn:active {
+  transform: translateY(1px);
+  box-shadow: inset 0 2px 5px rgba(0,0,0,0.4);
+}
 .btn[disabled] { opacity: 0.35; cursor: not-allowed; }
 .btn[disabled]:hover { background: var(--fill); color: var(--ink-2); border-color: var(--line-2); }
 
-.btn-primary { color: var(--ink); border-color: var(--line-3); background: rgba(255,255,255,0.07); }
-.btn-primary:hover { background: rgba(255,255,255,0.12); }
+/* The primary control borrows the accent of wherever you are standing, so the
+   thing the interface most wants you to press is the colour of the water. */
+.btn-primary {
+  color: var(--ink);
+  border-color: var(--accent-dim);
+  background: linear-gradient(180deg, rgba(255,255,255,0.115), rgba(255,255,255,0.03));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.14), 0 2px 10px rgba(0,0,0,0.34);
+}
+.btn-primary:hover {
+  background: linear-gradient(180deg, rgba(255,255,255,0.17), rgba(255,255,255,0.055));
+  border-color: var(--accent);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 3px 16px rgba(0,0,0,0.4);
+}
 .btn-lg { padding: 12px 34px; font-size: 13px; letter-spacing: 0.20em; }
 .btn-sm { padding: 5px 10px; font-size: 10.5px; }
 .btn-danger { color: #ffb0b0; border-color: rgba(255,110,110,0.32); }
@@ -178,13 +253,67 @@ button:focus-visible, [tabindex]:focus-visible { outline: 1px solid var(--line-3
   color: var(--ink-3);
 }
 
-.scroll { overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+.scroll {
+  overflow-y: auto;
+  scrollbar-width: thin; scrollbar-color: var(--line-2) transparent;
+  /* reaching the end of a list should stop, not hand the scroll to whatever is
+     behind it — on a phone that is the page itself, and the page bounces */
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
 .scroll::-webkit-scrollbar { width: 8px; height: 8px; }
 .scroll::-webkit-scrollbar-track { background: transparent; }
 .scroll::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 4px; }
 .scroll::-webkit-scrollbar-thumb:hover { background: var(--line-3); }
 
+/* An infinite animation given a 0.001ms duration does not stop — it spins as
+   fast as the compositor will let it, which is the opposite of what was asked
+   for. The iteration count is the half of this snippet that actually does the
+   work; the duration only stops the one-shots from being seen. */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
   #grain { animation: none; }
 }
+
+/* ---------------------------------------------------------------- ASTRAL
+
+   The only tier whose colour is not a colour. Every rarity pip, chip and
+   label in the game is painted from js/data/rarities.js with a flat hex; the
+   top one gets that hex inline as its fallback and one of these two classes
+   over the top, and the cascade does the rest — a CSS animation outranks an
+   inline declaration, so nothing has to be driven per frame from script.
+
+   Both keyframe tracks walk the same hues in the same order at the same rate,
+   so a pip and its label stay in step across a whole panel. Under
+   prefers-reduced-motion the block above pins the animation at its first
+   frame, which is a perfectly good magenta — the tier still reads as its own
+   thing without anything moving. */
+@keyframes bow-fg {
+  0%   { color: #ff4fd8; }
+  17%  { color: #ff6a4f; }
+  34%  { color: #ffd24f; }
+  50%  { color: #6bff8f; }
+  67%  { color: #4fd8ff; }
+  84%  { color: #7a6bff; }
+  100% { color: #ff4fd8; }
+}
+@keyframes bow-bg {
+  0%   { background: #ff4fd8; }
+  17%  { background: #ff6a4f; }
+  34%  { background: #ffd24f; }
+  50%  { background: #6bff8f; }
+  67%  { background: #4fd8ff; }
+  84%  { background: #7a6bff; }
+  100% { background: #ff4fd8; }
+}
+.bow-fg { animation: bow-fg 5.6s linear infinite; }
+.bow-bg { animation: bow-bg 5.6s linear infinite; }
+/* A rarity label in this tier is the loudest word on any screen it is on, and
+   it should be: it is the only one a player may never see. */
+.bow-fg { text-shadow: 0 0 10px rgba(255,255,255,0.30); letter-spacing: 0.16em; }
+.bow-bg { box-shadow: 0 0 8px rgba(255,255,255,0.34); }

@@ -28,12 +28,35 @@
     strange: { title: 'the unidentifiable thing', kind: 'lore',
       text: 'you can describe every part of it. the parts do not add up to anything. writing this down has not helped.' },
 
+    /* Three entries about one animal, which is the only thing in here that is
+       an animal rather than a kind of animal. */
+    returning1: { title: 'the one that went', kind: 'event',
+      text: 'it took the bait and it did not fight. it just kept going, at the same speed, in the same direction, until the line was gone. the hook went with it. it was not in a hurry and it was not afraid, and those are the two things that are bothering me.' },
+    returning2: { title: 'it came back', kind: 'event',
+      text: 'the same one. bigger, which is expected, and the old hook is still in the corner of its mouth, which is not — that was a long time ago. it fought this time. i think it fought because it knew what the line was for.' },
+    returning3: { title: 'the last time', kind: 'event',
+      text: 'it did not run. it came up on its own and waited while the line came in, and the whole business took as long as it took. i have not decided whether that was surrender. it did not look like surrender.' },
+
     firstvoid: { title: 'the first void catch', kind: 'event',
       text: 'it came up wrong. not damaged — wrong, in the way a sentence can be grammatical and still mean nothing. it is in the fishdex now, which is the only reason you believe it happened.' },
     firstwrong: { title: 'the quiet minute', kind: 'event',
       text: 'the water stopped. not calmed — stopped, entirely, like a held frame. it lasted under a minute and then went back to being water. nothing was on the line before or after.' },
     stillness: { title: 'on dead calm', kind: 'event',
       text: 'the old fisherman says the water goes flat like that when something large is holding still underneath it, and that the flatness is the shape of its back.' },
+    /* --- what the three of them said --- */
+    sounding: { title: 'eleven hundred fathoms', kind: 'lore',
+      text: 'the cartographer has sounded the trench four times. three of them came back at eleven hundred fathoms. on the fourth the lead reached eleven hundred fathoms and the line kept going out. she wrote down eleven hundred.' },
+    redraw: { title: 'the winter copy', kind: 'lore',
+      text: 'she redraws the whole chart every winter from the same notes, and every winter one thing on it is different, and it is never the same thing twice. this year it was a bay on the north side of the basin that she has never visited.' },
+    plating: { title: 'not rock', kind: 'lore',
+      text: 'the mechanic held the lamp against the damage and pointed at the edge of it. rock crushes a hull. this was opened. he says he can plate it as many times as you like.' },
+    theledger: { title: 'the ledger', kind: 'lore',
+      text: 'four hundred entries for four hundred hulls and what came back on them. weed, paint, a gull. nineteen of them say the same three words, in different hands, in different years. he did not say what the three words were.' },
+    midnight: { title: 'after midnight', kind: 'lore',
+      text: 'do not cast after midnight. he waited a long time before he gave the reason, and the reason was that that is when they start casting back.' },
+    thechild: { title: 'the child on the dock', kind: 'lore',
+      text: 'asked whether you saw her out on the nowhere sea, and did not seem troubled either way. she was not there. she said so herself.' },
+
     thinplace: { title: 'thin places', kind: 'event',
       text: 'the water gets uncommitted. you can see through it to somewhere that is not the bottom. the drifter calls these thin places and says they move, and that they are looking for something too.' },
 
@@ -56,7 +79,31 @@
     beneath: { title: 'below the nowhere sea', kind: 'lore', hint: 1,
       text: 'the charts stop at the nowhere sea because the people drawing them stopped. it goes further. the old fisherman has been once and will not say how, only that you have to already know it is there.' },
     thelast: { title: 'the last water', kind: 'lore', hint: 2,
-      text: 'every clue points the same direction and none of them name it. the chart circle, the plate\'s second date, the fragment\'s sense of down. there is one more place. it is not on the map because the map is what it is under.' }
+      text: 'every clue points the same direction and none of them name it. the chart circle, the plate\'s second date, the fragment\'s sense of down. there is one more place. it is not on the map because the map is what it is under.' },
+
+    /* ---- what a place leaves ---- */
+    nolog: { title: 'a log with no positions', kind: 'find',
+      text: 'four hundred pages. a date, a depth and a catch on every one of them, and not one position anywhere. whoever kept it knew where they were and did not think it needed saying, or knew that saying it would not have helped.' },
+    otherhook: { title: 'the other hook', kind: 'find', hint: 1,
+      text: 'the same shape as the one on your line and about the size of a chair. the barb has been used. the shank is worn smooth in one place, the way a handle wears, which means something held it there for a long time and held it often.' },
+
+    /* ---- count backwards ---- */
+    shores: { title: 'the order of shores', kind: 'lore',
+      text: 'the archivist laid the four charts out end to end and did not explain them. the coastline in the last one is the coastline in the first one, worn down by exactly as much as four hundred years would wear it. she said: you have been fishing the same shore the whole time. you have been fishing it at different ages.' },
+    oldnames: { title: 'the same names twice', kind: 'lore',
+      text: 'the plate lists eleven names, then a date. four hundred and six years further down, in a hand that is trying very hard to look like the first hand, the same eleven names again. she has a third list. she will not say where the third list is from and she will not say what the date on it is.' },
+    countback: { title: 'count backwards', kind: 'lore',
+      text: 'the note in the bottle said count backwards and everyone who read it counted years. the archivist counted shores. there are eight. she says the eighth is not a shore, it is where a shore stops being possible, and that whoever wrote the note got there before we did and came back to leave it.' },
+    plategift: { title: 'the older plate', kind: 'find',
+      text: 'she gave it to you face down and asked you not to turn it over in front of her. the names on it are not finished. there is room left at the bottom and the room is not accidental.' },
+
+    /* ---- what the drifter left ---- */
+    driftname: { title: 'a name that is not his', kind: 'lore',
+      text: 'the drifter remembered a name today. he said it twice, carefully, the way you say something you have been keeping. then he asked whose it was. it was not his. he has been carrying somebody else\'s name for long enough to have forgotten it was borrowed.' },
+    errand: { title: "the drifter's errand", kind: 'lore',
+      text: 'he did not leave the lantern behind. he put it down where it would be found, which is a different thing, and he has done it before, and he will not say how many times. he says the light does not go out. he says that is the problem.' },
+    nightglass: { title: 'night glass', kind: 'find',
+      text: 'a disc of something that is not glass, ground flat on one side. held up to a dark window it shows the same dark, a little closer. he said keep it, and then he said he was sorry, and he would not say which one he meant.' }
   };
 
   /* Add an entry once. Later entries never overwrite earlier ones. */
@@ -74,6 +121,25 @@
     return true;
   }
 
+  /* An entry the table does not carry.
+
+     Everything written before this came out of ENTRIES, which is right for
+     the handful of authored notes and wrong for a clue, a creature or an
+     expedition — those are data in their own files and would otherwise have
+     to be copied in here to be writable. Same record shape, same list, same
+     save; the panel and the hint count cannot tell the difference. */
+  function addFree(id, title, text, kind, hint) {
+    const d = VF.state.data;
+    for (let i = 0; i < d.journal.length; i++) if (d.journal[i].id === id) return false;
+    d.journal.push({
+      id: id, title: title, text: text, kind: kind || 'find',
+      hint: hint || 0, at: Date.now()
+    });
+    if (d.journal.length > 300) d.journal.shift();
+    VF.bus.emit('journal:entry', { title: title, kind: kind });
+    return true;
+  }
+
   function has(id) {
     const d = VF.state.data;
     for (let i = 0; i < d.journal.length; i++) if (d.journal[i].id === id) return true;
@@ -88,5 +154,5 @@
     return n;
   }
 
-  VF.journal = { entries: ENTRIES, add: add, has: has, hintCount: hintCount };
+  VF.journal = { entries: ENTRIES, add: add, addFree: addFree, has: has, hintCount: hintCount };
 })(window.VF = window.VF || {});

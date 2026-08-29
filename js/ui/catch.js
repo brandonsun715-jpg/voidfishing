@@ -10,25 +10,56 @@
   let current = null, artT = 0, lastFrame = 0, resolved = false;
   let revealT = 0;   // 0..1 silhouette-to-creature wipe for a new species
 
+  /* The card does not appear the instant a fish lands — it waits a beat for
+     the landing to read. That gap is a card that is going to open and has not
+     opened yet, which nothing could cancel: changing slot, erasing or
+     importing while a catch was in flight left the pending open to fire
+     afterwards and put a card up for a fish out of a game that is no longer
+     the one being played.
+
+     Every deferred open now carries a token, and anything that invalidates it
+     bumps the token instead of trying to close a card that is not there. */
+  let pendGen = 0;
+
+  function later(fn, ms) {
+    const my = ++pendGen;
+    setTimeout(function () { if (my === pendGen) fn(); }, ms);
+  }
+  function cancelPending() { pendGen++; }
+
   function init() {
     host = document.getElementById('modal');
     VF.bus.on('fishing:landed', function (c) {
       /* Two species stop the game to show you something first. The catch is
          already recorded by the time this runs, so the card is the same card
          whether the sequence is watched or skipped. */
-      if (c.fish && c.fish.cutscene && VF.cutscene) {
-        VF.cutscene.play(c.fish.cutscene, c, function () {
-          setTimeout(function () { show(c); }, 260);
+      const scene = VF.cutscene && VF.cutscene.forCatch(c);
+      if (scene) {
+        /* This card is opened from the far side of a six-second sequence, so
+           the token has to be taken NOW rather than when the callback runs.
+           Erasing or importing a save mid-cutscene bumps a token that has not
+           been issued yet, and the callback then goes on to allocate a fresh
+           one — so the card arrives regardless, for a fish out of a game that
+           no longer exists. That is the one hole in the guard. */
+        const my = ++pendGen;
+        VF.cutscene.play(scene, c, function () {
+          if (my !== pendGen) return;
+          later(function () { show(c); }, 260);
         });
         return;
       }
-      setTimeout(function () { show(c); }, 340);
+      later(function () { show(c); }, 340);
     });
-    VF.bus.on('fishing:treasure', function (c) { setTimeout(function () { showTreasure(c); }, 320); });
+    VF.bus.on('fishing:treasure', function (c) { later(function () { showTreasure(c); }, 320); });
+    // a save that has been wiped, swapped or replaced has no catch worth showing
+    VF.bus.on('save:reset', cancelPending);
+    VF.bus.on('save:imported', cancelPending);
+    VF.bus.on('save:slot', cancelPending);
   }
 
   function banner(c) {
     const traits = c.traits || [];
+    if (c.rarity === 'astral') return { text: 'this is not a fish', color: '#ff4fd8', bow: 1 };
     if (c.rarity === 'unknown') return { text: 'the record has no tier for this', color: '#ffffff' };
     if (c.rarity === 'glitch') return { text: 'this should not be here', color: '#ff2d55' };
     if (traits.length >= 3) return { text: traits.length + ' traits', color: VF.traits.color(traits) };
@@ -37,6 +68,22 @@
     if (c.isGiant) return { text: 'enormous', color: '#ffb03a' };
     if (c.isRecord) return { text: 'personal best', color: '#6fd8a4' };
     return { text: VF.rarities.get(c.rarity).name, color: VF.rarities.color(c.rarity) };
+  }
+
+  /* A picture of this one, to keep. Quiet — it is not one of the three
+     things you are here to decide, so it does not sit in the row with them. */
+  function pictureRow(c) {
+    const row = U.el('div', 'catch-extra');
+    const b = U.el('button', 'btn-quiet', 'save a picture');
+    b.title = 'Draw this catch as an image and download it.';
+    b.addEventListener('click', function () {
+      VF.audio.click();
+      const ok = VF.catchCard && VF.catchCard.save(c);
+      b.textContent = ok ? 'saved' : 'could not save that one';
+      b.disabled = true;
+    });
+    row.appendChild(b);
+    return row;
   }
 
   function show(c) {
@@ -72,6 +119,7 @@
 
     const ban = U.el('div', 'catch-banner', b.text);
     ban.style.background = b.color;
+    if (b.bow) ban.classList.add('bow-bg');
     card.appendChild(ban);
 
     const hero = U.el('div', 'catch-hero');
@@ -95,6 +143,7 @@
 
     const rr = U.el('div', 'catch-rarity', r.name);
     rr.style.color = b.color;
+    if (VF.rarities.rainbow(c.rarity)) rr.classList.add('bow-fg');
     body.appendChild(rr);
 
     body.appendChild(U.el('h2', 'catch-name', VF.traits.title(traits, c.fish.name)));
@@ -121,22 +170,33 @@
 
     body.appendChild(U.el('p', 'catch-desc', topTrait ? topTrait.desc : c.fish.desc));
 
+    /* Some things come in one size. A planet does, and so does the thing that
+       stood up in the trench — their kg range is a single number, so the size
+       percentile is a coin toss dressed up as a measurement and the runt-to-
+       giant bar is measuring a set with one member in it. Both come off, and
+       the row says what it can actually say instead. */
+    const fixed = c.fish.kg[0] === c.fish.kg[1];
+    let fill = null;
     const metrics = U.el('div', 'catch-metrics');
     metrics.appendChild(metric('Weight', U.weight(c.kg)));
     metrics.appendChild(metric('Length', U.length(c.m)));
-    metrics.appendChild(metric('Size', U.ordinalPercentile(c.pct)));
+    metrics.appendChild(metric(fixed ? 'Specimens' : 'Size',
+                               fixed ? 'one' : U.ordinalPercentile(c.pct)));
     body.appendChild(metrics);
 
-    const track = U.el('div', 'size-track');
-    const fill = U.el('div', 'size-fill');
-    fill.style.background = 'linear-gradient(90deg, ' + U.rgbToCss(U.hexToRgb(r.color), 0.35) + ', ' + r.glow + ')';
-    track.appendChild(fill);
-    body.appendChild(track);
+    if (!fixed) {
+      const track = U.el('div', 'size-track');
+      fill = U.el('div', 'size-fill');
+      fill.style.background = 'linear-gradient(90deg, ' +
+        U.rgbToCss(U.hexToRgb(r.color), 0.35) + ', ' + r.glow + ')';
+      track.appendChild(fill);
+      body.appendChild(track);
 
-    const note = U.el('div', 'size-note');
-    note.appendChild(U.el('span', null, 'runt'));
-    note.appendChild(U.el('span', null, c.isGiant ? 'a specimen' : 'giant'));
-    body.appendChild(note);
+      const note = U.el('div', 'size-note');
+      note.appendChild(U.el('span', null, 'runt'));
+      note.appendChild(U.el('span', null, c.isGiant ? 'a specimen' : 'giant'));
+      body.appendChild(note);
+    }
 
     const val = U.el('div', 'catch-value');
     const coin = U.el('span', 'coin', '◈');
@@ -146,23 +206,30 @@
     body.appendChild(val);
 
     const acts = U.el('div', 'catch-actions');
+    /* A run that never sells does not get a sell button greyed out — it gets
+       no sell button. A control that is only ever refused is furniture. */
+    const canSell = !VF.runs || VF.runs.sellAllowed();
     const sellBtn = U.el('button', 'btn btn-primary', 'Sell');
     sellBtn.addEventListener('click', function () { act('sell'); });
-    const keepBtn = U.el('button', 'btn', 'Keep');
+    const keepBtn = U.el('button', canSell ? 'btn' : 'btn', 'Keep');
     keepBtn.title = 'Store it in your bag. Sell it later.';
     keepBtn.addEventListener('click', function () { act('keep'); });
-    const relBtn = U.el('button', 'btn', 'Release');
+    const relBtn = U.el('button', canSell ? 'btn' : 'btn btn-primary', 'Release');
     relBtn.title = 'Let it go for reputation, which quietly improves your luck.';
     relBtn.addEventListener('click', function () { act('release'); });
-    acts.appendChild(sellBtn); acts.appendChild(keepBtn); acts.appendChild(relBtn);
+    if (canSell) acts.appendChild(sellBtn);
+    acts.appendChild(keepBtn); acts.appendChild(relBtn);
     body.appendChild(acts);
+    body.appendChild(pictureRow(c));
 
     card.appendChild(body);
     U.clear(host);
     host.appendChild(card);
     host.classList.remove('hidden');
 
-    requestAnimationFrame(function () { fill.style.width = (c.pct * 100).toFixed(1) + '%'; });
+    if (fill) {
+      requestAnimationFrame(function () { fill.style.width = (c.pct * 100).toFixed(1) + '%'; });
+    }
 
     if (c.isNew) {
       VF.audio.discover();
@@ -386,15 +453,31 @@
     close();
   }
 
-  function defaultAction() { act('sell'); }
+  /* Space and Enter take the default action. On a run that never sells, the
+     default is the one the run leaves you. */
+  function defaultAction() {
+    act(VF.runs && !VF.runs.sellAllowed() ? 'release' : 'sell');
+  }
 
   /* Dismissing the card must never strand the catch. If no choice was made the
-     fish is sold, so the player cannot lose progress by closing the window. */
+     fish is sold, so the player cannot lose progress by closing the window —
+     and on a run that never sells it is released instead, because the fallback
+     has to be something the rule actually permits or the game sits in `landed`
+     with the rod unusable. */
   function close() {
-    if (!open) return;
+    cancelPending();
+    if (!open) {
+      /* The card is already gone, but the panel flag may not be: anything that
+         tears the card down without coming through here leaves 'catch' sitting
+         in rt.panelOpen, and every menu key — and the admin door — checks that
+         flag before doing anything. One stranded flag deadens the keyboard. */
+      if (VF.state.rt.panelOpen === 'catch') VF.state.rt.panelOpen = null;
+      return;
+    }
     if (!resolved && VF.fishing.state() === 'landed') {
       resolved = true;
       if (current && current.treasure) VF.fishing.resolveCatch();
+      else if (VF.runs && !VF.runs.sellAllowed()) VF.catches.release();
       else VF.catches.sell();
     }
     open = false;

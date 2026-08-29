@@ -9,7 +9,7 @@
      per cast, so finding one is a moment rather than a checklist tick. */
   const LIST = [
     { id: 'lantern_isle', name: 'Lantern Isle', level: 0, chance: 0.09,
-      loc: { id: 'lantern_isle', name: 'Lantern Isle', level: 0,
+      loc: { id: 'lantern_isle', name: 'Lantern Isle', level: 0, near: 'trench',
         tag: 'somebody left a light on',
         desc: 'A rock barely above the water with a lamp on it, still burning. Whoever lit it has not been back, and the fish here have got used to the light.',
         hint: 'a light out on the water',
@@ -25,7 +25,7 @@
       } },
 
     { id: 'sunken_arch', name: 'The Sunken Arch', level: 0, chance: 0.075,
-      loc: { id: 'sunken_arch', name: 'The Sunken Arch', level: 0,
+      loc: { id: 'sunken_arch', name: 'The Sunken Arch', level: 0, near: 'cradle',
         tag: 'a doorway, underwater, to nowhere',
         desc: 'The top of an arch breaks the surface. The rest of it goes down further than the light does, and there is a room on the other side.',
         hint: 'something built, under the water',
@@ -41,7 +41,7 @@
       } },
 
     { id: 'glass_shallows', name: 'The Glass Shallows', level: 0, chance: 0.085,
-      loc: { id: 'glass_shallows', name: 'The Glass Shallows', level: 0,
+      loc: { id: 'glass_shallows', name: 'The Glass Shallows', level: 0, near: 'abyss',
         tag: 'ankle deep, and bottomless',
         desc: 'Water so clear and so shallow you could wade it, over a floor that is not there. Things swim past your feet at a depth of several kilometres.',
         hint: 'shallow water with nothing under it',
@@ -57,7 +57,7 @@
       } },
 
     { id: 'drowned_hall', name: 'The Drowned Hall', level: 0, chance: 0.055,
-      loc: { id: 'drowned_hall', name: 'The Drowned Hall', level: 0,
+      loc: { id: 'drowned_hall', name: 'The Drowned Hall', level: 0, near: 'cradle',
         tag: 'somebody used to live here',
         desc: 'A long room with the roof gone and the furniture still where it was left. The water fills it exactly to the height of a person standing.',
         hint: 'a room, filled precisely to the brim',
@@ -75,7 +75,7 @@
     /* Above the clouds. Never rolled for — the fallen star quest hands it over
        when the rod arrives, and `test` exists only so tryFind ignores it. */
     { id: 'the_heavens', name: 'THE HEAVENS', level: 0, chance: 0, journal: 'theheavens',
-      loc: { id: 'the_heavens', name: 'THE HEAVENS', level: 0,
+      loc: { id: 'the_heavens', name: 'THE HEAVENS', level: 0, near: 'nowhere',
         tag: 'above the weather, and there is water up here',
         desc: 'A flat calm sheet of light lying on top of the cloud, going out further than the sea does. ' +
               'The rod knows the way. You did not, and it did not need you to.',
@@ -91,7 +91,7 @@
 
     /* The end of the game. Not a level unlock — you have to have been told. */
     { id: 'the_last_water', name: 'THE LAST WATER', level: 0, chance: 1,
-      loc: { id: 'the_last_water', name: 'THE LAST WATER', level: 0,
+      loc: { id: 'the_last_water', name: 'THE LAST WATER', level: 0, near: 'beneath',
         tag: 'there is nothing under this one',
         desc: 'Not a place so much as the underside of the idea of one. The rod feels correct here for the first time. Everything you have caught was practice.',
         hint: 'one more, under everything',
@@ -125,7 +125,7 @@
     d.stats.secretsFound++;
     if (d.unlockedLocations.indexOf(s.loc.id) < 0) d.unlockedLocations.push(s.loc.id);
     VF.locations.register(s.loc);
-    VF.journal.add(s.final ? 'thelast' : 'beneath');
+    VF.journal.add(s.journal || (s.final ? 'thelast' : 'beneath'));
     VF.bus.emit('secret:found', s);
     VF.save.save();
     return true;

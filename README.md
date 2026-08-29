@@ -27,12 +27,17 @@ them since about 2015.
 | Hold | Drive the white bar right; let go and it runs back left. Keep the fish inside the bar and the meter fills. |
 | **R** | Reel the line back in |
 | Any of them | Skip a sequence. The catch is already recorded either way. |
-| **Q F B T M** | Shop, Fishdex, Bag, Record, Map |
+| **Q F B T M** | Shop, Fishdex, Bag, Record, the Chart |
+| **J C** | Journal, Wardrobe |
 | **Esc** | Close a menu |
 
-Catches can be sold for Brophys, kept for the collection, or released for
+Catches can be sold for Jias, kept for the collection, or released for
 reputation — which quietly raises your luck, and occasionally earns you
 something back.
+
+Progress lives in this browser, under the address you opened the game from.
+**Settings → Save data** exports it as a string and imports one back, which is
+how a run moves between machines or follows a single-file build to a new folder.
 
 ## What is in it
 
@@ -72,7 +77,7 @@ something back.
   been told where they are, and one of them is the end of the quest.
 - **Six people** with dialogue that moves as you do, and a journal that writes
   itself as you turn things up.
-- **Cosmetic cases** bought with Brophys, containing cosmetics and nothing else:
+- **Cosmetic cases** bought with Jias, containing cosmetics and nothing else:
   rod finishes, bobbers, line and splash effects, cast trails, catch effects,
   interface themes and outfits. The odds are printed, per case, after folding in
   what that case actually stocks. Duplicates are refunded.
@@ -106,21 +111,74 @@ something back.
   completely still, the audio drops away, and something very large is below you.
 - **63 achievements**, a full Fishdex with silhouettes for undiscovered species,
   per-species size records, and a statistics page.
+- **The chart.** The map is a sounding rather than a list: one plumb line
+  dropped through the whole world with every place hung off it at its own
+  depth. The ladder descends the spine, hidden water branches off it as
+  diamonds, THE HEAVENS floats above the waterline and THE LAST WATER sits
+  under the bottom. The column is sampled from the real palette of each spot,
+  so it darkens through the colours the game is about to show you. Locked water
+  is a depth reading with nothing named against it. Picking a place says what
+  actually lives there — how many of its species are on your record, broken
+  down by tier.
+- **Chartering the water.** Conditions are the strongest thing in the game and
+  the only one you could never influence. Late on, Jias stop having anywhere to
+  go — so the shop will sell you one. The price scales with your level and
+  climbs each time you ask, falling back over about ten minutes, so the answer
+  to "can I just keep buying Thin Places" is yes, at a price that climbs faster
+  than you can fish.
+- **Four save slots**, and a way to move one. A slot lives in this browser at
+  the address the file was opened from, so copying the build to a laptop — or
+  just moving it to another folder — leaves every slot behind. **Settings →
+  Save data** exports the slot you are playing as a string and imports one back
+  into whichever slot you point it at, through the same merge, sanitise and
+  revoke a normal load goes through.
+
+## The two builds
+
+`npm run build` makes the game you hand to anybody. `npm run build -- --admin`
+makes the one with the door in it.
+
+The difference is not a flag the player build carries and ignores. The owner
+build has two files the player build does not have at all — `js/core/authcode.js`
+and `js/ui/console.js`, plus `css/console.css` — and the handful of lines
+elsewhere that reach for them are cut out between `/* @admin-only */` and
+`/* @end-admin */`. Take those away and there is no word to guess, no key
+sequence to find and no salt to read: the door is not hidden, it is absent.
+The build refuses to write a player file if any of it leaks through.
+
+**Getting in**, in the owner build: press **###**, three times quickly, and the
+door opens. It wants four digits. `npm run authenticator` builds a small
+self-contained page — put it on a phone, open it offline — that derives the
+same code from the same clock, because it inlines `authcode.js` verbatim rather
+than keeping its own copy of the maths. The code rolls every thirty minutes and
+the windows either side are honoured, so two clocks do not have to agree
+exactly. The way in lasts fifteen minutes. Typing `admin` does the same thing
+once you are already through.
+
+What that gate is honestly worth: the salt ships in the owner build, so anybody
+willing to open devtools can compute the code or call straight past it. It is a
+bolt on the inside of a door that is already not in the player's house. The
+build split is the lock that works.
 
 ## Layout
 
 ```
 index.html            script order and the DOM skeleton
 css/                  base tokens, HUD, panels
-js/core/              utils, seeded RNG, event bus, game state, save
+js/core/              utils, seeded RNG, event bus, game state, save (four
+                      slots), authcode (owner build only)
 js/data/              fish, rods, merchant rods, bait, locations, weather,
-                      mutations, rarities, quests, achievements — all pure data
+                      mutations, rarities, quests, achievements, runs, trials,
+                      recipes, mods, lore — all pure data
 js/systems/           time, weather, progression, economy, loot, fishing,
                       catches, quests, merchant, cutscenes, achievements,
-                      encounters
-js/render/            palette, particles, screen effects, fish art, scene
+                      encounters, daily, bounties, wall, away, returning,
+                      charter
+js/render/            palette, particles, screen effects, fish art, the chart,
+                      scene
 js/audio/             procedural WebAudio engine
-js/ui/                toast, HUD and input, panels, catch card, tutorial
+js/ui/                toast, HUD and input, panels, catch card, tutorial,
+                      console (owner build only)
 js/main.js            boot and the frame loop
 tools/                headless harness and test scripts (dev only)
 ```
@@ -205,9 +263,20 @@ node tools/distcheck.js    the single file behaves exactly like the folder
 node tools/unknown.js      the ? tier: hidden until caught, the odds, both sequences
 ```
 
+## Taking a build apart
+
+`node tools/unbuild.js <file.html> [outDir]` reverses the build. The single file
+is a straight concatenation with a `/* path */` line in front of every file, so
+it splits back into the css/ and js/ trees and an index.html exactly — verified
+by rebuilding the result and diffing it against what it came from. This exists
+because a source tree can go missing while the build survives.
+
 ## Building a single file
 
 `npm run build` inlines every stylesheet and script into
 `dist/void-fishing.html` — one self-contained file you can move anywhere and
 open. Because the game uses classic scripts rather than ES modules, this is a
 straight concatenation in the same order `index.html` declares.
+
+`npm run build:admin` writes `dist/void-fishing-admin.html` instead, which is
+the same game with the door in it. Keep that one.

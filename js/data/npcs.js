@@ -68,6 +68,27 @@
           lines: ['take it out of here.', 'i am not being dramatic. i am being specific. take it out of this room.'] }
       ],
       quest: [
+        /* Count Backwards. Her own thread, and the reason she has had the
+           plate on the table instead of in a drawer. */
+        { at: function () { return VF.quests.started('firstshore'); },
+          lines: ['sit down. no — bring that lamp over first.',
+                  'eleven names, a date, and then four hundred and six years later the same eleven names in a hand that is trying to look like the first hand. i have had this plate eleven years and i have not been able to make it mean anything else.',
+                  'the note in the bottle says count backwards. everybody who reads it counts years. i want you to count shores.',
+                  'four fish. one from each of the first four waters. do not tell me they are the same fish. show me.'],
+          quest: { id: 'firstshore', advance: true }, journal: 'oldnames' },
+        { at: function () { return VF.quests.reached('firstshore', 4); },
+          lines: ['put them here. no, in that order. that order matters.',
+                  'the scales thin as you go down. the bones get older. the objects get further from anything anybody would drop on purpose.',
+                  'it is not four waters. it is one water, four times, and something is holding all four of them open at once.',
+                  'i want the other end of it. the three that are not shores. go down and bring me one from each.'],
+          quest: { id: 'firstshore', advance: true }, journal: 'shores' },
+        { at: function () { return VF.quests.reached('firstshore', 6); },
+          lines: ['eight. i have counted eight.',
+                  'the shore is the newest. the thing under the nowhere sea is the oldest, and it is not old the way a rock is old, it is old the way a habit is old.',
+                  'here. face down, and do not turn it over while i am looking at it. it is the third list.',
+                  'there is room left at the bottom of it. i have measured the room. it is exactly enough for eleven more.'],
+          quest: { id: 'firstshore', advance: true } },
+
         { at: function (d) { return VF.quests.reached('heavens', 6) && Object.keys(d.fishdex).length >= 40; },
           lines: ['forty species. forty. i have been asking people to do that for a very long time and they keep going fishing instead.',
                   'the glass wedge from the compass, yes. it is catalogued under objects that point at things. it is the only entry in that category.',
@@ -82,6 +103,17 @@
         { at: function (d) { return d.stats.catches >= 12; },
           lines: ['keep it in the bar. that is all of it. everything else is decoration.',
                   'and you do not lose them because the fish is strong. you lose them because you chased it instead of waiting for it to come back.'] },
+        /* The thread is planted here, out loud, before it opens. It used to
+           become available in silence — the engine simply started it once
+           three hidden conditions passed — so a player had no way of knowing
+           there was anything to start or what to do about it. He says what he
+           is waiting for, and the log holds him to it. */
+        { at: function (d) { return d.stats.catches >= 45; },
+          lines: ['you are still here. most are not, by now.',
+                  'there is a thing i will tell you about. not yet — i have told it twice in sixty years and both of them were in a hurry.',
+                  'come back when you are not new. a hundred and twenty fish, say, and enough experience behind you that the water has stopped surprising you. level twenty-two is where that happened for me.',
+                  'and keep coming back in the meantime. i say more when you have done more.'] },
+
         { at: function (d) { return VF.locations.index(d.location) >= 3 || d.level >= 18; },
           lines: ['the trench, is it. mm.',
                   'it has no bottom. people say that meaning it is very deep. i say it meaning it has no bottom.'] },
@@ -138,6 +170,41 @@
     { id: 'drifter', name: 'The Drifter', role: 'wander', color: '#b8a8e8',
       where: 'wherever you were not looking a moment ago',
       blurb: 'Turns up. Does not arrive.',
+
+      /* Nine weather types, ten conditions, a day and a night and now a moon,
+         and every species with its own opinion about all of them — and no way
+         to learn any of it except by accident. He is the one who moves, so he
+         is the one who has already been where the water is going. Everything
+         here is read off the real upcoming state, so he is never wrong; he is
+         only ever vague. */
+      filler: function (d) {
+        const out = [];
+        const T = VF.time;
+
+        if (T.moonName && T.elevation() < 0.45) {
+          const lit = T.moonLight();
+          out.push(lit > 0.92 ? 'full moon. everything comes up a little further than it means to.'
+                 : lit < 0.08 ? 'no moon tonight. the water keeps its own counsel.'
+                 : 'the moon is ' + T.moonName().toLowerCase() + '. i can never tell if that is going or coming.');
+        }
+
+        const next = VF.conditions && VF.conditions.next ? VF.conditions.next() : null;
+        if (next) {
+          const mins = Math.round(VF.conditions.nextIn() / 60);
+          out.push('there will be ' + next.name.toLowerCase() + ' through here' +
+                   (mins <= 1 ? ' any moment.' : mins <= 4 ? ' shortly.' : ' before long.'));
+        } else if (VF.conditions && VF.conditions.current()) {
+          out.push('you are standing in it. ' + VF.conditions.name().toLowerCase() + '. i would not waste it.');
+        }
+
+        const wx = VF.weatherData.get(VF.weather.id());
+        if (wx) out.push('sky is ' + wx.name.toLowerCase() + '. that suits some things and not others.');
+
+        if (!out.length) out.push('nothing is about to happen. that is also a forecast.');
+        out.push('i will be somewhere else in a minute. i usually am.');
+        return out;
+      },
+
       stages: [
         { at: function (d) { return d.stats.casts >= 40; },
           lines: ['oh — you are real. good. i lose track.',
@@ -157,6 +224,27 @@
           lines: ['ah.', 'i will not be coming with you. i have been. that is why i drift.'] }
       ],
       quest: [
+        /* What The Drifter Left. He is the only one who moves, and the lantern
+           turns up wherever he has been. */
+        { at: function () { return VF.quests.started('errand'); },
+          lines: ['oh. that.',
+                  'where. no — say the water, not the spot. i want to know which water.',
+                  'i did not lose it. i put it down. there is a difference and i have stopped explaining it to people.',
+                  'keep it on you. it points. it has been pointing the whole time and you have not noticed yet, which is how it works.'],
+          quest: { id: 'errand', advance: true } },
+        { at: function () { return VF.quests.reached('errand', 4); },
+          lines: ['you found one. of course you did.',
+                  'i remembered something on the way here. i have not remembered anything on the way anywhere in a long time.',
+                  'a name. i said it twice to keep hold of it. then i asked myself whose it was and i did not have an answer, so it is not mine, is it.',
+                  'one more thing out of the water. a big one. i will know it when you are holding it.'],
+          quest: { id: 'errand', advance: true }, journal: 'driftname' },
+        { at: function () { return VF.quests.reached('errand', 6); },
+          lines: ['stand still a moment. i am going to as well.',
+                  'that is the third time somebody has brought the lantern back to me. i put it down three times and it came back three times and every one of you found the hidden water first.',
+                  'take this instead. it is ground flat on one side. hold it up to something dark.',
+                  'keep it. — i am sorry. i will not say which of those i meant.'],
+          quest: { id: 'errand', advance: true } },
+
         { at: function (d) { return VF.quests.reached('heavens', 6) && VF.charms.owned('lantern'); },
           lines: ['you have got it. the lantern. i wondered where that had ended up and now i know, which is worse.',
                   'i was not going to say a word about the compass. not to you, not to anybody. i have been not saying a word about it for a very long time.',
@@ -222,7 +310,7 @@
       stages: [
         { at: function (d) { return d.level >= 4; },
           lines: ['none of this helps you fish. that is the entire appeal.',
-                  'a case, if you like. brophys only. i have no interest in what you pull out of the water.'] },
+                  'a case, if you like. jias only. i have no interest in what you pull out of the water.'] },
         { at: function (d) { return d.stats.casesOpened >= 5; },
           lines: ['you are getting a feel for it. most people stop at two and pretend they were never interested.',
                   'the odds are printed. i print them because people assume i do not.'] },
@@ -247,6 +335,132 @@
                   'sixteen useless things in your wardrobe. you understand the appeal now, which means i can part with it without feeling that it has gone somewhere unappreciative.',
                   'take it. do not put it back together in front of me.'],
           quest: { id: 'heavens', flag: 'compass_collector' } }
+      ] },
+
+    /* ------------------------------------------------------------------
+       Three people who exist because the water got bigger and nobody on the
+       shore had noticed. Every line one of them has is about something the
+       player has actually done — a hull they bought, a thing that surfaced,
+       a crossing that went somewhere else — and none of them explains a
+       mechanic. If a line could be a tooltip, it is cut. */
+
+    { id: 'cartographer', name: 'The Cartographer', role: 'lore', color: '#c0b088',
+      where: 'a table by the window, covered edge to edge',
+      blurb: 'Has drawn all of it. Twice.',
+      stages: [
+        { at: function (d) { return (d.voyages | 0) >= 1; },
+          lines: ['do not lean on it. the ink is forty years old and it has opinions.',
+                  'you have started crossing, then. good. the ones who stay on the shore only ever see the one edge of it.',
+                  'ten places. i have them all here. you will want the shore, the basin, the flats — work down the sheet, they are in order.'] },
+
+        /* The whole of her, in one exchange. She is not confused and she is
+           not lying: she counts ten, there are nine, and she will not be
+           moved off it. Nothing in the game ever resolves this. */
+        { at: function (d) { return d.unlockedLocations.length >= 3; },
+          lines: ['nine? no. ten.',
+                  'count them with me. shore. basin. flats. trench. abyss. cradle. nowhere. beneath. heavens.',
+                  '...',
+                  'ten.'] },
+
+        { at: function (d) { return d.unlockedLocations.indexOf('trench') >= 0; },
+          lines: ['the trench. yes. i have sounded it four times.',
+                  'the first three came back at eleven hundred fathoms, near enough. the fourth came back at eleven hundred fathoms and the line was still going out.',
+                  'i wrote down eleven hundred. what else was i going to write down.'],
+          journal: 'sounding' },
+
+        { at: function (d) { return d.unlockedLocations.indexOf('nowhere') >= 0; },
+          lines: ['ah. you have been out where the chart is wrong.',
+                  'it is not wrong. i want to be clear. every bearing on that sheet is correct and i have checked them at sea.',
+                  'they are simply also correct for somewhere else.'] },
+
+        { at: function (d) { return (d.stats.discoveries | 0) >= 8; },
+          lines: ['i redraw it every winter. same table, same ink, from the notes.',
+                  'and every winter it comes out the same except for one thing, and it is never the same one thing.',
+                  'this year it was a bay on the north side of the basin. i have never been to a bay on the north side of the basin. my hand knows it is there.'],
+          journal: 'redraw' },
+
+        { at: function (d) { return d.unlockedLocations.indexOf('beneath') >= 0; },
+          lines: ['you want the tenth.',
+                  'i am not being coy with you. i have drawn it nine times and i have never once been able to say where it is.',
+                  'it is on the sheet. look — there. no. there.',
+                  'it moves when you are not the one holding the paper.'] }
+      ] },
+
+    { id: 'mechanic', name: 'The Boat Mechanic', role: 'boat', color: '#a89078',
+      where: 'under a hull, mostly',
+      blurb: 'Fixes them. Writes down what did it.',
+      stages: [
+        { at: function () { return VF.boat && VF.boat.hull().id !== 'skiff'; },
+          lines: ['it floats. that is not a compliment, that is the whole specification.',
+                  'bring it back when it stops doing that and i will have a look.'] },
+
+        { at: function (d) { return (d.voyages | 0) >= 6; },
+          lines: ['you are wearing the port side. always the port side, with everybody.',
+                  'i used to think it was how people sit. it is not how people sit.'] },
+
+        { at: function () { return VF.boat && VF.boat.integrity() < 0.7; },
+          lines: ['right. hold that lamp still.',
+                  'see the edge of it? rock does not do that. rock crushes. this is opened.',
+                  'i can plate it. i can plate it as many times as you like.'],
+          journal: 'plating' },
+
+        { at: function (d) { return (d.stats.encounters | 0) >= 3; },
+          lines: ['i keep a book. every hull that comes back, what came back on it.',
+                  'four hundred and some entries. mostly weed, paint, a gull.',
+                  'nineteen of them say the same three words and i did not write them in the same year or in the same hand.'],
+          journal: 'theledger' },
+
+        { at: function (d) { return d.unlockedLocations.indexOf('cradle') >= 0; },
+          lines: ['you have been under the ring.',
+                  'do not tell me what it is made of. i asked a man once and he told me and i have not had a good winter since.',
+                  'just — if you scrape it, do not bring the scrapings here.'] },
+
+        /* The one everybody remembers. It is a safety instruction with the
+           reason removed, and then the reason. */
+        { at: function (d) { return (d.voyages | 0) >= 20; },
+          lines: ['one thing, since you are out there at all hours now.',
+                  'do not cast after midnight.',
+                  '...',
+                  'because that is when they start casting back.'],
+          journal: 'midnight' }
+      ] },
+
+    { id: 'child', name: 'The Child', role: 'strange', color: '#9fd0d8',
+      where: 'the end of the dock, feet over',
+      blurb: 'Nobody knows whose.',
+      stages: [
+        { at: function (d) { return (d.stats.casts | 0) >= 30; },
+          lines: ['you are the one with the rod.',
+                  'i am not allowed a rod.',
+                  'i can still hear them though.'] },
+
+        { at: function (d) { return (d.stats.catches | 0) >= 60; },
+          lines: ['do you want to know what the big one is called?',
+                  'no. i said do you WANT to know.',
+                  'ok.'] },
+
+        /* Said before it happens, in a game where it does happen. */
+        { at: function (d) { return d.unlockedLocations.indexOf('trench') >= 0; },
+          lines: ['there is a boat down there with its light still on.',
+                  'i have not been down there.',
+                  'i just know which ones are still on.'] },
+
+        { at: function (d) { return (d.stats.encounters | 0) >= 5; },
+          lines: ['you keep bringing them up.',
+                  'that is fine. i am not telling you off.',
+                  'it is just that now they know the way.'] },
+
+        { at: function (d) { return d.unlockedLocations.indexOf('nowhere') >= 0; },
+          lines: ['did you see me out there?',
+                  'you did. it is all right. i was not there.',
+                  'you can sit down if you like. i do not mind.'],
+          journal: 'thechild' },
+
+        { at: function (d) { return d.unlockedLocations.indexOf('beneath') >= 0; },
+          lines: ['...',
+                  'you went all the way down.',
+                  'my mother went all the way down.',
+                  'she is at the counter. she has been at the counter since. you have bought things off her.'] }
       ] }
   ];
 
@@ -280,13 +494,88 @@
     return n;
   }
   function availableStage(npc) { return availableIn(npc.stages || []); }
-  function availableQuest(npc) { return npc.quest ? availableIn(npc.quest) : -1; }
+
+  /* One person can be on more than one thread, so their quest lines are
+     grouped by the thread they belong to and each group is counted on its own.
+
+     They used to share a single ordered track and a single counter, which
+     works for exactly one quest and only one: `availableIn` stops at the first
+     entry whose condition fails, so with two threads on the same person the
+     opening line of the second sits behind the closing line of the first, and
+     a player who has not started the first can never reach it. With the two
+     new threads that would have meant the compass piece becoming unreachable
+     for anybody who took the archivist's thread first. */
+  function questTracks(npc) {
+    if (!npc.quest) return [];
+    if (npc._qt) return npc._qt;
+    const out = [], by = {};
+    for (let i = 0; i < npc.quest.length; i++) {
+      const e = npc.quest[i];
+      const id = (e.quest && e.quest.id) || '_';
+      if (!by[id]) { by[id] = { id: id, list: [] }; out.push(by[id]); }
+      by[id].list.push(e);
+    }
+    npc._qt = out;
+    return out;
+  }
+
+  /* How many of a thread's lines this person has already given up. Older saves
+     hold a bare number, which was always the first thread on that person. */
+  function consumed(npc, r, qid) {
+    const st = r.qstage;
+    if (typeof st === 'number') {
+      const tracks = questTracks(npc);
+      return (tracks.length && tracks[0].id === qid) ? (st | 0) : 0;
+    }
+    return (st && st[qid] | 0) || 0;
+  }
+
+  /* The thread this person leads with: the first one with a line the player
+     has not heard. */
+  function questTurn(npc, r) {
+    const tracks = questTracks(npc);
+    for (let i = 0; i < tracks.length; i++) {
+      const avail = availableIn(tracks[i].list);
+      if (avail < 0) continue;
+      if (avail >= consumed(npc, r, tracks[i].id)) {
+        return { qid: tracks[i].id, list: tracks[i].list, avail: avail };
+      }
+    }
+    return null;
+  }
+
+  /* Kept for the quest engine's repair pass, which asks how far along one
+     particular thread this person is. */
+  function availableQuest(npc, qid) {
+    const tracks = questTracks(npc);
+    for (let i = 0; i < tracks.length; i++) {
+      if (qid === undefined || tracks[i].id === qid) return availableIn(tracks[i].list);
+    }
+    return -1;
+  }
+  function questConsumed(id, qid) {
+    const npc = BY_ID[id];
+    return npc ? consumed(npc, peek(id), qid) : 0;
+  }
+  function setQuestConsumed(id, qid, n) {
+    const npc = BY_ID[id];
+    if (!npc) return;
+    const r = rec(id);
+    if (typeof r.qstage === 'number') {
+      const tracks = questTracks(npc);
+      const old = r.qstage | 0;
+      r.qstage = {};
+      if (tracks.length) r.qstage[tracks[0].id] = old;
+    }
+    if (!r.qstage || typeof r.qstage !== 'object') r.qstage = {};
+    r.qstage[qid] = Math.max(0, n | 0);
+  }
 
   function hasNew(id) {
     const npc = BY_ID[id];
     if (!npc) return false;
     const r = peek(id);
-    if (availableQuest(npc) > (r.qstage | 0) - 1) return true;
+    if (questTurn(npc, r)) return true;
     return availableStage(npc) > r.stage - 1;
   }
 
@@ -318,23 +607,37 @@
     if (!npc) return null;
     const r = rec(id);
     // a thread that is actually running is what they lead with
-    const qa = availableQuest(npc);
-    const onQuest = qa >= (r.qstage | 0);
-    const list = onQuest ? npc.quest : (npc.stages || []);
-    const avail = onQuest ? qa : availableStage(npc);
+    const turn = questTurn(npc, r);
+    const onQuest = !!turn;
+    const list = onQuest ? turn.list : (npc.stages || []);
+    const avail = onQuest ? turn.avail : availableStage(npc);
     if (avail < 0) return null;
-    const cur = onQuest ? (r.qstage | 0) : r.stage;
+    const cur = onQuest ? consumed(npc, r, turn.qid) : r.stage;
     const stage = Math.min(avail, cur);
-    const def = list[stage];
+    let def = list[stage];
+    /* Somebody with nothing new to say used to say their last line again,
+       forever. `filler` is what they say instead once you have heard
+       everything they currently have — worked out fresh each time, so it is
+       worth asking again, and it advances nothing.
+
+       The test is "nothing new", not "list exhausted": a stage gated behind
+       something the player has not done yet caps `avail` below `cur`, so the
+       list never runs out and the old line repeats instead. */
+    const nothingNew = stage < cur;
+    let spent = false;
+    if ((!def || nothingNew) && !onQuest && npc.filler) {
+      def = { lines: npc.filler };
+      spent = true;
+    }
     if (!def) return null;
-    const first = stage >= cur;
+    const first = !spent && stage >= cur;
     r.met++;
     let done = false;
     function commit() {
       if (done || !first) return;
       done = true;
       if (onQuest) {
-        r.qstage = stage + 1;
+        setQuestConsumed(id, turn.qid, stage + 1);
       } else {
         r.stage = stage + 1;
         if (r.heard.indexOf(stage) < 0) r.heard.push(stage);
@@ -345,7 +648,11 @@
       VF.bus.emit('npc:advanced', { npc: npc, stage: stage });
       VF.save.save();
     }
-    const res = { npc: npc, stage: stage, lines: def.lines, fresh: first, commit: commit };
+    /* Lines may be written or worked out. A function is handed the save and
+       returns what to say, which is how anybody in this game can talk about
+       what is actually happening rather than only about what has happened. */
+    const said = typeof def.lines === 'function' ? (def.lines(VF.state.data) || []) : def.lines;
+    const res = { npc: npc, stage: stage, lines: said, fresh: first, spent: spent, commit: commit };
     if (!(opts && opts.defer)) commit();
     return res;
   }
@@ -353,7 +660,7 @@
   function unlocked(id) {
     const npc = BY_ID[id];
     if (!npc) return false;
-    return availableStage(npc) >= 0 || availableQuest(npc) >= 0 || peek(id).met > 0;
+    return availableStage(npc) >= 0 || !!questTurn(npc, peek(id)) || peek(id).met > 0;
   }
 
   VF.npcs = {
@@ -362,6 +669,7 @@
     rec: rec, peek: peek, talk: talk, hasNew: hasNew, anyNew: anyNew,
     met: function (id) { return peek(id).met > 0; },
     name: nameOf,
-    unlocked: unlocked, availableStage: availableStage, availableQuest: availableQuest
+    unlocked: unlocked, availableStage: availableStage, availableQuest: availableQuest,
+    questConsumed: questConsumed, setQuestConsumed: setQuestConsumed
   };
 })(window.VF = window.VF || {});

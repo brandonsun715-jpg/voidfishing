@@ -3,6 +3,13 @@
 (function (VF) {
   'use strict';
 
+  function calm() {
+    try {
+      return !!(window.matchMedia &&
+                window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    } catch (e) { return false; }
+  }
+
   const SCHEMA = 2;
 
   function defaults() {
@@ -14,6 +21,10 @@
       money: 0,
       level: 1,
       xp: 0,
+      /* Past the level cap the xp does not stop arriving, so it goes here
+         instead of into a bar that cannot move. A fathom is a long way down. */
+      fathoms: 0,
+      fathomXp: 0,
       reputation: 0,          // earned by releasing fish
 
       /* --- equipment --- */
@@ -21,6 +32,10 @@
       ownedRods: ['wood'],
       bait: 'worm',
       baitCounts: {},         // id -> count. 'worm' is unlimited and not tracked here.
+      /* Line, reel and hook. See js/data/mods.js. */
+      ownedMods: [],
+      mods: { line: null, reel: null, hook: null },
+
       charms: [],             // owned charm and relic ids
       charmSlots: [null, null, null, null, null],
 
@@ -33,6 +48,7 @@
          fishdex[id] = { caught, record: {kg, m, pct, mutation}, firstSeen, mutations: {id:count} } */
       fishdex: {},
       kept: [],               // array of catch records the player chose to keep
+      wall: [],               // the handful of them that are up on the wall
       traitsSeen: {},         // trait id -> times landed
       treasures: {},          // treasure id -> times pulled up
       secrets: {},            // secret id -> discovery timestamp
@@ -46,6 +62,40 @@
         sold: [],             // ids already bought out of this visit
         visits: 0
       },
+      /* Where the rod was when the game was put down, so the line can still
+         be out when it is picked up. Null while playing. */
+      away: null,
+
+      /* The one that comes back. See js/systems/returning.js. */
+      returning: { stage: 0, lastCast: 0, done: false },
+
+      /* Standing requests. See js/systems/bounties.js. */
+      bounties: { list: [], at: 0 },
+
+      /* The aquarium. Shaped by js/systems/aquarium.js the first time the door
+         is opened, which is also what happens to a save from before it existed
+         — so there is nothing to migrate and nothing to guess. */
+      aquarium: null,
+      /* Findings the aquarium has confirmed: id -> when. Three of them put a
+         species in the water that was not there before, so this is read by the
+         loot pool and by the Fishdex's idea of how many species there are. */
+      discovered: {},
+
+      /* --- the boat, and everything downstream of it ---
+
+         All five of these are free-form maps or plain records, and all five
+         are in the wholesale-copy list in js/core/save.js. A save from before
+         any of this existed simply has none of them: the defaults land, the
+         first tick shapes them, and nothing has to be migrated. */
+      boat: null,             // shaped by js/systems/boat.js on first use
+      voyages: 0,             // how many crossings have been sailed
+      seas: {},               // voyage-event id -> times seen, for weighting
+      creatures: {},          // creature id -> { met, caught, escaped, state }
+      clues: {},              // clue id -> { at, spent }  — the things that point somewhere
+      leads: {},              // lead id -> { at, done }   — what a clue points at
+      expeditions: {},        // expedition id -> { started, leg, done, found: {} }
+      zoneState: {},          // per-zone progress: cradle sections, crystal charge, …
+
       cosmetics: [],          // owned cosmetic ids
       equipped: {},           // cosmetic slot -> id
       cases: {},              // case id -> times opened
@@ -59,6 +109,10 @@
         bestStreak: 0
       },
       streak: 0,              // consecutive catches without losing one
+
+      /* The rule this game is played under, chosen when the slot was started
+         and never changed after. See js/data/runs.js. */
+      run: 'none',
 
       /* --- meta --- */
       stats: {
@@ -83,11 +137,14 @@
         playSeconds: 0,
         perfectReels: 0,
         linesSnapped: 0,
+        secondChances: 0,
         treasuresFound: 0,
         casesOpened: 0,
         secretsFound: 0,
         multiTrait: 0,
-        wrongEvents: 0
+        wrongEvents: 0,
+        bounties: 0,
+        discoveries: 0
       },
       achievements: {},       // id -> unlock timestamp
       tutorial: { step: 0, done: false },
@@ -98,8 +155,14 @@
         music: 0.55,
         sfx: 0.75,
         quality: 'high',      // low | medium | high
-        screenShake: true,
-        reduceFlash: false,
+        /* The stylesheet honours prefers-reduced-motion, but a media query
+           reaches transitions and keyframes and nothing else — the two effects
+           that are motion rather than decoration live on the canvas, where CSS
+           cannot see them. So the operating system's answer seeds them here.
+           It seeds only: this lands in a NEW save, and the moment anyone sets
+           either switch by hand that choice is what persists. */
+        screenShake: !calm(),
+        reduceFlash: calm(),
         showHints: true
       }
     };

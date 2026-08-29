@@ -3,10 +3,15 @@
 #hud {
   position: absolute; inset: 0; z-index: 10;
   pointer-events: none;
-  display: flex; flex-direction: column; justify-content: space-between;
+  /* `space-between` splits any overflow equally between the two ends, so on a
+     short narrow screen the status row is pushed off the TOP of the display —
+     where nothing can reach it and nothing says it is there. Pinning the top
+     and pushing the bottom down does the same thing when there is room, and
+     spills off one end instead of two when there is not. */
+  display: flex; flex-direction: column; justify-content: flex-start;
   padding: clamp(12px, 1.8vw, 22px);
   opacity: 1;
-  transition: opacity 400ms var(--ease);
+  transition: opacity 400ms var(--e-move);
 }
 #hud > * { pointer-events: none; }
 #hud button, #hud .chip-btn { pointer-events: auto; }
@@ -30,7 +35,7 @@
   font-size: 9px; letter-spacing: 0.18em; text-transform: lowercase;
   color: var(--ink-4); margin-left: 2px;
 }
-.money.bump { animation: moneyBump 460ms var(--ease); }
+.money.bump { animation: moneyBump 460ms var(--e-out); }
 @keyframes moneyBump {
   0% { transform: none; }
   28% { transform: translateY(-3px) scale(1.055); color: var(--good); }
@@ -39,7 +44,8 @@
 
 .level-row { display: flex; align-items: center; gap: 9px; }
 .lv {
-  font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.14em;
+  font-family: var(--mono); font-variant-numeric: tabular-nums;
+  font-size: 10.5px; letter-spacing: 0.14em;
   color: var(--ink-2); min-width: 40px;
 }
 .xp-track {
@@ -48,12 +54,30 @@
   border-radius: 2px; overflow: hidden;
 }
 .xp-fill {
-  height: 100%; width: 0%;
+  height: 100%; width: 100%;
   background: linear-gradient(90deg, var(--accent-dim), var(--accent));
   border-radius: 2px;
-  transition: width 480ms var(--ease);
+  transform-origin: left center;
+  transform: scaleX(0);
+  transition: transform 520ms var(--e-move);
+  will-change: transform;
 }
-.xp-text { font-family: var(--mono); font-size: 10px; color: var(--ink-3); letter-spacing: 0.04em; }
+.xp-text { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 10px; color: var(--ink-3); letter-spacing: 0.04em; }
+
+/* A run of clean catches. It says what it pays, because a bare `×7` next to a
+   level reads as a multiplier on everything and used to multiply nothing. */
+.streak-tag {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.04em;
+  color: var(--good);
+  border: 1px solid rgba(95, 214, 153, 0.34);
+  border-radius: 999px; padding: 1px 7px;
+  white-space: nowrap;
+}
+.streak-tag.hot { color: var(--warn); border-color: rgba(255, 195, 106, 0.45); }
+
+/* Past the cap the bar counts fathoms instead of levels. */
+.xp-fill.deep { background: linear-gradient(90deg, #4a3a7a, #b48aff); }
+.lv.deep { color: #c9a8ff; }
 
 .hud-tr { display: flex; flex-direction: column; align-items: flex-end; gap: 9px; }
 
@@ -69,7 +93,7 @@
 }
 .chip-k { font-size: 9px; letter-spacing: 0.20em; color: var(--ink-3); }
 .chip-v { font-size: 11px; color: var(--ink-2); letter-spacing: 0.03em; white-space: nowrap; }
-.chip-btn { transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease); }
+.chip-btn { transition: border-color var(--t-tint) var(--e-move), background var(--t-tint) var(--e-move); }
 .chip-btn:hover { border-color: var(--line-3); background: var(--pane-2); }
 .chip-btn:hover .chip-v { color: var(--ink); }
 
@@ -79,13 +103,13 @@
   font-size: 10.5px; letter-spacing: 0.13em; text-transform: lowercase;
   color: var(--ink-3);
   border: 1px solid transparent; border-radius: var(--r);
-  transition: color var(--dur) var(--ease), background var(--dur) var(--ease),
-              border-color var(--dur) var(--ease);
+  transition: color var(--t-tint) var(--e-move), background var(--t-tint) var(--e-move),
+              border-color var(--t-tint) var(--e-move);
 }
 .mbtn:hover { color: var(--ink); background: var(--fill); border-color: var(--line); }
 .mbtn.active { color: var(--ink); border-color: var(--line-2); background: var(--fill-2); }
 .mbtn-icon { display: flex; align-items: center; padding: 6px 9px; }
-.mbtn.flash { animation: mbtnFlash 1.9s var(--ease) 3; }
+.mbtn.flash { animation: mbtnFlash 1.9s var(--e-move) 3; }
 @keyframes mbtnFlash {
   0%, 100% { color: var(--ink-3); }
   50% { color: var(--accent); text-shadow: 0 0 12px var(--accent-dim); }
@@ -94,6 +118,7 @@
 /* ---------------------------------------------------------------- bottom */
 
 .hud-bottom {
+  margin-top: auto;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: flex-end;
@@ -108,8 +133,8 @@
   background: var(--pane);
   backdrop-filter: blur(9px); -webkit-backdrop-filter: blur(9px);
   text-align: left; position: relative;
-  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease),
-              transform 120ms var(--ease);
+  transition: border-color var(--t-tint) var(--e-move), background var(--t-tint) var(--e-move),
+              transform var(--t-tap) var(--e-out);
 }
 .gear-card:hover { border-color: var(--line-3); background: var(--pane-2); transform: translateY(-1px); }
 .gear-k { font-size: 9px; letter-spacing: 0.22em; color: var(--ink-3); }
@@ -117,13 +142,14 @@
 .gear-card:hover .gear-v { color: var(--ink); }
 .gear-n {
   position: absolute; top: 6px; right: 10px;
-  font-family: var(--mono); font-size: 10px; color: var(--ink-3);
+  font-family: var(--mono); font-variant-numeric: tabular-nums;
+  font-size: 10px; color: var(--ink-3);
 }
 .gear-n.low { color: var(--warn); }
 
 .action-col { display: flex; flex-direction: column; align-items: center; gap: 9px; }
 
-.cast-meter { height: 4px; width: clamp(150px, 20vw, 230px); opacity: 0; transition: opacity 160ms var(--ease); }
+.cast-meter { height: 4px; width: clamp(150px, 20vw, 230px); opacity: 0; transition: opacity 160ms var(--e-move); }
 .cast-meter.on { opacity: 1; }
 .cast-track {
   position: relative; height: 100%;
@@ -131,9 +157,12 @@
   border-radius: 3px; overflow: hidden;
 }
 .cast-fill {
-  position: absolute; inset: 0 auto 0 0; width: 0%;
+  position: absolute; inset: 0;
   background: linear-gradient(90deg, var(--accent-dim), var(--accent));
   border-radius: 3px;
+  transform-origin: left center;
+  transform: scaleX(0);
+  will-change: transform;
 }
 .cast-sweet {
   position: absolute; top: 0; bottom: 0; left: 80%; right: 0;
@@ -149,8 +178,8 @@
   border: 1px solid var(--line-2); border-radius: var(--r-lg);
   background: var(--pane);
   backdrop-filter: blur(11px); -webkit-backdrop-filter: blur(11px);
-  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease),
-              transform 110ms var(--ease), box-shadow var(--dur) var(--ease);
+  transition: background var(--t-tint) var(--e-move), border-color var(--t-tint) var(--e-move),
+              transform var(--t-tap) var(--e-out), box-shadow var(--t-tint) var(--e-move);
 }
 .action-btn:hover { background: var(--pane-2); border-color: var(--line-3); }
 .action-btn:active { transform: translateY(1px); }
@@ -162,7 +191,10 @@
   border-color: rgba(255, 190, 90, 0.85);
   background: rgba(60, 34, 8, 0.72);
   box-shadow: 0 0 0 1px rgba(255,190,90,0.22), 0 0 34px rgba(255, 170, 60, 0.34);
-  animation: bitePulse 380ms var(--ease) infinite alternate;
+  /* the curve eases at both ends now, so it breathes instead of snapping;
+     the tempo is unchanged, because the bite window is short and this is the
+     one signal in the game you have under a second to answer */
+  animation: bitePulse 380ms ease-in-out infinite alternate;
 }
 @keyframes bitePulse { from { transform: scale(1); } to { transform: scale(1.035); } }
 .action-btn.reeling { border-color: var(--line-3); background: rgba(20,28,40,0.85); }
@@ -177,20 +209,21 @@
   backdrop-filter: blur(9px); -webkit-backdrop-filter: blur(9px);
   font-size: 11.5px; line-height: 1.55; color: var(--ink-2);
   opacity: 0; transform: translateY(6px);
-  transition: opacity 400ms var(--ease), transform 400ms var(--ease);
+  transition: opacity 320ms var(--e-out), transform 320ms var(--e-out);
 }
 .hint-box.on { opacity: 1; transform: none; }
 
 /* ----------------------------------------------------------- the fight
    The catch bar. One long track, a white bar the player drives with space, a
    fish indicator loose inside it, and the progress bar underneath. Nothing in
-   here transitions on position — the fight writes left/width every frame and a
-   transition would read as input lag. */
+   here transitions on position — the fight writes the bar and the fish every
+   frame and a transition would read as input lag. Both are moved with
+   `transform`, so a frame of the fight costs a composite and nothing else. */
 
 /* The entrance is its own class, removed once it has played. Left on .fight it
    would re-run every time .shake was toggled off, because that is a change of
    animation-name — the panel would fade back in mid-fight. */
-.fight.enter { animation: fightIn 280ms var(--ease) both; }
+.fight.enter { animation: fightIn var(--t-pane) var(--e-out) both; }
 .fight {
   position: absolute; left: 50%; bottom: clamp(96px, 13vh, 146px);
   transform: translateX(-50%);
@@ -248,6 +281,8 @@
 .mg-bar {
   position: absolute; top: 0; bottom: 0; left: 0; width: 30%;
   border-radius: 2px;
+  /* driven by transform, not by `left` — see js/ui/hud.js */
+  will-change: transform;
   background: linear-gradient(180deg, #ffffff, #d7dee6);
   box-shadow: 0 0 0 1px rgba(255,255,255,0.55), 0 0 14px rgba(255,255,255,0.16);
   display: grid; place-items: center;
@@ -264,7 +299,7 @@
   -webkit-mask: var(--chev) center / contain no-repeat;
           mask: var(--chev) center / contain no-repeat;
   --chev: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M10.5 2.5 4.5 8l6 5.5' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  transition: transform 140ms var(--ease), opacity 140ms linear;
+  transition: transform var(--t-tint) var(--e-move), opacity var(--t-tint) linear;
 }
 .mg-bar.right .mg-bar-arrow { transform: scaleX(-1); }
 .mg-bar.still .mg-bar-arrow { opacity: 0.14; }
@@ -273,7 +308,7 @@
    in the bar when its centre is, and a fat marker would lie about that. The
    silhouette hangs above the track where there is room for it to be legible,
    and it is the same colour as the fish's own rarity. */
-.mg-fish { position: absolute; top: 0; bottom: 0; left: 0; width: 0; }
+.mg-fish { position: absolute; top: 0; bottom: 0; left: 0; width: 0; will-change: transform; }
 .mg-fish::before {
   content: ''; position: absolute; top: -2px; bottom: -2px; left: -2.5px; width: 5px;
   border-radius: 3px;
@@ -303,8 +338,11 @@
   overflow: hidden;
 }
 .mg-prog-fill {
-  position: absolute; inset: 1px auto 1px 1px; width: 32%;
+  position: absolute; inset: 1px;
   border-radius: 2px;
+  transform-origin: left center;
+  transform: scaleX(0);
+  will-change: transform;
   background: linear-gradient(90deg, #b7c4d0, #ffffff);
   box-shadow: 0 0 12px rgba(255,255,255,0.22);
 }
@@ -321,7 +359,7 @@
   font-size: 9.5px; letter-spacing: 0.17em; text-transform: lowercase;
   color: var(--ink-3);
 }
-.fight-pct { font-family: var(--mono); color: var(--ink-2); }
+.fight-pct { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--ink-2); }
 .fight-hint b { color: var(--ink-2); font-weight: 500; }
 
 @media (max-width: 620px) {
@@ -376,6 +414,41 @@
 .quest-item .want { color: var(--ink-3); }
 .quest-done-line { margin-top: 11px; font-size: 12px; color: var(--good); letter-spacing: 0.04em; }
 
+/* A thread that has not opened yet: dimmer, with the list of what it is
+   waiting for. Ready and unstarted is the loud one — that is somebody
+   standing there with something to say. */
+.quest-sep {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.20em;
+  color: var(--ink-4); margin: 20px 0 10px; padding-bottom: 7px;
+  border-bottom: 1px solid var(--line);
+}
+.quest.locked { border-style: dashed; background: transparent; }
+.quest.locked .quest-name { color: var(--ink-3); }
+.quest.locked.ready {
+  border-style: solid; border-color: var(--accent-dim);
+  background: var(--fill);
+}
+.quest.locked.ready .quest-name { color: var(--ink); }
+.quest.locked.ready .quest-where { padding-left: 0; color: var(--accent); margin-top: 9px; }
+
+.quest-check { margin-top: 12px; display: grid; gap: 8px; }
+.quest-need {
+  display: flex; gap: 10px; align-items: baseline;
+  font-size: 12.5px; color: var(--ink-3);
+}
+.quest-need.done { color: var(--ink-2); }
+.quest-need > div { flex: 1 1 auto; }
+.quest-box {
+  width: 13px; height: 13px; flex: 0 0 13px;
+  border: 1px solid var(--line-2); border-radius: 3px;
+  font-size: 9px; line-height: 12px; text-align: center; color: var(--good);
+  align-self: center;
+}
+.quest-need.done .quest-box { border-color: rgba(95, 214, 153, 0.5); }
+.quest-need-note { font-size: 11px; color: var(--ink-4); margin-top: 2px; }
+.quest-need-at { font-family: var(--mono); font-size: 10.5px; color: var(--ink-4); }
+.quest-need.done .quest-need-at { color: var(--good); }
+
 /* ------------------------------------------------------------- prompts */
 
 .prompt {
@@ -389,14 +462,14 @@
   text-shadow: 0 0 34px rgba(0,0,0,0.9), 0 0 60px currentColor;
   opacity: 0;
 }
-.prompt.show { animation: promptIn 1500ms var(--ease) both; }
+.prompt.show { animation: promptIn 1500ms var(--e-move) both; }
 @keyframes promptIn {
   0%   { opacity: 0; transform: translate(-50%,-50%) scale(0.94); letter-spacing: 0.55em; }
   16%  { opacity: 1; transform: translate(-50%,-50%) scale(1); letter-spacing: 0.30em; }
   72%  { opacity: 1; }
   100% { opacity: 0; }
 }
-.prompt.hold { animation: promptHold 400ms var(--ease) both; }
+.prompt.hold { animation: promptHold 400ms var(--e-move) both; }
 @keyframes promptHold {
   0% { opacity: 0; transform: translate(-50%,-50%) scale(0.94); }
   100% { opacity: 1; transform: translate(-50%,-50%) scale(1); }
@@ -419,9 +492,9 @@
   backdrop-filter: blur(11px); -webkit-backdrop-filter: blur(11px);
   font-size: 11.5px; color: var(--ink-2);
   box-shadow: 0 10px 30px rgba(0,0,0,0.45);
-  animation: toastIn 320ms var(--ease) both;
+  animation: toastIn 300ms var(--e-out) both;
 }
-.toast.out { animation: toastOut 320ms var(--ease) both; }
+.toast.out { animation: toastOut var(--t-exit) var(--e-in) both; }
 @keyframes toastIn { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: none; } }
 @keyframes toastOut { to { opacity: 0; transform: translateX(18px); } }
 .toast .t-mark { width: 3px; align-self: stretch; border-radius: 2px; background: var(--accent); }
@@ -437,10 +510,10 @@
   display: flex; align-items: center; justify-content: center;
   pointer-events: none;
   background: radial-gradient(ellipse at 50% 58%, rgba(0,0,0,0) 22%, rgba(0,0,0,0.72) 78%);
-  animation: encIn 900ms var(--ease) both;
+  animation: encIn 900ms var(--e-move) both;
 }
 @keyframes encIn { from { opacity: 0; } to { opacity: 1; } }
-.encounter.out { animation: encOut 900ms var(--ease) both; }
+.encounter.out { animation: encOut 900ms var(--e-move) both; }
 @keyframes encOut { to { opacity: 0; } }
 .enc-inner { text-align: center; }
 .enc-text {
@@ -460,6 +533,10 @@
   .gear-row { order: 2; }
   .action-col { order: 1; }
   .menu-row { flex-wrap: wrap; justify-content: flex-end; }
+  /* seven buttons rather than six: they get smaller before they get a
+     second row */
+  .mbtn { padding: 5px 8px; font-size: 9.5px; letter-spacing: 0.09em; }
+  .mbtn-icon { padding: 5px 7px; }
   .fight { width: min(92vw, 430px); bottom: 152px; }
 }
 @media (max-height: 620px) {
@@ -469,10 +546,10 @@
 }
 
 /* the interface is simply not there for a moment */
-#hud.gone { opacity: 0; transition: opacity 700ms var(--ease); pointer-events: none; }
+#hud.gone { opacity: 0; transition: opacity 700ms var(--e-move); pointer-events: none; }
 body.wrong #vignette { opacity: 0.2; }
 body.wrong #edgeGlow { opacity: 0; }
-body.wrong .toasts { opacity: 0; transition: opacity 500ms var(--ease); }
+body.wrong .toasts { opacity: 0; transition: opacity 500ms var(--e-move); }
 
 /* -------------------------------------------------------------- captions
    A conversation happens out on the shore. All that belongs on the interface
@@ -487,7 +564,7 @@ body.wrong .toasts { opacity: 0; transition: opacity 500ms var(--ease); }
   z-index: 46;
   pointer-events: none;
   opacity: 1;
-  transition: opacity 420ms var(--ease);
+  transition: opacity 420ms var(--e-move);
 }
 .caption.hidden { display: none; }
 .caption.fading { opacity: 0; }
@@ -508,7 +585,7 @@ body.wrong .toasts { opacity: 0; transition: opacity 500ms var(--ease); }
   color: var(--ink);
   text-shadow: 0 2px 22px rgba(0, 0, 0, 0.92), 0 1px 4px rgba(0, 0, 0, 0.8);
   letter-spacing: 0.012em;
-  animation: capIn 460ms var(--ease) both;
+  animation: capIn 460ms var(--e-move) both;
 }
 
 .caption-more {
@@ -517,7 +594,7 @@ body.wrong .toasts { opacity: 0; transition: opacity 500ms var(--ease); }
   letter-spacing: 0.24em;
   color: var(--ink-4);
   opacity: 0;
-  transition: opacity 500ms var(--ease);
+  transition: opacity 500ms var(--e-move);
 }
 .caption.ready .caption-more { opacity: 1; }
 
@@ -529,10 +606,127 @@ body.wrong .toasts { opacity: 0; transition: opacity 500ms var(--ease); }
 /* while somebody is talking the rest of the interface gets out of the way */
 #hud.visiting .hud-bottom,
 #hud.visiting .fight,
-#hud.visiting .prompt { opacity: 0; pointer-events: none; transition: opacity 420ms var(--ease); }
-#hud.visiting .hud-top { opacity: 0.24; pointer-events: none; transition: opacity 420ms var(--ease); }
+#hud.visiting .prompt { opacity: 0; pointer-events: none; transition: opacity 420ms var(--e-move); }
+#hud.visiting .hud-top { opacity: 0.24; pointer-events: none; transition: opacity 420ms var(--e-move); }
 
 @media (max-width: 760px) {
   .caption { bottom: 34px; width: calc(100vw - 40px); }
   .caption-text { font-size: 14px; line-height: 1.68; }
+}
+
+/* ------------------------------------------------ the condition clock
+   A condition is a window with the biggest multipliers in the game behind it,
+   so the chip carries how much of it is left: a fuse draining along the
+   bottom edge, and a number for when the answer matters to the minute. */
+
+.cond-chip { position: relative; overflow: hidden; }
+.chip-left {
+  font-family: var(--mono); font-size: 9.5px;
+  color: var(--ink-3); letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  padding-left: 1px;
+}
+.chip-left.urgent { color: var(--warn); }
+.cond-fuse {
+  position: absolute; left: 0; bottom: 0;
+  width: 100%; height: 1.5px;
+  transform-origin: left center;
+  transform: scaleX(1);
+  opacity: 0.75;
+  transition: transform 320ms linear;
+}
+
+/* ---------------------------------------------------- the HUD, with weight
+
+   The chips and cards were flat panes of one colour. They are objects lit from
+   above now, the same as everything in the panels: a hairline of light along
+   the top edge, the body falling away from it, and a shadow underneath so they
+   sit in front of the water rather than on it. */
+
+.chip, .gear-card {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.008)),
+    var(--pane);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), 0 2px 10px rgba(0,0,0,0.34);
+}
+.chip-btn:hover, .gear-card:hover {
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 3px 14px rgba(0,0,0,0.42);
+}
+
+.mbtn {
+  background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.006));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.055);
+}
+.mbtn:hover { box-shadow: inset 0 1px 0 rgba(255,255,255,0.10), 0 2px 8px rgba(0,0,0,0.3); }
+/* the panel you have open is lit, not merely a different grey */
+.mbtn.active {
+  border-color: var(--accent-dim);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.13), 0 0 14px -2px var(--accent-dim);
+}
+
+/* The money is the number the whole game is about; give it a little light. */
+.money { text-shadow: 0 0 18px var(--accent-dim); }
+.coin  { text-shadow: 0 0 12px var(--accent-dim); }
+
+/* The XP bar reads as filled rather than merely coloured. */
+.xp-track { box-shadow: inset 0 1px 2px rgba(0,0,0,0.45); }
+.xp-fill  { box-shadow: 0 0 8px -1px var(--accent); }
+
+/* The stripe down the side of a toast says what kind of news it is, so let it
+   actually light — a good catch should feel like one from the corner of the
+   eye, without reading a word of it. */
+.toast {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.008)),
+    var(--pane-2);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), 0 14px 38px rgba(0,0,0,0.5);
+}
+.toast .t-mark { box-shadow: 0 0 10px -1px var(--accent); }
+.toast.good .t-mark { box-shadow: 0 0 12px -1px var(--good); }
+.toast.warn .t-mark { box-shadow: 0 0 12px -1px var(--warn); }
+.toast.bad  .t-mark { box-shadow: 0 0 12px -1px var(--bad); }
+
+/* --------------------------------------------------------------- calm
+
+   "Reduce flashing" is a switch in Settings as well as a preference in the
+   operating system, and it used to reach the canvas and stop there — the
+   flashes in the scene were damped and the interface went on strobing anyway.
+
+   These three are the flashes and only the flashes: two snap between states
+   two and a half times a second, and the third blooms a menu button's colour
+   three times over. The slow breaths — the bite button, the encounter line —
+   are motion rather than flashing and are left alone, because they are how
+   those two moments announce themselves and neither one strobes.
+
+   Nothing here is the only thing saying what it says. The warning is still
+   red, the progress bar still carries its red ring, and the menu button still
+   changes colour; they simply stop blinking about it. */
+body.calm .fight-warn.on,
+body.calm .mg-prog.low .mg-prog-fill,
+body.calm .mbtn.flash { animation: none; }
+
+/* The astral tier in the fight bar. The marker takes its colour from
+   --fishcol, which is set once from script at the top of the fight, so for the
+   one tier that has no single colour the variable itself is animated instead
+   and everything downstream of it follows without knowing. */
+@keyframes bow-var {
+  0%   { --fishcol: #ff4fd8; }
+  17%  { --fishcol: #ff6a4f; }
+  34%  { --fishcol: #ffd24f; }
+  50%  { --fishcol: #6bff8f; }
+  67%  { --fishcol: #4fd8ff; }
+  84%  { --fishcol: #7a6bff; }
+  100% { --fishcol: #ff4fd8; }
+}
+@property --fishcol {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #7fd0ff;
+}
+.fight-bow {
+  animation: bow-var 5.6s linear infinite;
+  /* An eight-pointed star, one point per member of the tier. It stands in
+     until the species has been landed once, at which point js/ui/hud.js
+     replaces it with that subject's own outline. */
+  --fishglyph: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 0 13.6 8.2 19.8 2.6 16.4 10.4 24 12 16.4 13.6 19.8 21.4 13.6 15.8 12 24 10.4 15.8 4.2 21.4 7.6 13.6 0 12 7.6 10.4 4.2 2.6 10.4 8.2Z'/%3E%3C/svg%3E");
 }

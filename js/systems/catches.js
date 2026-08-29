@@ -10,6 +10,7 @@
   function sell() {
     const c = last();
     if (!c) return null;
+    if (VF.runs && !VF.runs.sellAllowed()) return null;
     const d = VF.state.data;
     VF.economy.earn(c.value, 'catch');
     d.stats.sold++;
@@ -26,7 +27,21 @@
     const d = VF.state.data;
     d.kept.push({
       id: c.id, kg: c.kg, m: c.m, pct: c.pct,
-      mutation: c.mutation, value: c.value, at: c.at, location: c.location
+      /* The whole list, not just the first. A four-trait fish went into the
+         bag as a one-trait fish and stayed that way — and the bag is the only
+         place a catch survives as an object rather than a tally, so that was
+         the sole record of a combination and it was lossy. The stored value
+         was still the four-trait price, so the row showed a plain fish worth
+         an inexplicable amount. */
+      traits: (c.traits || []).slice(),
+      mutation: c.mutation, value: c.value, at: c.at, location: c.location,
+      rarity: c.rarity,
+      /* The rest of the evening. A kept fish is the only thing in the game
+         that survives as an object rather than a tally, and the aquarium reads
+         every one of these off the plate under the glass — so a catch that
+         does not carry them is a specimen with no provenance. Old saves have
+         none of it and the aquarium says "unrecorded" rather than guessing. */
+      weather: c.weather, time: c.time, bait: c.bait, rod: c.rod
     });
     if (d.kept.length > KEEP_LIMIT) d.kept.shift();
     VF.audio.click();
@@ -52,7 +67,7 @@
     const roll = VF.rng.g();
     if (roll < 0.07) {
       // a handful of whatever bait the player can currently use
-      const usable = VF.bait.list.filter(function (b) { return !b.unlimited && d.level >= b.level; });
+      const usable = VF.bait.available().filter(function (b) { return !b.unlimited && d.level >= b.level; });
       if (usable.length) {
         const b = usable[Math.min(usable.length - 1, VF.rng.g.int(Math.max(0, usable.length - 3), usable.length - 1))];
         const n = b.pack;
@@ -72,6 +87,7 @@
 
   /* Selling from the Bag, after the fact. */
   function sellKept(index) {
+    if (VF.runs && !VF.runs.sellAllowed()) return 0;
     const d = VF.state.data;
     if (index < 0 || index >= d.kept.length) return 0;
     const k = d.kept.splice(index, 1)[0];
@@ -83,6 +99,7 @@
   }
 
   function sellAllKept() {
+    if (VF.runs && !VF.runs.sellAllowed()) return 0;
     const d = VF.state.data;
     let total = 0;
     for (let i = 0; i < d.kept.length; i++) total += d.kept[i].value;

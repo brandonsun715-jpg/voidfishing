@@ -4,7 +4,7 @@
   'use strict';
 
   const U = VF.util;
-  let host = null, overlay = null, current = null, node = null;
+  let host = null, overlay = null, current = null, node = null, curTab = null;
   let gen = 0;   // guards the deferred teardown against a newer open
   let rodCanvases = [];   // live rod previews, animated while the shop is open
   let rodRaf = 0;
@@ -21,6 +21,8 @@
       for (let i = 0; i < rodCanvases.length; i++) {
         const e = rodCanvases[i];
         if (!e.cv.isConnected) continue;
+        // a stood-up preview carries its own painter, transform and all
+        if (e.paint) { e.paint(e.ctx, t + e.phase); continue; }
         const g = e.ctx;
         g.clearRect(0, 0, e.cv.width, e.cv.height);
         VF.rodArt.preview(g, e.rod, e.cv.width, e.cv.height, t + e.phase);
@@ -34,6 +36,64 @@
     rodCanvases = [];
   }
 
+  /* Owning a rod and being allowed to swing it are two different things — the
+     one at the end of the long thread arrives well before its level. Both
+     places that offer an Equip button go through here so they cannot disagree
+     about it. */
+  function equipButton(rod, onDone, cls) {
+    if (!VF.rods.canEquip(rod)) {
+      const wait = U.el('div', 'row-price', 'needs lv ' + rod.level);
+      wait.style.color = 'var(--warn)';
+      return wait;
+    }
+    const btn = U.el('button', 'btn btn-sm' + (cls || ''), 'Equip');
+    btn.addEventListener('click', function () {
+      VF.state.data.rod = rod.id;
+      VF.audio.click(); VF.bus.emit('gear:changed'); VF.save.save();
+      onDone();
+    });
+    return btn;
+  }
+
+  /* What tier a rod sits in, for the badge on its card. Merchant rods carry
+     one; shelf rods do not, so it comes off the same grade the drawing uses. */
+  /* Weighted toward the bottom on purpose. Grade is rank across all hundred
+     and twenty-nine rods, and the thirty on the shelf are the bottom of that
+     queue — split evenly they would all read Common, which tells the player
+     nothing about which of the thirty is better than which. */
+  const ROD_TIERS = [
+    [0.08, 'Common',    '#9db4c6'], [0.20, 'Uncommon',  '#5fd699'],
+    [0.36, 'Rare',      '#4aa8ff'], [0.56, 'Epic',      '#b06bff'],
+    [0.78, 'Legendary', '#ffb03a'], [1.01, 'Mythic',    '#ff5c9e']
+  ];
+  function rodRarity(rod) {
+    if (rod.rarity) {
+      const r = VF.rarities.get(rod.rarity);
+      return { name: r.name, color: r.color };
+    }
+    const g = VF.rodSig ? VF.rodSig.grade(rod) : 0.4;
+    for (let i = 0; i < ROD_TIERS.length; i++) {
+      if (g < ROD_TIERS[i][0]) return { name: ROD_TIERS[i][1], color: ROD_TIERS[i][2] };
+    }
+    return { name: 'Mythic', color: '#ff5c9e' };
+  }
+
+  function rcStat(host, k, v, dir) {
+    const row = U.el('div', 'rc-stat');
+    row.appendChild(U.el('span', 'rc-k', k));
+    const val = U.el('span', 'rc-v', v);
+    if (dir > 0) val.classList.add('up');
+    else if (dir < 0) val.classList.add('down');
+    row.appendChild(val);
+    host.appendChild(row);
+  }
+
+  /* A control in a panel that keeps focus after a mouse click keeps the space
+     bar with it — see the same helper in js/ui/hud.js. */
+  function dropFocusIn(e) {
+    if (e && e.detail > 0 && e.currentTarget && e.currentTarget.blur) e.currentTarget.blur();
+  }
+
   function rodPreview(rod, i, dim) {
     const cv = U.el('canvas', 'rod-art');
     cv.width = 300; cv.height = 132;
@@ -43,23 +103,129 @@
     rodCanvases.push({ cv: cv, ctx: g, rod: rod, phase: i * 0.9 });
     return cv;
   }
-  let dexFilter = 'all', dexMode = 'all';
+
+  /* The same drawing, stood up.
+
+     A rod is a long thin object and a shop is a list of them, so drawing them
+     lying down means each one gets a strip a hundred pixels tall and the thing
+     that distinguishes it — its outline — is the part there is no room for.
+     Stood up in a card it gets the whole height, which is the difference
+     between seeing that two rods are different and being told so. */
+  function rodPreviewV(rod, i, dim, w, h) {
+    const cv = U.el('canvas', 'rod-art-v');
+    const DPR = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = Math.round(w * DPR); cv.height = Math.round(h * DPR);
+    cv.style.width = w + 'px'; cv.style.height = h + 'px';
+    const g = cv.getContext('2d');
+    if (dim) cv.style.opacity = '0.45';
+    const paint = function (ctx, t) {
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+      /* butt at the bottom, tip at the top: rotate the frame a quarter turn
+         and hand the flat renderer a landscape box inside it */
+      ctx.translate(w * 0.5, h * 0.5);
+      ctx.rotate(-Math.PI / 2);
+      ctx.translate(-h * 0.5, -w * 0.5);
+      VF.rodArt.preview(ctx, rod, h, w, t);
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    };
+    paint(g, i * 0.9);
+    rodCanvases.push({ cv: cv, ctx: g, rod: rod, phase: i * 0.9, paint: paint });
+    return cv;
+  }
+  let dexFilter = 'all', dexMode = 'all', dexTab = 'waters', dexLoc = 'all';
+
+  /* ---------------------------------------------------------------- focus
+
+     A panel is a modal, and until now the keyboard did not know that: Tab from
+     inside an open panel walked straight out into the HUD behind it, and
+     closing one left focus wherever it happened to land. Both are fixed here
+     rather than per-panel, so every view gets it — including the ones that do
+     not exist yet. */
+
+  let lastFocus = null;
+
+  const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), ' +
+                    'select, textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+  function focusables() {
+    if (!node) return [];
+    return U.qsa(FOCUSABLE, node).filter(function (el) {
+      return el.offsetWidth > 0 || el.offsetHeight > 0 || el === document.activeElement;
+    });
+  }
+
+  function trapTab(e) {
+    if (!current || e.code !== 'Tab') return;
+    const list = focusables();
+    if (!list.length) return;
+    const first = list[0], last = list[list.length - 1];
+    const at = document.activeElement;
+    // wrap at both ends, and catch the case where focus escaped entirely
+    if (e.shiftKey && (at === first || !node.contains(at))) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && (at === last || !node.contains(at))) { e.preventDefault(); first.focus(); }
+  }
+
+  /* Was the thing that opened this panel reached by keyboard? Only then is it
+     worth handing focus back when the panel closes. Returning focus to a button
+     somebody clicked with a mouse puts a ring on it that they did not ask for
+     and cannot get rid of — and leaves the space bar pointed at it. */
+  function reachedByKey(el) {
+    if (!el || !el.matches) return false;
+    try { return el.matches(':focus-visible'); } catch (e) { return false; }
+  }
+
+  function takeFocus() {
+    lastFocus = reachedByKey(document.activeElement) ? document.activeElement : null;
+    setTimeout(function () {
+      if (!current || !node) return;
+      // the close button is a poor first stop; the first real control is better
+      const list = focusables();
+      const skipClose = list.filter(function (el) { return !el.classList.contains('panel-close'); });
+      const target = (skipClose[0] || list[0]);
+      if (target) target.focus();
+    }, 30);
+  }
+
+  function returnFocus() {
+    const el = lastFocus;
+    lastFocus = null;
+    if (el && el.isConnected && typeof el.focus === 'function') el.focus();
+  }
 
   function init() {
     host = document.getElementById('modal');
     overlay = document.getElementById('overlay');
     overlay.addEventListener('click', function () { if (current) close(); });
+    window.addEventListener('keydown', trapTab, true);
   }
 
   function isOpen() { return !!current; }
 
   function open(id, tab) {
     if (VF.catchUI.isOpen()) return;
+    /* The aquarium is not a panel. It is the one thing on the menu bar that
+       takes the whole screen instead of floating over the water, so the button
+       routes straight past all of this — see js/ui/aquarium.js. */
+    if (id === 'aquarium') {
+      if (current) close();
+      /* It opens whether or not there is anything to put in it. It used to
+         refuse below level six with nothing kept, and all a refusal can do is
+         throw a line of toast that scrolls past under whatever else is on
+         screen — from the player's side that is a menu button that does
+         nothing when pressed. An empty room explains itself; a dead button
+         does not. */
+      VF.aquariumUI.show();
+      return;
+    }
     if (current === id) { close(); return; }
     if (current) closeNow();
     stopRodLoop();
+    stopMapLoop();
+    if (VF.boatUI) VF.boatUI.stop();
     gen++;
     current = id;
+    curTab = tab === undefined ? null : tab;
     VF.state.rt.panelOpen = id;
     overlay.classList.remove('hidden', 'out');
     node = build(id, tab);
@@ -69,6 +235,7 @@
     startRodLoop();
     U.qsa('.mbtn').forEach(function (b) { b.classList.toggle('active', b.dataset.panel === id); });
     VF.hud.pressEnd();
+    takeFocus();
   }
 
   function close() {
@@ -82,25 +249,51 @@
       // a panel opened during the exit animation owns the host now — leave it alone
       if (myGen !== gen) return;
       if (n && n.parentNode) n.parentNode.removeChild(n);
-      if (!current) { host.classList.add('hidden'); overlay.classList.add('hidden'); }
-    }, 210);
+      if (!current) {
+        host.classList.add('hidden');
+        overlay.classList.add('hidden');
+        overlay.classList.remove('out');
+      }
+    }, 200);
     closeNow();
   }
 
   function closeNow() {
     stopRodLoop();
-    current = null; node = null;
+    stopMapLoop();
+    if (VF.boatUI) VF.boatUI.stop();
+    current = null; node = null; curTab = null;
+    returnFocus();
     VF.state.rt.panelOpen = null;
     U.qsa('.mbtn').forEach(function (b) { b.classList.remove('active'); });
-    overlay.classList.add('hidden');
+    /* The overlay is NOT hidden here. It carries the blur behind the panel, and
+       hiding it in the same frame the panel starts leaving meant the whole
+       backdrop snapped back to sharp while the panel was still fading — the one
+       piece of the interface that visibly stuttered on every close. The
+       deferred tidy-up in close() puts it away once its own fade has run;
+       open() clears it directly when one panel is replacing another. */
   }
 
+  /* Rebuilding without naming a tab stays on the tab that is open — a row
+     that grants or buys something should not throw you back to the first. */
   function refresh(tab) {
     if (!current) return;
     stopRodLoop();
+    stopMapLoop();
+    if (VF.boatUI) VF.boatUI.stop();
+    if (tab === undefined) tab = curTab; else curTab = tab;
     const id = current, prev = node;
+    /* Where the reader was. A panel is rebuilt from scratch on every change,
+       and settings is long enough that acting on something near the bottom —
+       loading a slot, erasing one — used to throw the page back to the top and
+       leave them hunting for the row they had just pressed. */
+    const wasAt = prev ? (prev.querySelector('.panel-body') || {}).scrollTop || 0 : 0;
     node = build(id, tab);
     if (prev && prev.parentNode) prev.parentNode.replaceChild(node, prev);
+    if (wasAt) {
+      const bodyEl = node.querySelector('.panel-body');
+      if (bodyEl) bodyEl.scrollTop = wasAt;
+    }
     startRodLoop();
   }
 
@@ -147,6 +340,17 @@
     return c;
   }
 
+  /* The panel furniture, as an object a module outside this file can build
+     with. Nothing in here is stateful; `refresh` and `close` are the two live
+     wires and both already exist. */
+  function scaffold() {
+    return { shell: shell, body: body, tabs: function (items, active, pick) {
+               return tabs(items, active, pick);
+             },
+             statCell: statCell, priceEl: priceEl,
+             refresh: refresh, close: close };
+  }
+
   function build(id, tab) {
     switch (id) {
       case 'shop': return buildShop(tab || 'rods');
@@ -155,102 +359,288 @@
       case 'stats': return buildStats(tab || 'stats');
       case 'settings': return buildSettings();
       case 'map': return buildMap();
+      /* Built by its own module, handed the same scaffold every other panel
+         is built from — so the boatyard is a different set of rows inside the
+         same furniture rather than a second panel system. */
+      case 'boat': return VF.boatUI.build(scaffold(), tab || 'boat');
       case 'merchant': return buildMerchant();
       case 'cases': return buildCases();
       case 'wardrobe': return buildWardrobe(tab || 'all');
       // a running quest is what the journal is for while there is one
       case 'journal': return buildJournal(tab || (VF.quests.activeCount() ? 'quests' : 'entries'));
+      /* Built by its own module. There is no button for it — three slashes
+         are the only way in — so it is not in the menu bar either, and in a
+         build without that module it is not a panel at all. */
+/* @admin-only */
+      case 'admin': return VF.adminConsole ? VF.adminConsole.build(shell, body) : shell('—');
+/* @end-admin */
+
       default: return shell('—');
     }
   }
 
   /* ---------------------------------------------------------------- shop */
 
+  /* The cheapest rod that is actually better than the one in your hand and
+     that you could actually get. With a hundred and twenty-nine rods on the
+     shelf, "what should I be saving for" is the question the list is worst at
+     answering — the comparison arrows only compare against what you already
+     hold, one row at a time, and the ladder interleaves so the next row down
+     is often not the next rod up.
+
+     Better means better at the thing rods are for: reach, line and reel, plus
+     the rarity it draws. A rod that is worse at all four is not an upgrade
+     however much it costs. */
+  function betterThan(rod, eq) {
+    let up = 0, down = 0;
+    [['cast', 1], ['line', 1], ['reel', 1], ['rare', 1], ['luck', 1]].forEach(function (k) {
+      if (rod[k[0]] > eq[k[0]] + 1e-9) up++;
+      else if (rod[k[0]] < eq[k[0]] - 1e-9) down++;
+    });
+    return up >= 3 && up > down;
+  }
+
+  function nextUpgrade(eq) {
+    const d = VF.state.data;
+    const box = U.el('div', 'next-up');
+
+    let best = null;
+    VF.rods.list.forEach(function (rod) {
+      if (d.ownedRods.indexOf(rod.id) >= 0) return;
+      if (rod.admin || rod.noShop || rod.quest) return;
+      if (rod.merchant) return;                    // he is not always here
+      if (VF.rods.blocked(rod)) return;            // out of reach for a reason
+      if (!betterThan(rod, eq)) return;
+      if (!best || rod.cost < best.cost) best = rod;
+    });
+
+    if (!best) {
+      box.classList.add('quiet');
+      box.appendChild(U.el('div', 'next-up-k', 'nothing on the shelf beats what you are holding'));
+      return box;
+    }
+
+    const short = Math.max(0, best.cost - d.money);
+    box.appendChild(U.el('div', 'next-up-k', 'next upgrade'));
+    const row = U.el('div', 'next-up-row');
+    row.appendChild(U.el('span', 'next-up-name', best.name));
+    row.appendChild(U.el('span', 'next-up-cost', '◇ ' + U.money(best.cost)));
+    box.appendChild(row);
+    box.appendChild(U.el('div', 'next-up-sub', short > 0
+      ? U.money(short) + ' short'
+      : 'you can afford this now'));
+    if (!short) box.classList.add('ready');
+    return box;
+  }
+
+  /* Line, reel and hook. Every rod is a rung — cast, line, reel, rarity and
+     luck all climb together — so two rods of a tier play the same. These are
+     the only place a rod becomes a shape rather than a number, and every one
+     of them trades something for something. */
+  function modStrip() {
+    const strip = U.el('div', 'modslots');
+    VF.mods.SLOTS.forEach(function (slot) {
+      const m = VF.mods.inSlot(slot);
+      const cell = U.el('div', 'modslot' + (m ? ' on' : ''));
+      cell.appendChild(U.el('div', 'modslot-k', VF.mods.SLOT_NAMES[slot].toLowerCase()));
+      cell.appendChild(U.el('div', 'modslot-v', m ? m.name : 'nothing fitted'));
+      if (m) {
+        const off = U.el('button', 'btn btn-sm', 'Remove');
+        off.addEventListener('click', function () {
+          VF.audio.click(); VF.mods.remove(slot); refresh();
+        });
+        cell.appendChild(off);
+      }
+      strip.appendChild(cell);
+    });
+    return strip;
+  }
+
+  function modRow(m, owned) {
+    const d = VF.state.data;
+    const fittedHere = VF.mods.inSlot(m.slot);
+    const isOn = fittedHere && fittedHere.id === m.id;
+    const locked = !owned && d.level < m.level;
+    const row = U.el('div', 'row row-mod' + (isOn ? ' equipped' : owned ? ' owned' : '') +
+                              (locked ? ' locked' : ''));
+    const mark = U.el('div', 'row-mark');
+    mark.style.background = isOn ? 'var(--accent)' : owned ? 'var(--good)' : locked ? 'var(--line-2)' : 'var(--accent)';
+    row.appendChild(mark);
+
+    const main = U.el('div', 'row-main');
+    const nm = U.el('div', 'row-name');
+    nm.appendChild(U.el('span', null, m.name));
+    nm.appendChild(U.el('span', 'mod-slot', VF.mods.SLOT_NAMES[m.slot].toLowerCase()));
+    if (isOn) { const t = U.el('span', 'tag', 'fitted'); t.style.color = 'var(--accent)'; nm.appendChild(t); }
+    main.appendChild(nm);
+    main.appendChild(U.el('div', 'row-desc', m.desc));
+
+    /* What it trades, in the terms the rod row already uses. */
+    const grid = U.el('div', 'mod-effects');
+    const NAMES = { line: 'bar width', reel: 'bar speed', fill: 'meter', rare: 'rarity', luck: 'luck', bite: 'wait' };
+    for (const k in m.mods) {
+      const v = m.mods[k];
+      const good = k === 'bite' ? v < 1 : v > (k === 'luck' ? 0 : 1);
+      const chip = U.el('span', 'mod-eff ' + (good ? 'up' : 'down'));
+      chip.textContent = NAMES[k] + ' ' + (k === 'luck'
+        ? (v >= 0 ? '+' : '') + v.toFixed(2)
+        : (v > 1 ? '+' : '') + Math.round((v - 1) * 100) + '%');
+      grid.appendChild(chip);
+    }
+    main.appendChild(grid);
+    row.appendChild(main);
+
+    const side = U.el('div', 'row-side');
+    if (owned) {
+      if (!isOn) {
+        const fitBtn = U.el('button', 'btn btn-sm btn-primary', 'Fit');
+        fitBtn.addEventListener('click', function () { VF.audio.click(); VF.mods.fit(m.id); refresh(); });
+        side.appendChild(fitBtn);
+      } else {
+        const off = U.el('button', 'btn btn-sm', 'Remove');
+        off.addEventListener('click', function () { VF.audio.click(); VF.mods.remove(m.slot); refresh(); });
+        side.appendChild(off);
+      }
+    } else if (locked) {
+      side.appendChild(U.el('div', 'row-desc', 'level ' + m.level));
+    } else {
+      side.appendChild(priceEl(m.cost, VF.economy.canAfford(m.cost)));
+      const buy = U.el('button', 'btn btn-sm' + (VF.economy.canAfford(m.cost) ? ' btn-primary' : ''), 'Buy');
+      buy.disabled = !VF.economy.canAfford(m.cost);
+      buy.addEventListener('click', function () {
+        const res = VF.mods.buy(m.id);
+        if (res.ok) { VF.audio.sell(); VF.toast.plain(m.name.toLowerCase() + ' — fitted', 'good', 2800); }
+        else VF.audio.error();
+        refresh();
+      });
+      side.appendChild(buy);
+    }
+    row.appendChild(side);
+    return row;
+  }
+
+  function modShop() {
+    const wrap = U.el('div');
+    wrap.appendChild(modStrip());
+    const list = U.el('div', 'list');
+    VF.mods.SLOTS.forEach(function (slot) {
+      VF.mods.list.filter(function (m) { return m.slot === slot; })
+        .forEach(function (m) { list.appendChild(modRow(m, VF.mods.owned(m.id))); });
+    });
+    wrap.appendChild(list);
+    return wrap;
+  }
+
   function buildShop(tab) {
     const d = VF.state.data;
-    const p = shell('Shop', 'Everything you will ever need, eventually · paid in Brophys');
+    const p = shell('Shop', 'Everything you will ever need, eventually · paid in Jias');
     p.appendChild(tabs([
       { id: 'rods', label: 'rods' }, { id: 'bait', label: 'bait' },
-      { id: 'charms', label: 'charms' }, { id: 'cases', label: 'cases' }
+      { id: 'mods', label: 'fittings' },
+      { id: 'charms', label: 'charms' }, { id: 'cases', label: 'cases' },
+      { id: 'charter', label: 'charter' }
     ], tab, function (t) { refresh(t); }));
     const b = body();
 
+    if (tab === 'charter') { b.appendChild(charterShop()); p.appendChild(b); return p; }
+    if (tab === 'mods') { b.appendChild(modShop()); p.appendChild(b); return p; }
     if (tab === 'charms') { b.appendChild(charmShop()); p.appendChild(b); return p; }
     if (tab === 'cases') { b.appendChild(caseList()); p.appendChild(b); return p; }
 
     if (tab === 'rods') {
+      /* Cards rather than rows.
+
+         A row is the right shape for a list of prices and the wrong one for a
+         list of objects: it gives a rod a hundred-pixel strip lying on its
+         side, which is exactly the amount of room its outline needs and does
+         not get. A card stands the rod up, gives it the full height, and puts
+         the numbers where they can be read down rather than across. */
       const eq = VF.rods.get(d.rod);
-      const list = U.el('div', 'list');
-      VF.rods.list.forEach(function (rod) {
+      b.appendChild(nextUpgrade(eq));
+      const grid = U.el('div', 'rod-cards');
+      VF.rods.list.forEach(function (rod, idx) {
         const owned = d.ownedRods.indexOf(rod.id) >= 0;
         // earned rods and the wanderer's stock are never on the shelf; they
         // turn up here once they are yours
-        if ((rod.quest || rod.merchant) && !owned) return;
+        if ((rod.quest || rod.merchant || rod.admin) && !owned) return;
         const block = owned ? null : VF.rods.blocked(rod);
         const locked = !!block || (!owned && rod.noShop);
         const can = VF.economy.canAfford(rod.cost);
+        const inHand = d.rod === rod.id;
+        const rar = rodRarity(rod);
 
-        const row = U.el('div', 'row row-rod' + (owned ? ' owned' : '') + (locked && !owned ? ' locked' : '') +
-                                  (d.rod === rod.id ? ' equipped' : ''));
-        const mark = U.el('div', 'row-mark');
-        mark.style.background = owned ? 'var(--good)' : (locked ? 'var(--line-2)' : 'var(--accent)');
-        row.appendChild(mark);
+        const card = U.el('div', 'rod-card' + (owned ? ' owned' : '') +
+                          (locked && !owned ? ' locked' : '') + (inHand ? ' equipped' : ''));
+        card.style.setProperty('--rar', rar.color);
 
-        const art = U.el('div', 'rod-art-box');
-        art.appendChild(rodPreview(rod, VF.rods.index(rod.id), locked && !owned));
-        row.appendChild(art);
+        /* the numbers, read down */
+        const stats = U.el('div', 'rc-stats');
+        const c = owned ? function () { return 0; } : cmp;
+        rcStat(stats, 'Cast', rod.cast.toFixed(2), c(rod.cast, eq.cast));
+        rcStat(stats, 'Reel', rod.reel.toFixed(2), c(rod.reel, eq.reel));
+        rcStat(stats, 'Line', rod.line.toFixed(2), c(rod.line, eq.line));
+        rcStat(stats, 'Rarity', '\u00d7' + rod.rare.toFixed(2), c(rod.rare, eq.rare));
+        rcStat(stats, 'Luck', '+' + rod.luck.toFixed(2), c(rod.luck, eq.luck));
+        rcStat(stats, 'Bar', Math.round((rod.barSize || 1) * 100) + '%',
+               c(rod.barSize || 1, eq.barSize || 1));
+        card.appendChild(stats);
 
-        const main = U.el('div', 'row-main');
-        const name = U.el('div', 'row-name');
-        name.appendChild(U.el('span', null, rod.name));
-        if (d.rod === rod.id) {
-          const t = U.el('span', 'tag', 'equipped'); t.style.color = 'var(--accent)'; name.appendChild(t);
-        } else if (owned) {
-          const t = U.el('span', 'tag', 'owned'); t.style.color = 'var(--good)'; name.appendChild(t);
-        }
-        main.appendChild(name);
-        // a rod that is never sold has no purchase requirement worth stating —
-        // the level it sits at is not what is standing between you and it
-        main.appendChild(U.el('div', 'row-desc', !locked || owned ? rod.desc
+        /* the rod, stood up */
+        const art = U.el('div', 'rc-art');
+        art.appendChild(rodPreviewV(rod, idx, locked && !owned, 150, 240));
+        card.appendChild(art);
+
+        /* what it is */
+        const badge = U.el('div', 'rc-rarity');
+        badge.style.color = rar.color;
+        badge.appendChild(U.el('span', 'rc-star', '\u2605'));
+        badge.appendChild(U.el('span', null, rar.name));
+        badge.appendChild(U.el('span', 'rc-star', '\u2605'));
+        card.appendChild(badge);
+
+        card.appendChild(U.el('div', 'rc-name', '[' + rod.name + ']'));
+        card.appendChild(U.el('div', 'rc-build', VF.rodFrame ? VF.rodFrame.of(rod).name + ' build' : ''));
+
+        card.appendChild(U.el('div', 'rc-desc', !locked || owned ? rod.desc
           : rod.noShop ? (rod.notForSale || 'Not for sale. Somebody has to give you this one.')
           : block.note));
+        if (rod.perk && (!locked || owned)) {
+          const pk = U.el('div', 'rc-perk', rod.perk);
+          card.appendChild(pk);
+        }
+        card.appendChild(U.el('div', 'rc-bar', rodBarNote(rod)));
 
-        // comparison arrows only matter when deciding whether to buy
-        const c = owned ? function () { return 0; } : cmp;
-        const grid = U.el('div', 'stat-grid');
-        grid.appendChild(statCell('Cast', rod.cast.toFixed(2), c(rod.cast, eq.cast)));
-        grid.appendChild(statCell('Reel', rod.reel.toFixed(2), c(rod.reel, eq.reel)));
-        grid.appendChild(statCell('Line', rod.line.toFixed(2), c(rod.line, eq.line)));
-        grid.appendChild(statCell('Rare', '×' + rod.rare.toFixed(2), c(rod.rare, eq.rare)));
-        grid.appendChild(statCell('Luck', '+' + rod.luck.toFixed(2), c(rod.luck, eq.luck)));
-        main.appendChild(grid);
-        const bn = U.el('div', 'row-desc', rodBarNote(rod));
-        bn.style.color = 'var(--ink-2)';
-        main.appendChild(bn);
-        row.appendChild(main);
-
-        const side = U.el('div', 'row-side');
+        /* and the one thing you can do about it */
+        const foot = U.el('div', 'rc-foot');
         if (owned) {
-          if (d.rod !== rod.id) {
-            const btn = U.el('button', 'btn btn-sm', 'Equip');
-            btn.addEventListener('click', function () {
-              d.rod = rod.id; VF.audio.click(); VF.bus.emit('gear:changed');
-              VF.save.save(); refresh('rods');
-            });
-            side.appendChild(btn);
+          if (inHand) {
+            foot.appendChild(U.el('div', 'rc-btn is-on', '[Equipped]'));
           } else {
-            side.appendChild(U.el('div', 'row-price', 'in hand'));
+            if (!VF.rods.canEquip(rod)) {
+              foot.appendChild(U.el('div', 'rc-btn is-off', '[Needs LV ' + rod.level + ']'));
+            } else {
+              const eb = U.el('button', 'rc-btn', '[Equip]');
+              eb.addEventListener('click', function (e2) {
+                dropFocusIn(e2);
+                VF.state.data.rod = rod.id;
+                VF.audio.click(); VF.bus.emit('gear:changed'); VF.save.save();
+                VF.hud.refreshGear();
+                refresh('rods');
+              });
+              foot.appendChild(eb);
+            }
           }
         } else if (rod.noShop) {
-          /* the keeper does not stock these and will not be talked into it */
-          const n = U.el('div', 'row-price', 'not for sale');
-          n.style.color = 'var(--ink-3)';
-          side.appendChild(n);
+          foot.appendChild(U.el('div', 'rc-btn is-off', '[Not For Sale]'));
         } else {
-          side.appendChild(priceEl(rod.cost, can && !locked));
-          const btn = U.el('button', 'btn btn-sm' + (can && !locked ? ' btn-primary' : ''), 'Buy');
-          btn.disabled = locked || !can;
-          btn.addEventListener('click', function () {
+          const price = U.el('div', 'rc-price' + (can && !locked ? '' : ' cant'),
+                             U.money(rod.cost) + ' jias');
+          foot.appendChild(price);
+          const bb = U.el('button', 'rc-btn' + (can && !locked ? ' is-buy' : ''),
+                          locked ? '[Locked]' : '[Buy]');
+          bb.disabled = locked || !can;
+          bb.addEventListener('click', function (e2) {
+            dropFocusIn(e2);
             const r = VF.economy.buyRod(rod.id);
             if (r.ok) {
               VF.audio.buy();
@@ -258,15 +648,15 @@
               VF.hud.refreshGear(); VF.achievements.check(); refresh('rods');
             } else { VF.audio.error(); }
           });
-          side.appendChild(btn);
+          foot.appendChild(bb);
         }
-        row.appendChild(side);
-        list.appendChild(row);
+        card.appendChild(foot);
+        grid.appendChild(card);
       });
-      b.appendChild(list);
+      b.appendChild(grid);
     } else {
       const list = U.el('div', 'list');
-      VF.bait.list.forEach(function (bt) {
+      VF.bait.available().forEach(function (bt) {
         const levelOk = d.level >= bt.level;
         const have = VF.bait.count(bt.id);
         const row = U.el('div', 'row' + (levelOk ? '' : ' locked') + (d.bait === bt.id ? ' equipped' : ''));
@@ -328,25 +718,30 @@
      white bar, reel force is what steadies it and sharpens how fast it answers
      the key. Same arithmetic as loot.fightParams — stated here so the shop is
      not describing a bonus the fight does not actually give. */
+  /* The totals, not the parts: what this rod does to the white bar once its
+     line, its reel force and anything it declares for itself are all in. */
   function rodBarNote(rod) {
-    const q = U.clamp((rod.reel - 0.40) / 2.70, 0, 1.25);
+    /* A rod may state its own, and one does. Nothing that can be bought is
+       allowed to — a rod for sale has to say what the fight will really do. */
+    if (rod.barNote) return rod.barNote;
+    const q = U.clamp((rod.reel - 0.40) / 2.70, 0, VF.loot.Q_MAX);
+    const bar = (1 + 0.155 * (Math.log(Math.max(0.25, rod.line)) / Math.LN2)) * (rod.barSize || 1);
+    const wider = Math.round((bar - 1) * 100);
+    /* It cannot promise more slowing than the fight will actually give, and
+       what the fight will actually give is the floor barMul clamps to. */
+    const capped = Math.max(VF.loot.SLOW_FLOOR, (1 - 0.20 * q) * (rod.barSpeed || 1));
+    const move = Math.round((capped - 1) * 100);
     const sharper = Math.round(60 * q);
-    const fill = Math.round(((rod.barFill || 1) - 1) * 100);
-    const bits = [];
-    if (rod.barSize !== undefined) {
-      // it states its own; print exactly what the fight will use
-      bits.push('white bar +' + Math.round((rod.barSize - 1) * 100) + '%');
-      const spd = Math.round((rod.barSpeed - 1) * 100);
-      if (spd) bits.push('bar movement ' + (spd > 0 ? '+' : '−') + Math.abs(spd) + '%');
-    } else {
-      const wider = Math.round(15.5 * (Math.log(Math.max(0.25, rod.line)) / Math.LN2));
-      const steadier = Math.round(20 * q);
-      if (wider <= 0 && steadier <= 0) {
-        return 'white bar: the baseline every other rod is measured against';
-      }
-      if (wider > 0) bits.push('white bar +' + wider + '%');
-      if (steadier > 0) bits.push(steadier + '% steadier');
+    // reel force drives the meter as well as the key, so this carries the same
+    // (1 + 0.35q) the fight applies — without it a rod with a stated −3%
+    // drawback advertised a penalty while actually reeling a fifth faster
+    const fill = Math.round(((1 + 0.35 * q) * (rod.barFill || 1) - 1) * 100);
+    if (wider <= 0 && !move && !fill) {
+      return 'white bar: the baseline every other rod is measured against';
     }
+    const bits = [];
+    if (wider > 0) bits.push('white bar +' + wider + '%');
+    if (move) bits.push('bar movement ' + (move > 0 ? '+' : '−') + Math.abs(move) + '%');
     if (sharper > 0) bits.push(sharper + '% sharper on the key');
     if (fill) bits.push('progress ' + (fill > 0 ? '+' : '−') + Math.abs(fill) + '%');
     return bits.join(' · ');
@@ -384,7 +779,7 @@
       const can = VF.economy.canAfford(rod.cost);
       const row = U.el('div', 'row row-rod' + (gone ? ' owned' : '') + (!can && !gone ? ' locked' : ''));
       const mark = U.el('div', 'row-mark');
-      mark.style.background = VF.rarities.color(rod.rarity);
+      VF.rarities.paint(mark, rod.rarity, 'background');
       row.appendChild(mark);
 
       const art = U.el('div', 'rod-art-box');
@@ -395,7 +790,7 @@
       const name = U.el('div', 'row-name');
       name.appendChild(U.el('span', null, rod.name));
       const rt = U.el('span', 'tag', VF.rarities.get(rod.rarity).name);
-      rt.style.color = VF.rarities.color(rod.rarity);
+      VF.rarities.paint(rt, rod.rarity, 'color');
       name.appendChild(rt);
       if (gone) {
         const t2 = U.el('span', 'tag', owned ? 'yours' : 'sold');
@@ -453,6 +848,112 @@
   }
 
   /* --------------------------------------------------------- charms */
+
+  /* ------------------------------------------------------------- charter
+
+     Where the money goes late on. Conditions are the strongest thing in the
+     game and the only one you could never influence; this is the lever. The
+     price climbs with each charter and falls back over about ten minutes, so
+     the answer to "can I just keep buying Thin Places" is yes, at a price. */
+
+  function charterShop() {
+    const wrap = U.el('div');
+    const loc = VF.locations.current();
+
+    const blurb = U.el('div', 'case-blurb');
+    blurb.textContent = 'the water at ' + loc.name.toLowerCase() +
+      ' can be persuaded, for a while, to be doing something else. it costs more each time' +
+      ' you ask, and the asking price settles again if you leave it alone.';
+    wrap.appendChild(blurb);
+
+    const block = VF.charter.blocked();
+    if (block) {
+      const note = U.el('div', 'charter-note' + (block === 'busy' ? ' good' : ''));
+      note.textContent = block === 'busy'
+        ? 'the water is already doing something. ' +
+          (VF.conditions.name() || '').toLowerCase() + ' has to finish first.'
+        : 'land what is on the line first.';
+      wrap.appendChild(note);
+    }
+
+    const sur = VF.charter.surcharge();
+    if (sur > 0.02) {
+      const s2 = U.el('div', 'charter-sur');
+      s2.textContent = 'asking price is up ' + Math.round(sur * 100) + '% — it falls back on its own';
+      wrap.appendChild(s2);
+    }
+
+    const list = U.el('div', 'list charter-list');
+    const offered = VF.charter.offered();
+    if (!offered.length) {
+      wrap.appendChild(U.el('div', 'empty', 'this water does not do anything on request.'));
+      return wrap;
+    }
+
+    offered.slice().sort(function (a, b) {
+      return VF.charter.power(a) - VF.charter.power(b);
+    }).forEach(function (c) {
+      const cost = VF.charter.price(c);
+      const can = VF.economy.canAfford(cost) && !block;
+
+      const row = U.el('div', 'row' + (block ? ' locked' : ''));
+      const mark = U.el('div', 'row-mark');
+      mark.style.background = c.tint;
+      mark.style.boxShadow = '0 0 10px ' + U.rgbToCss(U.hexToRgb(c.tint), 0.5);
+      row.appendChild(mark);
+
+      const main = U.el('div', 'row-main');
+      const name = U.el('div', 'row-name');
+      const nm = U.el('span', null, c.name);
+      nm.style.color = c.tint;
+      name.appendChild(nm);
+      const dur = U.el('span', 'tag', Math.round(c.dur[0] / 60) + '–' + Math.round(c.dur[1] / 60) + ' min');
+      name.appendChild(dur);
+      main.appendChild(name);
+      main.appendChild(U.el('div', 'row-desc', c.blurb));
+
+      // the actual numbers, so the price can be judged against them
+      const mods = U.el('div', 'stat-grid');
+      const LABEL = { bite: 'bites', rare: 'rarity', trait: 'traits', treasure: 'salvage',
+                      encounter: 'encounters', size: 'size', value: 'value', secret: 'hidden water',
+                      'void': 'void' };
+      for (const k in c.mods) {
+        const v = c.mods[k];
+        if (v === 1) continue;
+        // a bite modifier under 1 means sooner, which is better, not worse
+        const better = k === 'bite' ? v < 1 : v > 1;
+        const shown = k === 'bite' ? (v < 1 ? '×' + (1 / v).toFixed(2) + ' faster' : '×' + v.toFixed(2) + ' slower')
+                                   : '×' + v.toFixed(2);
+        mods.appendChild(statCell(LABEL[k] || k, shown, better ? 1 : -1));
+      }
+      main.appendChild(mods);
+      row.appendChild(main);
+
+      const side = U.el('div', 'row-side');
+      side.appendChild(priceEl(cost, can));
+      const buy = U.el('button', 'btn btn-sm' + (can ? ' btn-primary' : ''), 'Charter');
+      buy.disabled = !can;
+      buy.addEventListener('click', function () {
+        const res = VF.charter.buy(c.id);
+        if (!res.ok) {
+          VF.audio.error();
+          VF.toast.plain(res.why === 'money' ? 'not enough Jias'
+            : res.why === 'busy' ? 'the water is already busy'
+            : res.why === 'fishing' ? 'land it first' : 'not here', 'warn');
+          return;
+        }
+        VF.audio.sell();
+        VF.toast.show('the water turns — <strong>' + U.esc(c.name) + '</strong>', 'good', 4200);
+        close();
+      });
+      side.appendChild(buy);
+      row.appendChild(side);
+      list.appendChild(row);
+    });
+
+    wrap.appendChild(list);
+    return wrap;
+  }
 
   function charmIcon(c, size) {
     const cv = U.el('canvas');
@@ -537,7 +1038,7 @@
       const row = U.el('div', 'row' + (own ? ' owned' : '') + (levelOk ? '' : ' locked') +
                               (VF.charms.isEquipped(c.id) ? ' equipped' : ''));
       const mark = U.el('div', 'row-mark');
-      mark.style.background = VF.rarities.color(c.rarity);
+      VF.rarities.paint(mark, c.rarity, 'background');
       row.appendChild(mark);
 
       const iconBox = U.el('div', 'rod-art-box');
@@ -553,7 +1054,7 @@
       const name = U.el('div', 'row-name');
       name.appendChild(U.el('span', null, c.name));
       const kt = U.el('span', 'tag', c.kind);
-      kt.style.color = VF.rarities.color(c.rarity);
+      VF.rarities.paint(kt, c.rarity, 'color');
       name.appendChild(kt);
       if (VF.charms.isEquipped(c.id)) {
         const t = U.el('span', 'tag', 'worn'); t.style.color = 'var(--accent)'; name.appendChild(t);
@@ -701,13 +1202,16 @@
       main.appendChild(U.el('div', 'case-blurb', levelOk ? c.blurb : 'requires level ' + c.level));
 
       const odds = U.el('div', 'odds');
+      /* Every tier the case can actually pay, including the two the old list
+         stopped short of — a case that promises two in a hundred thousand of
+         something has to say so, or the tier is a rumour. */
       const eff = VF.cases.effectiveOdds(c);
-      ['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic'].forEach(function (r) {
+      VF.cases.TIERS.forEach(function (r) {
         const pc = eff[r] * 100;
         if (pc <= 0) return;
         const sp = U.el('span', null, VF.rarities.get(r).name + ' ' +
-          (pc >= 1 ? pc.toFixed(1) : pc.toFixed(2)) + '%');
-        sp.style.color = VF.rarities.color(r);
+          (pc >= 1 ? pc.toFixed(1) : pc >= 0.01 ? pc.toFixed(2) : pc.toFixed(4)) + '%');
+        VF.rarities.paint(sp, r, 'color');
         odds.appendChild(sp);
       });
       main.appendChild(odds);
@@ -756,7 +1260,7 @@
 
   function buildWardrobe(tab) {
     const d = VF.state.data;
-    const comp = VF.cosmetics.completion();
+    const comp = VF.cosmetics.gearCompletion();
     const p = shell('Wardrobe', comp.have + ' of ' + comp.total + ' owned · ' +
                     Math.round(comp.pct * 100) + '% complete');
     const items = [{ id: 'all', label: 'all' }].concat(
@@ -773,7 +1277,12 @@
     spacer.style.height = '14px';
     b.appendChild(spacer);
 
-    const list = VF.cosmetics.list.filter(function (c) { return tab === 'all' || c.slot === tab; });
+    /* Gear only. The room's backdrops and plinths are cosmetics in every
+       other respect — same cases, same ownership, same rarity — but they are
+       fitted in the aquarium's own cabinet, because filing a tank backdrop in
+       a tab next to a rod finish files it by what it is made of rather than by
+       what it is for. */
+    const list = VF.cosmetics.gear.filter(function (c) { return tab === 'all' || c.slot === tab; });
     list.sort(function (a, c) {
       const ra = VF.rarities.rank(a.rarity), rc = VF.rarities.rank(c.rarity);
       if (ra !== rc) return rc - ra;
@@ -786,7 +1295,7 @@
       const on = VF.cosmetics.equippedIn(c.slot) === c;
       const cell = U.el('div', 'cos-cell' + (own ? '' : ' locked') + (on ? ' on' : ''));
       const pip = U.el('div', 'cos-pip');
-      pip.style.background = VF.rarities.color(c.rarity);
+      VF.rarities.paint(pip, c.rarity, 'background');
       if (own) pip.style.boxShadow = '0 0 8px ' + U.rgbToCss(U.hexToRgb(VF.rarities.get(c.rarity).glow), 0.7);
       cell.appendChild(pip);
 
@@ -822,26 +1331,270 @@
 
   /* --------------------------------------------------- journal + people */
 
+  /* The board. Three standing requests, no timer on them, and the only place
+     in the game that ever asks for a fish by name. */
+  function boardView() {
+    const wrap = U.el('div');
+    VF.bounties.refresh();
+    const list = VF.bounties.list();
+
+    const note = U.el('div', 'board-note',
+      'People want particular things. They will wait.');
+    wrap.appendChild(note);
+
+    if (!list.length) {
+      wrap.appendChild(U.el('div', 'empty',
+        'nobody is asking for anything you could go and get yet.'));
+      return wrap;
+    }
+
+    list.forEach(function (bnt) {
+      const f = VF.fish.byId(bnt.fish);
+      if (!f) return;
+      const r = VF.rarities.get(f.rarity);
+      const done = VF.bounties.ready(bnt);
+      const row = U.el('div', 'bounty' + (done ? ' done' : ''));
+
+      const mark = U.el('div', 'bounty-mark');
+      mark.style.background = done ? 'var(--good)' : r.color;
+      row.appendChild(mark);
+
+      const art = U.el('canvas', 'bounty-art');
+      art.width = 168; art.height = 84;
+      const g = art.getContext('2d');
+      g.save(); g.translate(84, 42);
+      const got = !!VF.state.data.fishdex[f.id];
+      if (got) VF.fishArt.draw(g, f, VF.fishArt.fitSize(f, 84, false), { time: 0.3 });
+      else { g.globalAlpha = 0.34; VF.fishArt.drawSilhouette(g, f, VF.fishArt.fitSize(f, 84, false), 0.85); }
+      g.restore();
+      row.appendChild(art);
+
+      const main = U.el('div', 'bounty-main');
+      const who = VF.npcs.get(bnt.who);
+      const head = U.el('div', 'bounty-who', (who ? who.name : 'somebody') + ' wants');
+      main.appendChild(head);
+
+      /* The name, whether or not it is in the record. Somebody asking you for
+         a fish tells you which fish — the silhouette above is you not knowing
+         what it looks like yet, which is a different thing and the interesting
+         one. A board that says ????? is not a request, it is a riddle. */
+      const nm = U.el('div', 'bounty-name', f.name + (bnt.want > 1 ? ' ×' + bnt.want : ''));
+      nm.style.color = r.color;
+      main.appendChild(nm);
+
+      const where = f.locs.length ? VF.locations.get(f.locs[0]).name.toLowerCase() : 'anywhere';
+      main.appendChild(U.el('div', 'bounty-where', r.name.toLowerCase() + ' · ' + where));
+
+      const track = U.el('div', 'bounty-track');
+      const fill = U.el('div', 'bounty-fill');
+      fill.style.width = (Math.min(1, bnt.have / bnt.want) * 100) + '%';
+      if (done) fill.style.background = 'var(--good)';
+      track.appendChild(fill);
+      main.appendChild(track);
+      main.appendChild(U.el('div', 'bounty-n', bnt.have + ' / ' + bnt.want));
+      row.appendChild(main);
+
+      const acts = U.el('div', 'bounty-acts');
+      acts.appendChild(U.el('div', 'bounty-pay', '◇ ' + U.money(bnt.pay)));
+      if (done) {
+        const hand = U.el('button', 'btn btn-sm btn-primary', 'Hand it over');
+        hand.addEventListener('click', function () {
+          const res = VF.bounties.claim(bnt.id);
+          VF.audio.sell();
+          if (res) VF.toast.plain('◇ ' + U.money(res.pay) + ' — that is what they wanted', 'good', 3000);
+          refresh('board');
+        });
+        acts.appendChild(hand);
+      } else {
+        const give = U.el('button', 'btn btn-sm', 'Pass');
+        give.title = 'Take it off the board. Somebody will ask for something else.';
+        give.addEventListener('click', function () {
+          VF.audio.click();
+          VF.bounties.drop(bnt.id);
+          refresh('board');
+        });
+        acts.appendChild(give);
+      }
+      row.appendChild(acts);
+      wrap.appendChild(row);
+    });
+    return wrap;
+  }
+
+  /* Leads, and the expeditions they open into. What the player is currently
+     chasing, in the order they could act on it. */
+  function leadsView(b, leads) {
+    const d = VF.state.data;
+    const run = VF.expedition ? VF.expedition.current() : null;
+
+    if (run) {
+      b.appendChild(U.el('div', 'panel-note', 'under way'));
+      b.appendChild(expCard({ def: run.def, started: 1, done: 0, leg: run.rec.leg, open: 1 }, run));
+    }
+
+    if (!leads.length) {
+      /* Only when this is the whole of what the panel has to say. Inside the
+         threads list an empty leads section is just an empty section. */
+      if (!b.childElementCount) {
+        b.appendChild(U.el('div', 'empty',
+          'nothing is pointing anywhere yet. strange catches leave clues, and clues point somewhere.'));
+      }
+    } else {
+      leads.forEach(function (l) {
+        const card = U.el('div', 'lead' + (l.ready ? ' ready' : ''));
+        card.appendChild(U.el('div', 'lead-name', l.def.name));
+        card.appendChild(U.el('div', 'lead-note', l.def.note));
+        const where = l.def.where ? VF.locations.get(l.def.where).name : 'anywhere';
+        const need = U.el('div', 'lead-need' + (l.ready ? ' met' : ''),
+          where.toLowerCase() + (l.def.need ? ' · ' + l.def.need : '') +
+          (l.ready ? ' · you are standing in it' : ''));
+        card.appendChild(need);
+        b.appendChild(card);
+      });
+    }
+
+    /* Expeditions that a lead has opened but that are not running. */
+    const offer = VF.expedition ? VF.expedition.offered().filter(function (x) {
+      return x.open && !x.started;
+    }) : [];
+    if (offer.length) {
+      b.appendChild(U.el('div', 'panel-note', 'expeditions'));
+      offer.forEach(function (x) { b.appendChild(expCard(x, null)); });
+    }
+    /* Finished expeditions used to be listed underneath the open ones. A
+       list of things you are doing should not be mostly things you have
+       already done — they are on the field tab, with the rest of the record. */
+  }
+
+  function expCard(x, run) {
+    const def = x.def;
+    const card = U.el('div', 'exp' + (x.started && !x.done ? ' running' : ''));
+    const head = U.el('div', 'exp-head');
+    head.appendChild(U.el('span', 'exp-name', def.name));
+    head.appendChild(U.el('span', 'exp-stage',
+      x.done ? 'done' : x.started ? 'leg ' + (x.leg + 1) + ' of ' + def.legs.length : 'ready'));
+    card.appendChild(head);
+    card.appendChild(U.el('div', 'exp-obj', def.objective));
+
+    const legs = U.el('div', 'exp-legs');
+    def.legs.forEach(function (_, i) {
+      legs.appendChild(U.el('div', 'exp-leg' +
+        (i < x.leg ? ' done' : i === x.leg && x.started && !x.done ? ' now' : '')));
+    });
+    card.appendChild(legs);
+
+    if (x.started && !x.done && run && run.leg) {
+      card.appendChild(U.el('div', 'exp-obj', run.leg.task));
+      const w = run.leg.at ? VF.locations.get(run.leg.at).name : 'anywhere';
+      card.appendChild(U.el('div', 'exp-where',
+        w.toLowerCase() + (run.leg.hint ? ' · ' + run.leg.hint : '')));
+    } else if (!x.started) {
+      card.appendChild(U.el('div', 'exp-where', def.need));
+      const btn = U.el('button', 'mod-buy', 'begin');
+      btn.addEventListener('click', function () {
+        if (VF.expedition.begin(def.id)) refresh('leads');
+      });
+      card.appendChild(btn);
+    }
+    return card;
+  }
+
+  /* The field notes: what has been met, and what it did. A creature that has
+     escaped but never been landed is listed with what is known about it,
+     which is the escape line and nothing else. */
+  function fieldView(b) {
+    const d = VF.state.data;
+    const seen = VF.creatureData.list.filter(function (c) {
+      return (d.creatures || {})[c.id];
+    });
+    if (!seen.length) {
+      b.appendChild(U.el('div', 'empty',
+        'nothing has happened to you yet that was not a fish.'));
+      return;
+    }
+    const cc = VF.creatureData.counts();
+    b.appendChild(U.el('div', 'panel-note',
+      cc.caught + ' landed · ' + cc.met + ' met · ' + cc.total + ' out there'));
+    seen.forEach(function (c) {
+      const r = d.creatures[c.id];
+      const card = U.el('div', 'exp' + (r.caught ? ' running' : ''));
+      const head = U.el('div', 'exp-head');
+      head.appendChild(U.el('span', 'exp-name', r.caught ? c.name : '???'));
+      head.appendChild(U.el('span', 'exp-stage',
+        r.caught ? 'landed ×' + r.caught : 'met ×' + r.met));
+      card.appendChild(head);
+      card.appendChild(U.el('div', 'exp-obj', r.caught ? c.journal : c.blurb));
+      const f = U.el('div', 'exp-found');
+      if (r.escaped) f.appendChild(U.el('span', 'exp-chip', 'got away ×' + r.escaped));
+      if (c.on.locs.length && r.caught) {
+        c.on.locs.forEach(function (l) {
+          f.appendChild(U.el('span', 'exp-chip', VF.locations.get(l).name.toLowerCase()));
+        });
+      }
+      if (f.childElementCount) card.appendChild(f);
+      b.appendChild(card);
+    });
+  }
+
   function buildJournal(tab) {
+    /* Saved state and old deep links can still name the tab that used to
+       exist. It is the threads list now. Redirected here rather than in the
+       body below, so nothing renders twice. */
+    if (tab === 'leads') tab = 'quests';
     const d = VF.state.data;
     const p = shell('Journal', d.journal.length + ' entries · ' +
                     Object.keys(d.secrets).length + ' hidden places found');
     const qn = VF.quests.activeCount();
+    const bn = VF.bounties.list().length;
+    /* A lead, a creature and an expedition are all the same thing to the
+       player — something written down that they have not finished — so they
+       live in the journal rather than in panels of their own. */
+    const leads = VF.discovery ? VF.discovery.open() : [];
+    const ready = leads.filter(function (l) { return l.ready; }).length;
+    const cc = VF.creatureData ? VF.creatureData.counts() : { met: 0, caught: 0 };
+    /* This had seven tabs. Three of them — quests, leads, field — were three
+       lists of the same sentence: a thing you are part way through and have
+       not finished. A player looking for "what am I supposed to be doing"
+       had to check three places and hold the difference between a quest, a
+       lead and an expedition in their head, and the difference is an
+       implementation detail of this codebase. They are one list now, in the
+       order you would want them: what is ready, then what is open, then what
+       is waiting on somebody. */
+    const openN = qn + leads.length;
     p.appendChild(tabs([
-      { id: 'quests', label: 'quests' + (qn ? ' ' + qn : '') },
+      { id: 'quests', label: 'threads' + (ready ? ' •' : (openN ? ' ' + openN : '')) },
+      { id: 'field', label: 'field' + (cc.met ? ' ' + cc.met : '') },
+      { id: 'board', label: 'board' + (VF.bounties.anyReady() ? ' •' : (bn ? ' ' + bn : '')) },
       { id: 'entries', label: 'entries' },
       { id: 'people', label: 'people' + (VF.npcs.anyNew() ? ' •' : '') },
       { id: 'records', label: 'records' }
     ], tab, function (t) { refresh(t); }));
     const b = body();
 
+    if (tab === 'board') { b.appendChild(boardView()); p.appendChild(b); return p; }
+    if (tab === 'field') { fieldView(b); p.appendChild(b); return p; }
+
     if (tab === 'quests') {
       const open = VF.quests.visible();
-      if (!open.length) {
+      /* Threads that have not opened, and what each is waiting for. Without
+         this a quest becomes available in silence and the only way to find out
+         is to go round talking to everybody again on the off chance. */
+      const soon = VF.quests.locked();
+      if (!open.length && !soon.length && !leads.length) {
         b.appendChild(U.el('div', 'empty',
           'nothing is asking anything of you yet. keep fishing, and talk to people.'));
       } else {
         open.forEach(function (v) { b.appendChild(questCard(v)); });
+        if (leads.length) {
+          if (open.length) b.appendChild(U.el('div', 'quest-sep', 'and these'));
+          leadsView(b, leads);
+        }
+        if (soon.length) {
+          const h = U.el('div', 'quest-sep',
+                         (open.length || leads.length) ? 'not yet' : 'somebody has something to say');
+          b.appendChild(h);
+          soon.forEach(function (l) { b.appendChild(lockedCard(l)); });
+        }
       }
     } else if (tab === 'entries') {
       if (!d.journal.length) {
@@ -933,6 +1686,51 @@
     return p;
   }
 
+  /* A thread that has not opened: who is carrying it, what it is about, and
+     the list of what is still missing with how far along each one is. The list
+     is the quest's own — the same one the engine tests — so it cannot say one
+     thing and require another. */
+  function lockedCard(l) {
+    const def = l.def;
+    const card = U.el('div', 'quest locked' + (l.ready ? ' ready' : ''));
+
+    const head = U.el('div', 'quest-head');
+    head.appendChild(U.el('span', 'quest-name', l.ready ? def.name : '?????'));
+    if (def.difficulty) {
+      const t = U.el('span', 'quest-tag', def.difficulty);
+      t.style.color = 'var(--ink-4)';
+      head.appendChild(t);
+    }
+    head.appendChild(U.el('span', 'quest-of',
+      l.ready ? 'go and see ' + VF.npcs.name(def.giver).toLowerCase()
+              : VF.npcs.name(def.giver).toLowerCase()));
+    card.appendChild(head);
+    card.appendChild(U.el('div', 'quest-blurb', l.ready ? def.blurb : (def.rumour || def.blurb)));
+
+    if (l.ready) {
+      card.appendChild(U.el('div', 'quest-where',
+        VF.npcs.name(def.giver).toLowerCase() + ' is waiting to say it'));
+      return card;
+    }
+
+    const list = U.el('div', 'quest-check');
+    l.needs.forEach(function (n) {
+      const row = U.el('div', 'quest-need' + (n.done ? ' done' : ''));
+      row.appendChild(U.el('span', 'quest-box', n.done ? '✓' : ''));
+      const main = U.el('div');
+      main.appendChild(U.el('span', null, n.label));
+      if (n.note) main.appendChild(U.el('div', 'quest-need-note', n.note));
+      row.appendChild(main);
+      if (n.need > 1) {
+        row.appendChild(U.el('span', 'quest-need-at',
+          U.commas(Math.min(n.have, n.need)) + ' / ' + U.commas(n.need)));
+      }
+      list.appendChild(row);
+    });
+    card.appendChild(list);
+    return card;
+  }
+
   /* One quest, and where in it the player currently is. Everything drawn here
      comes off the quest definition, so a second quest needs no new UI. */
   function questCard(v) {
@@ -1011,6 +1809,97 @@
 
   /* ------------------------------------------------------------- fishdex */
 
+  /* Which waters the index can talk about: the ones the player has been to.
+     A spot they have not found is not a gap in their record, it is a place
+     that does not exist yet. */
+  function dexWaters() {
+    return VF.locations.list.filter(function (l) {
+      return VF.state.data.seenLocations.indexOf(l.id) >= 0 ||
+             VF.locations.isUnlocked(l.id);
+    });
+  }
+
+  /* One water: what lives in it, what comes up out of it, and how much of both
+     is in the record. The index is built around this now — a spot's roster is
+     its own, and seeing them side by side is the point of having eight of them. */
+  function waterCard(loc) {
+    const d = VF.state.data;
+    const here = d.location === loc.id;
+    const fish = VF.fish.nativeTo(loc.id).filter(function (f) { return !f.hidden || d.fishdex[f.id]; });
+    const home = fish.filter(function (f) { return f.locs[0] === loc.id; });
+    const got = fish.filter(function (f) { return !!d.fishdex[f.id]; }).length;
+    const objs = VF.treasureData.nativeTo(loc.id);
+    const sig = objs.filter(function (t) { return t.locs && t.locs.length === 1; });
+    const gotObj = objs.filter(function (t) { return (d.treasures[t.id] | 0) > 0; }).length;
+
+    const card = U.el('div', 'water' + (here ? ' here' : ''));
+    const head = U.el('div', 'water-head');
+    const mark = U.el('div', 'water-mark');
+    mark.style.background = loc.glow;
+    head.appendChild(mark);
+    const nm = U.el('div');
+    const line = U.el('div', 'water-name');
+    line.appendChild(U.el('span', null, loc.name));
+    if (here) {
+      const t = U.el('span', 'tag', 'here');
+      t.style.color = 'var(--accent)';
+      line.appendChild(t);
+    }
+    nm.appendChild(line);
+    nm.appendChild(U.el('div', 'water-tag', loc.tag));
+    head.appendChild(nm);
+    head.appendChild(U.el('div', 'water-of', got + ' / ' + fish.length));
+    card.appendChild(head);
+
+    const track = U.el('div', 'water-track');
+    const fill = U.el('div', 'water-fill');
+    fill.style.width = (fish.length ? got / fish.length * 100 : 0).toFixed(1) + '%';
+    fill.style.background = 'linear-gradient(90deg, ' +
+      U.rgbToCss(U.shade(U.hexToRgb(loc.glow), -0.45)) + ', ' + loc.glow + ')';
+    track.appendChild(fill);
+    card.appendChild(track);
+
+    /* The tier mix, which is most of what makes one water not another. */
+    const pips = U.el('div', 'water-tiers');
+    VF.rarities.visible().forEach(function (r) {
+      const n = fish.filter(function (f) { return f.rarity === r.id; }).length;
+      if (!n) return;
+      const pip = U.el('span', 'water-tier');
+      const dot = U.el('span', 'water-dot');
+      dot.style.background = r.color;
+      dot.style.boxShadow = '0 0 6px ' + U.rgbToCss(U.hexToRgb(r.glow), 0.6);
+      pip.appendChild(dot);
+      pip.appendChild(U.el('span', null, String(n)));
+      pip.title = n + ' ' + r.name.toLowerCase();
+      pips.appendChild(pip);
+    });
+    card.appendChild(pips);
+
+    const foot = U.el('div', 'water-foot');
+    foot.appendChild(U.el('span', null, home.length + ' live only here'));
+    foot.appendChild(U.el('span', null, gotObj + ' / ' + objs.length + ' objects'));
+    if (sig.length) {
+      const s1 = sig[0];
+      const has = (d.treasures[s1.id] | 0) > 0;
+      const el = U.el('span', 'water-sig');
+      el.appendChild(U.el('span', 'water-sig-k', 'only here'));
+      const v = U.el('span', null, has ? s1.name : '?????');
+      v.style.color = has ? s1.color : 'var(--ink-4)';
+      el.appendChild(v);
+      el.title = has ? s1.desc : 'one object comes up here and nowhere else';
+      foot.appendChild(el);
+    }
+    card.appendChild(foot);
+
+    const go = U.el('button', 'btn btn-sm', here ? 'Show its species' : 'Show its species');
+    go.addEventListener('click', function () {
+      dexTab = 'species'; dexLoc = loc.id; dexFilter = 'all';
+      VF.audio.click(); refresh();
+    });
+    card.appendChild(go);
+    return card;
+  }
+
   function buildDex() {
     const d = VF.state.data;
     /* Species in a hidden tier are not in the total, not in the filter row and
@@ -1019,9 +1908,51 @@
     const shown = VF.fish.knownList();
     const found = shown.filter(function (f) { return !!d.fishdex[f.id]; }).length;
     const p = shell('Fishdex', found + ' of ' + shown.length + ' species recorded');
+
+    p.appendChild(tabs([
+      { id: 'waters', label: 'waters' },
+      { id: 'species', label: 'species' }
+    ], dexTab, function (t) { dexTab = t; refresh(); }));
+
     const b = body();
 
+    if (dexTab === 'waters') {
+      const grid = U.el('div', 'water-grid');
+      dexWaters().forEach(function (l) { grid.appendChild(waterCard(l)); });
+      b.appendChild(grid);
+      /* And the ones that are not from anywhere, which is its own fact about
+         them rather than a hole in the record. */
+      const odd = VF.fish.unplaced().filter(function (f) { return !f.hidden || d.fishdex[f.id]; });
+      const oddGot = odd.filter(function (f) { return !!d.fishdex[f.id]; }).length;
+      const note = U.el('div', 'water-odd');
+      note.appendChild(U.el('div', 'water-odd-k', 'from no particular water'));
+      note.appendChild(U.el('div', 'water-odd-v', oddGot + ' / ' + odd.length +
+        ' — the wrong ones, and whatever a falling sky brings'));
+      const oddGo = U.el('button', 'btn btn-sm', 'Show them');
+      oddGo.addEventListener('click', function () {
+        dexTab = 'species'; dexLoc = 'none'; dexFilter = 'all';
+        VF.audio.click(); refresh();
+      });
+      note.appendChild(oddGo);
+      b.appendChild(note);
+      p.appendChild(b);
+      return p;
+    }
+
     const bar = U.el('div', 'dex-toolbar');
+
+    /* Which water's roster is on screen. This is the spine of the index now:
+       a spot's species are its own, and browsing all four hundred at once was
+       the only way to look at them. */
+    const segL = U.el('div', 'seg');
+    [{ id: 'all', label: 'Everywhere' }].concat(dexWaters().map(function (l) {
+      return { id: l.id, label: l.name.replace(/^The /, '') };
+    })).concat([{ id: 'none', label: 'Nowhere' }]).forEach(function (o) {
+      const btn = U.el('button', dexLoc === o.id ? 'active' : '', o.label);
+      btn.addEventListener('click', function () { dexLoc = o.id; VF.audio.click(); refresh(); });
+      segL.appendChild(btn);
+    });
+    bar.appendChild(segL);
     const segR = U.el('div', 'seg');
     [{ id: 'all', label: 'All' }].concat(VF.rarities.visible().map(function (r) {
       return { id: r.id, label: r.name };
@@ -1034,6 +1965,11 @@
         dot.style.cssText = 'display:inline-block;width:5px;height:5px;border-radius:50%;' +
           'margin-right:6px;vertical-align:middle;background:' + col +
           ';box-shadow:0 0 6px ' + U.rgbToCss(U.hexToRgb(VF.rarities.get(o.id).glow), 0.6);
+        // the one tier whose dot cannot be a hex
+        if (VF.rarities.rainbow(o.id)) {
+          dot.classList.add('bow-bg');
+          if (dexFilter === o.id) btn.classList.add('bow-fg');
+        }
         btn.insertBefore(dot, btn.firstChild);
       }
       btn.addEventListener('click', function () { dexFilter = o.id; VF.audio.click(); refresh(); });
@@ -1051,17 +1987,31 @@
     b.appendChild(bar);
 
     const list = shown.filter(function (f) {
+      if (dexLoc === 'none' && f.locs.length) return false;
+      if (dexLoc !== 'all' && dexLoc !== 'none' && f.locs.indexOf(dexLoc) < 0) return false;
       if (dexFilter !== 'all' && f.rarity !== dexFilter) return false;
       const has = !!d.fishdex[f.id];
       if (dexMode === 'found' && !has) return false;
       if (dexMode === 'missing' && has) return false;
       return true;
     });
+    /* Home water first, so a spot's own species lead and the ones that merely
+       range in from next door follow. */
+    if (dexLoc !== 'all' && dexLoc !== 'none') {
+      list.sort(function (a, b) {
+        return (a.locs[0] === dexLoc ? 0 : 1) - (b.locs[0] === dexLoc ? 0 : 1);
+      });
+    }
 
     const cnt = U.el('div', 'dex-count', list.length + ' shown');
     bar.appendChild(cnt);
 
     if (!list.length) { b.appendChild(U.el('div', 'empty', 'Nothing here yet.')); p.appendChild(b); return p; }
+
+    /* Read once for the whole grid rather than per cell — it is the same
+       answer for every one of them, and there can be four hundred. */
+    const share = VF.loot.tierShare();
+    const THIN = 0.02;
 
     const grid = U.el('div', 'dex-grid');
     list.forEach(function (f, i) {
@@ -1081,7 +2031,7 @@
       cv.width = 240; cv.height = 132;
       const g = cv.getContext('2d');
       g.save(); g.translate(120, 66);
-      const sz = VF.fishArt.fitSize(f, 118);
+      const sz = VF.fishArt.fitSize(f, 118, false);
       if (has) VF.fishArt.draw(g, f, sz, { time: i * 0.7 });
       else { g.globalAlpha = 0.34; VF.fishArt.drawSilhouette(g, f, sz, 0.85); }
       g.restore();
@@ -1093,6 +2043,16 @@
         ? (entry.record ? U.weight(entry.record.kg) + ' · ×' + entry.caught +
             (nTraits ? ' · ' + nTraits + 't' : '') : '×' + entry.caught)
         : r.name));
+
+      /* Why a gap is a gap. A tier the current loadout has all but stopped
+         drawing is the commonest reason a species stays missing, and the game
+         never said so — the fix is to fish down, and nothing pointed at it. */
+      if (!has && share[f.rarity] !== undefined && share[f.rarity] < THIN) {
+        const w = U.el('div', 'dex-thin',
+          share[f.rarity] < THIN * 0.1 ? 'your gear has stopped finding these'
+                                       : 'rare on this loadout');
+        cell.appendChild(w);
+      }
 
       if (has) {
         cell.addEventListener('click', function () { VF.audio.click(); showDexDetail(f, entry); });
@@ -1119,7 +2079,7 @@
     const g = cv.getContext('2d');
     g.save(); g.translate(200, 84);
     // objects are boxier than any fish, so the hero has to be fitted, not fixed
-    VF.fishArt.draw(g, f, Math.min(62, VF.fishArt.fitSize(f, cv.height)),
+    VF.fishArt.draw(g, f, Math.min(62, VF.fishArt.fitSize(f, cv.height, false)),
                     { time: 1.2, mutation: entry.record ? entry.record.mutation : null });
     g.restore();
     hero.appendChild(cv);
@@ -1128,6 +2088,26 @@
     const bd = U.el('div', 'catch-body');
     bd.appendChild(U.el('h2', 'catch-name', f.name));
     bd.appendChild(U.el('p', 'catch-desc', f.desc));
+
+    /* And what catching it repeatedly taught you. Only for the species that
+       have any written — the record does not promise a paragraph it does not
+       have, and a locked line for four hundred species that will never fill
+       is worse than no line at all. */
+    if (VF.lore.has(f.id)) {
+      const caught = entry.caught | 0;
+      VF.lore.unlocked(f.id, caught).forEach(function (l) {
+        const para = U.el('p', 'catch-desc lore');
+        const tag = U.el('span', 'lore-at', '×' + l.at);
+        para.appendChild(tag);
+        para.appendChild(document.createTextNode(l.text));
+        bd.appendChild(para);
+      });
+      const nxt = VF.lore.next(f.id, caught);
+      if (nxt) {
+        bd.appendChild(U.el('p', 'lore-soon',
+          'something else at ' + nxt + ' — ' + caught + ' so far'));
+      }
+    }
 
     const m = U.el('div', 'catch-metrics');
     m.appendChild(metricEl('Record', entry.record ? U.weight(entry.record.kg) : '—'));
@@ -1192,17 +2172,178 @@
 
   /* ----------------------------------------------------------------- bag */
 
+  /* One catch per mount, drawn at the size it was, with what it weighed and
+     what it was carrying on the plate. The wall is where a fish stops being
+     inventory. */
+  function wallView() {
+    const d = VF.state.data;
+    const wrap = U.el('div');
+    const n = VF.wall.mounts();
+    const up = VF.wall.list();
+
+    const head = U.el('div', 'wall-head');
+    head.appendChild(U.el('span', null, up.length + ' of ' + n + ' mounted'));
+    if (VF.wall.nextAt()) {
+      head.appendChild(U.el('span', 'wall-next', 'another at level ' + VF.wall.nextAt()));
+    }
+    if (up.length) head.appendChild(U.el('span', 'wall-worth', '◇ ' + U.money(VF.wall.value())));
+    wrap.appendChild(head);
+
+    const grid = U.el('div', 'wall-grid');
+    for (let i = 0; i < n; i++) {
+      const k = up[i];
+      const cell = U.el('div', 'mount' + (k ? '' : ' bare'));
+      if (!k) {
+        cell.appendChild(U.el('div', 'mount-empty', 'empty'));
+        grid.appendChild(cell);
+        continue;
+      }
+      const f = VF.fish.byId(k.id);
+      const r = VF.rarities.get((f && f.rarity) || k.rarity || 'common');
+
+      const cv = U.el('canvas', 'mount-art');
+      cv.width = 320; cv.height = 150;
+      const g = cv.getContext('2d');
+      g.save(); g.translate(160, 72);
+      if (f) VF.fishArt.draw(g, f, VF.fishArt.fitSize(f, 150, false), { time: i * 0.9, traits: k.traits || [] });
+      g.restore();
+      cell.appendChild(cv);
+
+      const plate = U.el('div', 'mount-plate');
+      const nm = U.el('div', 'mount-name', f ? f.name : k.id);
+      nm.style.color = r.color;
+      plate.appendChild(nm);
+      plate.appendChild(U.el('div', 'mount-kg', U.weight(k.kg) + ' · ' + U.length(k.m)));
+      const tr = (k.traits || []).map(function (t) { return VF.traits.get(t); }).filter(Boolean);
+      if (tr.length) {
+        const row = U.el('div', 'mount-traits');
+        tr.forEach(function (t) {
+          const chip = U.el('span', 'mount-trait', t.name.toLowerCase());
+          chip.style.color = t.color;
+          chip.style.borderColor = U.rgbToCss(U.hexToRgb(t.color), 0.45);
+          row.appendChild(chip);
+        });
+        plate.appendChild(row);
+      }
+      plate.appendChild(U.el('div', 'mount-where',
+        (VF.locations.get(k.location) || {}).name || ''));
+      cell.appendChild(plate);
+
+      const acts = U.el('div', 'mount-acts');
+      const down = U.el('button', 'btn btn-sm', 'Take down');
+      down.addEventListener('click', function () {
+        VF.audio.click();
+        if (!VF.wall.unmount(i)) VF.toast.plain('the bag is full', 'warn', 2200);
+        refresh('wall');
+      });
+      acts.appendChild(down);
+      if (!VF.runs || VF.runs.sellAllowed()) {
+        const sellIt = U.el('button', 'btn btn-sm', 'Sell ◇ ' + U.money(k.value));
+        sellIt.addEventListener('click', function () {
+          VF.wall.sell(i);
+          refresh('wall');
+        });
+        acts.appendChild(sellIt);
+      }
+      cell.appendChild(acts);
+      grid.appendChild(cell);
+    }
+    wrap.appendChild(grid);
+
+    /* And what is in the bag that could go up there. */
+    if (!VF.wall.full() && d.kept.length) {
+      wrap.appendChild(U.el('div', 'wall-sub', 'in the bag'));
+      const pick = U.el('div', 'wall-pick');
+      d.kept.slice().reverse().slice(0, 24).forEach(function (k) {
+        const realIndex = d.kept.indexOf(k);
+        const f = VF.fish.byId(k.id);
+        const btn = U.el('button', 'wall-pick-row');
+        btn.appendChild(U.el('span', 'wall-pick-name', f ? f.name : k.id));
+        btn.appendChild(U.el('span', 'wall-pick-kg', U.weight(k.kg)));
+        btn.addEventListener('click', function () {
+          VF.audio.click();
+          VF.wall.mount(realIndex);
+          refresh('wall');
+        });
+        pick.appendChild(btn);
+      });
+      wrap.appendChild(pick);
+    } else if (VF.wall.full()) {
+      wrap.appendChild(U.el('div', 'wall-sub', 'the wall is full. take one down to put another up.'));
+    } else {
+      wrap.appendChild(U.el('div', 'wall-sub', 'nothing kept. keep a catch and it can go up here.'));
+    }
+    return wrap;
+  }
+
+  /* What the objects are for. It lives on the salvage tab because that is
+     where the objects already are — a separate crafting screen would be a
+     second place to look for the same tally. */
+  function makeList() {
+    const wrap = U.el('div', 'make');
+    wrap.appendChild(U.el('div', 'make-k', 'some of it goes together'));
+
+    const list = U.el('div', 'make-list');
+    VF.recipes.list.forEach(function (r) {
+      const can = VF.recipes.canMake(r);
+      const row = U.el('div', 'make-row' + (can ? ' can' : ''));
+
+      const main = U.el('div', 'make-main');
+      const head = U.el('div', 'make-name');
+      head.appendChild(U.el('span', null, r.name));
+      const gv = U.el('span', 'make-gives', VF.recipes.reward(r));
+      head.appendChild(gv);
+      main.appendChild(head);
+      main.appendChild(U.el('div', 'make-desc', r.desc));
+
+      const need = U.el('div', 'make-need');
+      for (const k in r.need) {
+        const t = VF.treasureData.get(k);
+        const have = VF.recipes.have(k);
+        const want = r.need[k];
+        const chip = U.el('span', 'make-chip' + (have >= want ? ' ok' : ''));
+        chip.textContent = (t ? t.name.toLowerCase() : k) + ' ' + Math.min(have, want) + '/' + want;
+        need.appendChild(chip);
+      }
+      main.appendChild(need);
+      row.appendChild(main);
+
+      const acts = U.el('div', 'make-acts');
+      if (can) {
+        const go = U.el('button', 'btn btn-sm btn-primary', 'Make');
+        go.addEventListener('click', function () {
+          const made = VF.recipes.make(r.id);
+          if (made) {
+            VF.audio.discover();
+            VF.toast.plain(VF.recipes.reward(made).toLowerCase() + ' — made', 'good', 3000);
+          }
+          refresh('salvage');
+        });
+        acts.appendChild(go);
+      } else {
+        acts.appendChild(U.el('div', 'make-why', VF.recipes.blocked(r) || ''));
+      }
+      row.appendChild(acts);
+      list.appendChild(row);
+    });
+    wrap.appendChild(list);
+    return wrap;
+  }
+
   function buildBag(tab) {
     const d = VF.state.data;
     const p = shell('Bag', 'What you are carrying');
     p.appendChild(tabs([
       { id: 'catches', label: 'catches (' + d.kept.length + ')' },
+      { id: 'wall', label: 'wall (' + VF.wall.count() + '/' + VF.wall.mounts() + ')' },
       { id: 'rods', label: 'rods' },
       { id: 'bait', label: 'bait' },
       { id: 'charms', label: 'charms' },
-      { id: 'salvage', label: 'salvage' }
+      { id: 'salvage', label: 'salvage' + (VF.recipes.anyReady() ? ' •' : '') }
     ], tab, function (t) { refresh(t); }));
     const b = body();
+
+    if (tab === 'wall') { b.appendChild(wallView()); p.appendChild(b); return p; }
 
     if (tab === 'charms') {
       b.appendChild(slotStrip());
@@ -1215,7 +2356,7 @@
           const eqd = VF.charms.isEquipped(c.id);
           const row = U.el('div', 'row row-rod' + (eqd ? ' equipped' : ' owned'));
           const mark = U.el('div', 'row-mark');
-          mark.style.background = VF.rarities.color(c.rarity);
+          VF.rarities.paint(mark, c.rarity, 'background');
           row.appendChild(mark);
           const iconBox = U.el('div', 'rod-art-box');
           iconBox.style.cssText = 'width:84px;flex:0 0 84px;display:grid;place-items:center';
@@ -1225,7 +2366,7 @@
           const nm = U.el('div', 'row-name');
           nm.appendChild(U.el('span', null, c.name));
           const kt = U.el('span', 'tag', c.kind);
-          kt.style.color = VF.rarities.color(c.rarity);
+          VF.rarities.paint(kt, c.rarity, 'color');
           nm.appendChild(kt);
           main.appendChild(nm);
           main.appendChild(U.el('div', 'row-desc', c.desc));
@@ -1249,6 +2390,7 @@
         b.appendChild(list);
       }
     } else if (tab === 'salvage') {
+      b.appendChild(makeList());
       const ids = Object.keys(d.treasures);
       if (!ids.length) {
         b.appendChild(U.el('div', 'empty', 'nothing but fish so far.'));
@@ -1259,7 +2401,7 @@
           const cell = U.el('div', 'cos-cell' + (n ? '' : ' locked'));
           cell.style.cursor = 'default';
           const pip = U.el('div', 'cos-pip');
-          pip.style.background = VF.rarities.color(t.rarity);
+          VF.rarities.paint(pip, t.rarity, 'background');
           cell.appendChild(pip);
           const cv = U.el('canvas', 'cos-art');
           cv.width = 236; cv.height = 108;
@@ -1360,11 +2502,7 @@
           row.appendChild(main);
           const side = U.el('div', 'row-side');
           if (d.rod !== rod.id) {
-            const btn = U.el('button', 'btn btn-sm btn-primary', 'Equip');
-            btn.addEventListener('click', function () {
-              d.rod = rod.id; VF.audio.click(); VF.bus.emit('gear:changed'); VF.save.save(); refresh('rods');
-            });
-            side.appendChild(btn);
+            side.appendChild(equipButton(rod, function () { refresh('rods'); }, ' btn-primary'));
           }
           row.appendChild(side);
           list.appendChild(row);
@@ -1372,7 +2510,7 @@
       b.appendChild(list);
     } else {
       const list = U.el('div', 'list');
-      VF.bait.list.forEach(function (bt) {
+      VF.bait.available().forEach(function (bt) {
         const have = VF.bait.count(bt.id);
         if (!bt.unlimited && have <= 0) return;
         const row = U.el('div', 'row' + (d.bait === bt.id ? ' equipped' : ''));
@@ -1424,17 +2562,31 @@
       const rare = VF.fish.byId(s.rarestFish);
       const tiles = [
         ['Fish landed', U.commas(s.catches), U.commas(s.casts) + ' casts'],
+        (d.level >= VF.progression.MAX_LEVEL
+          ? ['Fathoms', U.commas(d.fathoms | 0),
+             U.commas(d.fathomXp | 0) + ' / ' + U.commas(VF.progression.FATHOM_XP) + ' to the next']
+          : ['Level', String(d.level), U.commas(d.xp) + ' / ' + U.commas(VF.progression.xpToNext())]),
         ['Discovered', Object.keys(d.fishdex).length + ' / ' + VF.fish.count, 'species'],
         ['Biggest catch', s.biggestKg ? U.weight(s.biggestKg) : '—', big ? big.name : ''],
         ['Rarest catch', rare ? VF.rarities.get(rare.rarity).name : '—', rare ? rare.name : ''],
         ['Total earned', '◈ ' + U.money(s.earned), '◈ ' + U.money(s.spent) + ' spent'],
         ['Fish sold', U.commas(s.sold), U.commas(s.released) + ' released'],
         ['Legendary+', U.commas(s.legendaryCatches), U.commas(s.voidCatches) + ' void'],
+        /* The two rarest tiers were counted and never shown anywhere. A tier
+           you can catch and cannot see the count of may as well not be kept. */
+        ['!@#$%^&$#', U.commas(s.glitchCatches | 0),
+         (s.unknownCatches | 0) ? U.commas(s.unknownCatches | 0) + ' of the other thing' : 'and one tier above it'],
         ['Mutations', U.commas(s.mutationsFound), U.commas(s.recordsBroken) + ' records broken'],
         ['Escapes', U.commas(s.escapes), U.commas(s.linesSnapped) + ' lines snapped'],
         ['Clean fights', U.commas(s.perfectReels), 'never in the red'],
+        ['Second chances', U.commas(s.secondChances | 0), 'the rod would not have it'],
         ['Encounters', U.commas(s.encounters), 'something below'],
-        ['Time at the water', U.duration(s.playSeconds), 'reputation ' + U.commas(d.reputation)]
+        /* Reputation stops paying into luck at 480 and nothing said so, which
+           made releasing quietly worthless from a point nobody could see. */
+        ['Reputation', U.commas(d.reputation),
+         d.reputation >= VF.progression.REP_FULL ? 'the water knows you'
+           : Math.round(d.reputation / VF.progression.REP_FULL * 100) + '% of what it is worth'],
+        ['Time at the water', U.duration(s.playSeconds), 'longest run ' + U.commas(d.records.bestStreak | 0)]
       ];
       tiles.forEach(function (t) {
         const tile = U.el('div', 'stat-tile');
@@ -1454,6 +2606,25 @@
         const main = U.el('div');
         main.appendChild(U.el('div', 'ach-name', hidden ? '??????' : a.name));
         main.appendChild(U.el('div', 'ach-desc', hidden ? 'Hidden' : a.desc));
+        /* How far along, for the ones that count something. Not for the
+           hidden ones — a bar creeping toward a target nobody has been told
+           about would give away that there is one, and the blankness is the
+           effect. And not for the ones already earned. */
+        /* A bar that reads 0 / 1 is a bar saying "no". Only worth drawing
+           where there is a distance to show. */
+        if (!got && !hidden && a.count && a.count[1] > 1) {
+          let have = 0;
+          try { have = a.count[0](d) || 0; } catch (e) { have = 0; }
+          const target = a.count[1];
+          const k = U.clamp(have / target, 0, 1);
+          const bar = U.el('div', 'ach-prog');
+          const fill = U.el('div', 'ach-prog-fill');
+          fill.style.width = (k * 100).toFixed(1) + '%';
+          bar.appendChild(fill);
+          main.appendChild(bar);
+          main.appendChild(U.el('div', 'ach-prog-n',
+            U.commas(Math.min(Math.floor(have), target)) + ' / ' + U.commas(target)));
+        }
         if (a.reward) main.appendChild(U.el('div', 'ach-reward', '◈ ' + U.money(a.reward)));
         el.appendChild(main);
         grid.appendChild(el);
@@ -1466,78 +2637,304 @@
 
   /* ----------------------------------------------------------------- map */
 
-  function buildMap() {
-    const d = VF.state.data;
-    const p = shell('Where To Fish', 'Deeper water, stranger catches');
-    const b = body();
-    const list = U.el('div', 'loc-list');
+  /* ------------------------------------------------------------------ chart
 
+     A sounding rather than a list. Everywhere in this game is arranged by how
+     far down it is — the ladder descends, the hidden water hangs off the side
+     of it, and the two ends of the quest are the only things that break the
+     pattern — so the map is one plumb line dropped through the whole world
+     with every place hung off it at its own depth.
+
+     The chart is a canvas because it animates (where you are standing pulses)
+     and because the water column behind it is sampled from the real palette of
+     each spot, which is a gradient rather than a stack of divs. render/mapArt
+     draws and hit-tests; this decides what is on it. */
+
+  let mapNodes = [];
+  let mapSel = null;
+  let mapRaf = 0;
+  let mapGen = 0;   // the chart a running loop belongs to
+
+  function stopMapLoop() {
+    if (mapRaf) cancelAnimationFrame(mapRaf);
+    mapRaf = 0;
+    mapGen++;
+    mapNodes = [];
+  }
+
+  function mapPlaces() {
+    const d = VF.state.data;
+    const out = [];
     let shownLocked = 0;
     VF.locations.list.forEach(function (loc) {
       const unlocked = VF.locations.isUnlocked(loc.id);
-      const isCur = d.location === loc.id;
       const secret = VF.secrets.isSecretLoc(loc.id);
-      // a secret spot only exists on the map once it has been found
+      // hidden water is not on the chart until it has been stood in
       if (secret && !unlocked) return;
-      // only tease the next locked spot, so the map keeps its mystery
+      // and only the next rung down is teased, so the column keeps its bottom
       if (!unlocked) { shownLocked++; if (shownLocked > 1) return; }
+      out.push({
+        id: loc.id, name: loc.name, level: loc.level, glow: loc.glow,
+        water: loc.water, unlocked: unlocked, secret: secret, loc: loc
+      });
+    });
+    return out;
+  }
 
-      const el = U.el('div', 'loc' + (isCur ? ' current' : '') + (unlocked ? '' : ' locked'));
-      const mark = U.el('div', 'loc-mark');
-      mark.style.background = unlocked ? loc.glow : 'var(--line-2)';
-      el.appendChild(mark);
+  function buildMap() {
+    const d = VF.state.data;
+    const nFound = VF.secrets.countFound();
+    const p = shell('The Chart', nFound
+      ? 'deeper water, stranger catches · ' + nFound + ' hidden ' +
+        (nFound === 1 ? 'place' : 'places') + ' found'
+      : 'deeper water, stranger catches');
+    p.classList.add('panel-map');
 
-      const main = U.el('div');
-      const nameRow = U.el('div', 'loc-name');
-      nameRow.appendChild(U.el('span', null, unlocked ? loc.name : '???'));
-      if (secret) {
-        const t = U.el('span', 'tag', 'found');
-        t.style.color = 'var(--warn)';
-        t.style.marginLeft = '8px';
-        nameRow.appendChild(t);
-      }
-      main.appendChild(nameRow);
-      main.appendChild(U.el('div', 'loc-tag', unlocked ? loc.tag : loc.hint));
-      if (unlocked) {
-        main.appendChild(U.el('div', 'loc-desc', loc.desc));
-        const meta = U.el('div', 'loc-meta');
-        meta.appendChild(U.el('span', null, 'rarity ×' + loc.rarityBoost.toFixed(2)));
-        meta.appendChild(U.el('span', null, 'value ×' + loc.valueBoost.toFixed(2)));
-        meta.appendChild(U.el('span', null, 'xp ×' + loc.xpBoost.toFixed(1)));
-        main.appendChild(meta);
-      } else {
-        main.appendChild(U.el('div', 'loc-desc', 'unlocks at level ' + loc.level + ' · you are level ' + d.level));
-      }
-      el.appendChild(main);
+    const b = U.el('div', 'panel-body map-body');
+    const wrap = U.el('div', 'map-wrap');
 
-      const side = U.el('div', 'row-side');
-      if (isCur) side.appendChild(U.el('div', 'row-price', 'you are here'));
-      else if (unlocked) {
-        const btn = U.el('button', 'btn btn-sm btn-primary', 'Travel');
-        btn.addEventListener('click', function () { travel(loc.id); });
-        side.appendChild(btn);
-      } else {
-        side.appendChild(U.el('div', 'row-price cant', 'LV ' + loc.level));
+    const chart = U.el('div', 'map-chart');
+    const cv = U.el('canvas', 'map-canvas');
+    chart.appendChild(cv);
+    wrap.appendChild(chart);
+
+    const side = U.el('div', 'map-side scroll');
+    wrap.appendChild(side);
+    b.appendChild(wrap);
+    p.appendChild(b);
+
+    // stop the old loop before laying out the new chart — it clears the node
+    // list, and a chart with no nodes is a gradient and nothing else
+    stopMapLoop();
+    const myGen = mapGen;
+
+    const places = mapPlaces();
+    if (!mapSel || !places.some(function (x) { return x.id === mapSel; })) mapSel = d.location;
+    mapNodes = VF.mapArt.layout(places);
+
+    function paintSide() {
+      U.clear(side);
+      /* The day is the same everywhere and for everybody, so it sits above the
+         one place you happen to be looking at rather than inside it. */
+      side.appendChild(dailyCard());
+      const sel = places.filter(function (x) { return x.id === mapSel; })[0];
+      if (!sel) { side.appendChild(U.el('div', 'empty', 'pick somewhere.')); return; }
+      side.appendChild(spotCard(sel));
+    }
+
+    const t0 = performance.now();
+    function sizeAndPaint() {
+      /* The panel is built before it is appended, so the first frame runs on a
+         canvas that is not in the document yet. Not being ready is a frame to
+         skip, not a reason to stop — only stopMapLoop ends this. */
+      if (!cv.isConnected) return;
+      const r = chart.getBoundingClientRect();
+      if (!r.width || !r.height) return;
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const w = Math.round(r.width), h = Math.round(r.height);
+      if (cv.width !== w * dpr || cv.height !== h * dpr) {
+        cv.width = w * dpr; cv.height = h * dpr;
+        cv.style.width = w + 'px'; cv.style.height = h + 'px';
       }
-      el.appendChild(side);
-      list.appendChild(el);
+      const g = cv.getContext('2d');
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      VF.mapArt.draw(g, w, h, mapNodes, {
+        time: (performance.now() - t0) / 1000,
+        selected: mapSel, current: d.location
+      });
+    }
+
+    (function frame() {
+      if (myGen !== mapGen) return;
+      sizeAndPaint();
+      mapRaf = requestAnimationFrame(frame);
+    })();
+
+    function pickAt(e) {
+      const r = cv.getBoundingClientRect();
+      if (!r.width || !r.height) return null;
+      return VF.mapArt.hit(mapNodes, e.clientX - r.left, e.clientY - r.top, r.width, r.height);
+    }
+    cv.addEventListener('click', function (e) {
+      const nd = pickAt(e);
+      if (!nd || nd.p.id === mapSel) return;
+      mapSel = nd.p.id;
+      VF.audio.click();
+      paintSide();
+    });
+    cv.addEventListener('pointermove', function (e) {
+      cv.style.cursor = pickAt(e) ? 'pointer' : 'default';
+    });
+    // the chart is a control, so it answers the keyboard too
+    cv.tabIndex = 0;
+    cv.setAttribute('role', 'listbox');
+    cv.setAttribute('aria-label', 'Fishing spots, by depth');
+    cv.addEventListener('keydown', function (e) {
+      const open = mapNodes.filter(function (nd) { return nd.p.unlocked; });
+      if (!open.length) return;
+      let i = open.findIndex(function (nd) { return nd.p.id === mapSel; });
+      if (e.code === 'ArrowDown' || e.code === 'ArrowRight') { i = Math.min(open.length - 1, i + 1); }
+      else if (e.code === 'ArrowUp' || e.code === 'ArrowLeft') { i = Math.max(0, i - 1); }
+      else if (e.code === 'Enter' || e.code === 'Space') {
+        e.preventDefault();
+        if (mapSel !== d.location) travel(mapSel);
+        return;
+      } else return;
+      e.preventDefault();
+      mapSel = open[i].p.id;
+      VF.audio.hover();
+      paintSide();
     });
 
-    b.appendChild(list);
-
-    const nFound = VF.secrets.countFound();
-    const foot = U.el('div', 'case-blurb');
-    foot.style.marginTop = '14px';
-    foot.textContent = nFound
-      ? nFound + ' hidden ' + (nFound === 1 ? 'place' : 'places') + ' found. there are others.'
-      : 'not every stretch of water is on this list.';
-    b.appendChild(foot);
-
-    p.appendChild(b);
+    paintSide();
     return p;
   }
 
+  /* Everything worth knowing about one place, including — new here — what
+     actually lives in it and how much of it you have on record. */
+  function spotCard(sel) {
+    const d = VF.state.data;
+    const loc = sel.loc;
+    const card = U.el('div', 'spot');
+
+    const head = U.el('div', 'spot-head');
+    const mark = U.el('div', 'spot-mark');
+    mark.style.background = loc.glow;
+    mark.style.boxShadow = '0 0 12px ' + U.rgbToCss(U.hexToRgb(loc.glow), 0.65);
+    head.appendChild(mark);
+    const ht = U.el('div');
+    ht.appendChild(U.el('div', 'spot-name', loc.name));
+    ht.appendChild(U.el('div', 'spot-tag', loc.tag));
+    head.appendChild(ht);
+    card.appendChild(head);
+
+    card.appendChild(U.el('p', 'spot-desc', loc.desc));
+
+    /* What lives here. The list printed three multipliers and nothing about
+       the fish, which made it a teleport menu rather than a choice. */
+    const pool = poolFor(loc.id);
+    if (pool.total) {
+      const dex = U.el('div', 'spot-dex');
+      const bar = U.el('div', 'spot-bar');
+      const fill = U.el('div', 'spot-bar-fill');
+      fill.style.width = Math.round(pool.have / pool.total * 100) + '%';
+      fill.style.background = loc.glow;
+      bar.appendChild(fill);
+      dex.appendChild(bar);
+      dex.appendChild(U.el('div', 'spot-dex-n',
+        pool.have + ' of ' + pool.total + ' recorded here'));
+      card.appendChild(dex);
+
+      const tiers = U.el('div', 'spot-tiers');
+      VF.rarities.visible().forEach(function (r) {
+        const n = pool.byTier[r.id];
+        if (!n) return;
+        const chip = U.el('span', 'spot-tier');
+        const dot = U.el('span', 'spot-dot');
+        dot.style.background = r.color;
+        chip.appendChild(dot);
+        chip.appendChild(document.createTextNode(String(n)));
+        chip.title = n + ' ' + r.name.toLowerCase() + ' species live here';
+        tiers.appendChild(chip);
+      });
+      card.appendChild(tiers);
+    }
+
+    /* Anything currently pointing at this water. The chart is where a player
+       decides where to go, so it is where a lead has to be readable. */
+    const ptr = VF.discovery ? VF.discovery.forPlace(loc.id) : [];
+    ptr.forEach(function (l) {
+      const el = U.el('div', 'lead' + (l.ready ? ' ready' : ''));
+      el.appendChild(U.el('div', 'lead-name', l.def.name));
+      el.appendChild(U.el('div', 'lead-note', l.def.note));
+      if (l.def.need) el.appendChild(U.el('div', 'lead-need', l.def.need));
+      card.appendChild(el);
+    });
+
+    const meta = U.el('div', 'spot-meta');
+    [['rarity', '×' + loc.rarityBoost.toFixed(2)],
+     ['value', '×' + loc.valueBoost.toFixed(2)],
+     ['xp', '×' + loc.xpBoost.toFixed(1)],
+     ['bite', '×' + loc.biteBoost.toFixed(2)]].forEach(function (kv) {
+      const c = U.el('div', 'spot-stat');
+      c.appendChild(U.el('span', 'k', kv[0]));
+      c.appendChild(U.el('span', 'v', kv[1]));
+      meta.appendChild(c);
+    });
+    card.appendChild(meta);
+
+    const sky = (loc.weather || []).map(function (w) { return VF.weatherData.get(w).name; }).join(' · ');
+    if (sky) {
+      const wl = U.el('div', 'spot-line');
+      wl.appendChild(U.el('span', 'k', 'sky '));
+      wl.appendChild(document.createTextNode(sky));
+      card.appendChild(wl);
+    }
+
+    const acts = U.el('div', 'spot-actions');
+    if (sel.id === d.location) {
+      acts.appendChild(U.el('div', 'spot-here', 'you are here'));
+      // the water can be paid to do something, but only where you are standing
+      const ch = U.el('button', 'btn btn-sm', 'Charter the water');
+      ch.addEventListener('click', function () { VF.audio.click(); open('shop', 'charter'); });
+      acts.appendChild(ch);
+    } else {
+      const go = U.el('button', 'btn btn-primary', 'Travel');
+      go.addEventListener('click', function () { travel(sel.id); });
+      acts.appendChild(go);
+    }
+    card.appendChild(acts);
+    return card;
+  }
+
+  /* Which species can actually turn up at a spot, and how many are on record.
+     Native only — strays from one spot over are not what somebody asking
+     "what lives here" means. */
+  const spotPoolCache = Object.create(null);
+  function poolFor(locId) {
+    const d = VF.state.data;
+    let cached = spotPoolCache[locId];
+    if (!cached) {
+      cached = spotPoolCache[locId] = VF.fish.knownList().filter(function (f) {
+        return f.locs && f.locs.indexOf(locId) >= 0;
+      });
+    }
+    const byTier = Object.create(null);
+    let have = 0;
+    for (let i = 0; i < cached.length; i++) {
+      const f = cached[i];
+      byTier[f.rarity] = (byTier[f.rarity] | 0) + 1;
+      if (d.fishdex[f.id]) have++;
+    }
+    return { total: cached.length, have: have, byTier: byTier };
+  }
+
+  /* Nothing else in this game is shared between two people playing it. This
+     is, and saying so is most of the point — the water itself is ordinary. */
+  function dailyCard() {
+    const t = VF.daily.today();
+    const box = U.el('div', 'daily');
+    box.appendChild(U.el('div', 'daily-k', 'today, everywhere'));
+    box.appendChild(U.el('div', 'daily-v', VF.daily.line()));
+    if (!VF.daily.unlocked()) {
+      box.appendChild(U.el('div', 'daily-sub', 'you have not been there yet'));
+      box.classList.add('locked');
+    } else if (VF.daily.isHere()) {
+      box.appendChild(U.el('div', 'daily-sub', 'you are standing in it'));
+      box.classList.add('here');
+    } else {
+      const go = U.el('button', 'btn btn-sm', 'Go');
+      go.addEventListener('click', function () { travel(t.loc.id); });
+      box.appendChild(go);
+    }
+    return box;
+  }
+
   function travel(id) {
+    if (VF.runs && !VF.runs.travelAllowed(id)) {
+      VF.toast.plain(VF.runs.why('travel'), 'warn', 3000);
+      return;
+    }
     const st = VF.fishing.state();
     if (st === 'reeling' || st === 'bite') {
       VF.audio.error();
@@ -1545,6 +2942,20 @@
       return;
     }
     VF.fishing.reelIn();
+    /* With a hull that can cross, the water between two places is a place.
+       The arrival is identical either way — everything below runs when the
+       crossing lands — so this is the same function with a scene in front of
+       it rather than a second way to travel. */
+    if (VF.voyage && VF.voyage.possible(id)) {
+      close();
+      // where the crossing actually ended up, which is not always where it was pointed
+      VF.voyage.begin(id, function (real) { arrive(real || id); });
+      return;
+    }
+    arrive(id);
+  }
+
+  function arrive(id) {
     const d = VF.state.data;
     d.location = id;
     if (d.seenLocations.indexOf(id) < 0) d.seenLocations.push(id);
@@ -1554,9 +2965,15 @@
     VF.fx.reset();
     VF.audio.click();
     VF.bus.emit('location:changed', id);
+    /* Arriving at the day's water puts the sky and the condition where the day
+       says they are. It has to happen after location:changed, which resets the
+       conditions for the new spot. */
+    const isDaily = VF.daily && VF.daily.today().loc.id === id;
+    if (isDaily) VF.daily.arrive();
     VF.save.save();
     const loc = VF.locations.get(id);
-    VF.toast.show('<strong>' + U.esc(loc.name) + '</strong><br><span style="color:var(--ink-3)">' + U.esc(loc.tag) + '</span>', null, 4000);
+    VF.toast.show('<strong>' + U.esc(loc.name) + '</strong><br><span style="color:var(--ink-3)">' +
+                  U.esc(isDaily ? VF.daily.line() : loc.tag) + '</span>', null, 4000);
     VF.hud.showPrompt(loc.name, loc.glow, 1.6);
     close();
   }
@@ -1584,7 +3001,7 @@
       const btn = U.el('button', s.quality === o[0] ? 'active' : '', o[1]);
       btn.addEventListener('click', function () {
         s.quality = o[0];
-        document.body.className = 'q-' + o[0];
+        U.syncBody();
         VF.audio.click();
         VF.scene.resize();
         VF.bus.emit('settings:quality');
@@ -1596,7 +3013,7 @@
     qRow.appendChild(qSeg);
     vis.appendChild(qRow);
     vis.appendChild(toggle('Screen shake', s.screenShake, function (v) { s.screenShake = v; }));
-    vis.appendChild(toggle('Reduce flashing', s.reduceFlash, function (v) { s.reduceFlash = v; }));
+    vis.appendChild(toggle('Reduce flashing', s.reduceFlash, function (v) { s.reduceFlash = v; U.syncBody(); }));
     vis.appendChild(toggle('Show hints', s.showHints, function (v) { s.showHints = v; if (!v) VF.hud.clearHint(); }));
 
     const fsRow = U.el('div', 'set-row');
@@ -1617,9 +3034,16 @@
     ctrl.appendChild(U.el('span', 'k', 'Controls'));
     const keys = U.el('div');
     keys.style.cssText = 'font-size:11.5px;line-height:1.9;color:var(--ink-3)';
+    /* Every key the game actually binds. J and C were bound and listed
+       nowhere, which made two panels keyboard-only secrets. The door is not
+       here on purpose — it is not in the build most people have, and naming
+       it in the one that does would defeat the point of it. */
     [['Hold Space / click', 'charge and cast, set the hook, reel'],
      ['R', 'reel the line back in'],
-     ['Q / F / B / T / M', 'shop, fishdex, bag, record, map'],
+     ['Q / B', 'shop, bag'],
+     ['F / T', 'fishdex, record'],
+     ['M', 'the chart'],
+     ['J / C', 'journal, wardrobe'],
      ['Esc', 'close a menu']].forEach(function (k) {
       const row = U.el('div');
       const kk = U.el('span', 'mono');
@@ -1637,18 +3061,201 @@
     const info = U.el('div');
     info.style.cssText = 'font-size:11.5px;color:var(--ink-3);margin-bottom:12px;line-height:1.6';
     info.textContent = VF.save.isAvailable()
-      ? 'Progress saves automatically to this browser. Closing the tab is safe.'
-      : 'Storage is unavailable in this browser, so progress will not persist.';
+      ? 'Four games. The one you are playing saves itself; the others sit where you left them.'
+      : 'Storage is unavailable in this browser, so nothing here will persist.';
     data.appendChild(info);
-    const row = U.el('div', 'set-row');
-    const resetBtn = U.el('button', 'btn btn-sm btn-danger', 'Reset everything');
-    resetBtn.addEventListener('click', confirmReset);
-    row.appendChild(resetBtn);
-    data.appendChild(row);
+    /* Four games, side by side. A row says what is in the slot so the choice
+       is made on what the game looks like rather than on a number. */
+    const list = U.el('div', 'saveslot-list');
+    VF.save.slots().forEach(function (sl) {
+      const here = sl.slot === VF.save.slot();
+      /* `blank`, not `empty`: a global `.empty` already exists for the
+         placeholder a panel shows when a list has nothing in it, and it is
+         centred with forty-four pixels of padding. */
+      const row = U.el('div', 'saveslot' + (here ? ' here' : '') + (sl.empty ? ' blank' : ''));
+
+      const mark = U.el('div', 'saveslot-mark');
+      mark.style.background = here ? 'var(--accent)' : (sl.empty ? 'var(--line-2)' : 'var(--good)');
+      row.appendChild(mark);
+
+      const main = U.el('div', 'saveslot-main');
+      const name = U.el('div', 'saveslot-name');
+      name.appendChild(U.el('span', null, 'slot ' + (sl.slot + 1)));
+      if (here) {
+        const t = U.el('span', 'tag', 'playing');
+        t.style.color = 'var(--accent)';
+        name.appendChild(t);
+      }
+      main.appendChild(name);
+      if (!sl.empty && sl.run && sl.run !== 'none') {
+        const rt = U.el('span', 'run-tag', VF.runs.get(sl.run).short || VF.runs.get(sl.run).name);
+        name.appendChild(rt);
+      }
+      main.appendChild(U.el('div', 'saveslot-desc', sl.empty ? 'empty'
+        : (sl.level >= VF.progression.MAX_LEVEL
+             ? 'lv 99 · ' + sl.fathoms + ' fathoms' : 'lv ' + sl.level) +
+          ' · ' + U.commas(sl.species) + ' species · ◈ ' + U.money(sl.money)));
+      if (!sl.empty) {
+        main.appendChild(U.el('div', 'saveslot-sub',
+          VF.locations.get(sl.location).name + ' · ' + U.duration(sl.playSeconds)));
+      }
+      row.appendChild(main);
+
+      const acts = U.el('div', 'saveslot-acts');
+      if (!here) {
+        const go = U.el('button', 'btn btn-sm' + (sl.empty ? '' : ' btn-primary'),
+                        sl.empty ? 'Start here' : 'Load');
+        go.addEventListener('click', function () {
+          if (sl.empty) chooseRun(sl); else switchSlot(sl);
+        });
+        acts.appendChild(go);
+      }
+      if (!sl.empty) {
+        const del = U.el('button', 'btn btn-sm btn-danger', 'Erase');
+        del.addEventListener('click', function () { confirmErase(sl); });
+        acts.appendChild(del);
+      }
+      row.appendChild(acts);
+      list.appendChild(row);
+    });
+    data.appendChild(list);
+    data.appendChild(transferRow());
     b.appendChild(data);
 
     p.appendChild(b);
     return p;
+  }
+
+  /* ------------------------------------------------ moving a game off here
+
+     The four slots are four games on this machine. They are not four games
+     you can take anywhere: localStorage belongs to the address the file was
+     opened from, so copying the build to a laptop — or just moving it to
+     another folder — leaves every slot behind.
+
+     This sits under the slots because that is the question it answers. Export
+     writes the slot you are playing; import reads one back into whichever
+     slot you point it at, through the same path a normal load takes. */
+
+  function transferRow() {
+    const wrap = U.el('div', 'transfer');
+
+    const head = U.el('div', 'transfer-head');
+    head.appendChild(U.el('span', 'k', 'Move a game'));
+    const hint = U.el('span', 'transfer-hint',
+      'a slot lives in this browser, at this address. this is how one leaves.');
+    head.appendChild(hint);
+    wrap.appendChild(head);
+
+    const area = document.createElement('textarea');
+    area.className = 'transfer-box mono';
+    area.spellcheck = false;
+    area.setAttribute('aria-label', 'Save data');
+    area.placeholder = 'export writes slot ' + (VF.save.slot() + 1) +
+                       ' here — or paste a save in and choose a slot to import it into';
+
+    const acts = U.el('div', 'set-row transfer-acts');
+
+    const ex = U.el('button', 'btn btn-sm', 'Export slot ' + (VF.save.slot() + 1));
+    ex.addEventListener('click', function () {
+      const str = VF.save.exportString();
+      if (!str) { VF.audio.error(); VF.toast.plain('could not read that slot', 'warn'); return; }
+      area.value = str;
+      area.select();
+      VF.audio.click();
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(str).then(function () {
+          VF.toast.plain('slot ' + (VF.save.slot() + 1) + ' copied to the clipboard', 'good', 2800);
+        }).catch(function () {
+          VF.toast.plain('written below — copy it out', 'good', 3000);
+        });
+      } else {
+        VF.toast.plain('written below — copy it out', 'good', 3000);
+      }
+    });
+    acts.appendChild(ex);
+
+    /* Import needs a slot, and picking one afterwards is a dialog nobody
+       wants — so there is a button per slot, and each says what it would
+       overwrite. */
+    const into = U.el('div', 'transfer-into');
+    into.appendChild(U.el('span', 'k', 'import into'));
+    const slotRow = U.el('div', 'transfer-slots');
+    VF.save.slots().forEach(function (sl) {
+      const b2 = U.el('button', 'btn btn-sm', String(sl.slot + 1));
+      b2.title = sl.empty ? 'slot ' + (sl.slot + 1) + ' is empty'
+        : 'slot ' + (sl.slot + 1) + ' holds lv ' + sl.level + ', ' + sl.species + ' species';
+      if (sl.slot === VF.save.slot()) b2.classList.add('is-cur');
+      if (!sl.empty) b2.classList.add('is-full');
+      b2.addEventListener('click', function () {
+        const raw = area.value;
+        if (!raw.trim()) { VF.audio.error(); VF.toast.plain('paste a save into the box first', 'warn'); return; }
+        const peek = VF.save.previewString(raw);
+        if (!peek.ok) {
+          VF.audio.error();
+          VF.toast.plain(peek.why === 'notasave' ? 'that is not a Void Fishing save'
+            : peek.why === 'empty' ? 'nothing to import' : 'that save could not be read', 'warn', 3400);
+          return;
+        }
+        confirmImport(raw, sl, peek);
+      });
+      slotRow.appendChild(b2);
+    });
+    into.appendChild(slotRow);
+
+    wrap.appendChild(area);
+    wrap.appendChild(acts);
+    wrap.appendChild(into);
+    return wrap;
+  }
+
+  /* Importing throws a slot away, so it says which one and what is in it. */
+  function confirmImport(raw, sl, peek) {
+    VF.audio.click();
+    const dlg = U.el('div', 'dialog');
+    dlg.appendChild(U.el('h3', null, sl.empty
+      ? 'Import into slot ' + (sl.slot + 1) + '?'
+      : 'Overwrite slot ' + (sl.slot + 1) + '?'));
+
+    const incoming = 'The pasted game is level ' + peek.level +
+      (peek.fathoms ? ' · ' + peek.fathoms + ' fathoms' : '') +
+      ', ' + U.commas(peek.species) + ' species, ' + U.duration(peek.playSeconds) + ' played.';
+    dlg.appendChild(U.el('p', null, sl.empty
+      ? incoming + ' Slot ' + (sl.slot + 1) + ' is empty, so nothing is lost.'
+      : incoming + ' Slot ' + (sl.slot + 1) + ' currently holds level ' + sl.level + ', ' +
+        U.commas(sl.species) + ' species — that game is gone. Export it first if you want it.'));
+
+    const acts = U.el('div', 'dialog-actions');
+    const no = U.el('button', 'btn', 'Cancel');
+    no.addEventListener('click', function () { VF.audio.back(); refresh(); });
+    const yes = U.el('button', 'btn' + (sl.empty ? ' btn-primary' : ' btn-danger'),
+                     sl.empty ? 'Import' : 'Overwrite');
+    yes.addEventListener('click', function () {
+      const res = VF.save.importString(raw, sl.slot);
+      if (!res.ok) {
+        VF.audio.error();
+        VF.toast.plain(res.why === 'full' ? 'no room left in this browser'
+          : res.why === 'unavailable' ? 'storage is unavailable here'
+          : 'that save could not be read', 'warn', 3400);
+        refresh();
+        return;
+      }
+      adoptGame();
+      close();
+      const d = VF.state.data;
+      VF.toast.show('imported into <strong>slot ' + (res.slot + 1) + '</strong><br>' +
+        '<span style="color:var(--ink-3)">level ' + d.level + ' · ' +
+        U.commas(Object.keys(d.fishdex).length) + ' species</span>', 'good', 5000);
+      if (res.revoked && res.revoked.rods) {
+        VF.toast.plain(res.revoked.rods + ' rod' + (res.revoked.rods === 1 ? '' : 's') +
+                       ' that save was given rather than earned came off it', 'warn', 6000);
+      }
+    });
+    acts.appendChild(no); acts.appendChild(yes);
+    dlg.appendChild(acts);
+    const prev = node;
+    node = dlg;
+    if (prev && prev.parentNode) prev.parentNode.replaceChild(dlg, prev);
   }
 
   function slider(label, value, onChange) {
@@ -1689,32 +3296,121 @@
     return row;
   }
 
-  function confirmReset() {
+  /* The one door that discards a game. It shows what is about to be replaced
+     and what is about to replace it, and it puts the outgoing save in the box
+     on the way past so a mistaken paste is recoverable. */
+  /* Everything the world has to be told when the game underneath it changes.
+     Both slot doors go through here, and so does erasing the one in play. */
+  function adoptGame() {
+    VF.catchUI.close();
+    VF.fishing.hardReset();
+    VF.loot.invalidatePool();
+    VF.encounters.reset();
+    VF.fx.reset();
+    VF.particles.clearAll();
+    VF.scene.rebuild();
+    VF.scene.seedAmbient();
+    VF.audio.setVolumes();
+    U.syncBody();
+    VF.bus.emit('gear:changed');
+    VF.bus.emit('location:changed');
+    VF.hud.refreshAll();
+  }
+
+  /* Four slots and no reason to fill the other three. A rule is that reason,
+     and it is chosen here because it can only be chosen here: a restriction
+     you can turn on after the fact is not a restriction, and one you can turn
+     off is not one either. */
+  function chooseRun(sl) {
     VF.audio.click();
+    const card = U.el('div', 'run-pick');
+    card.appendChild(U.el('div', 'run-pick-k', 'slot ' + (sl.slot + 1) + ' — a new game'));
+    card.appendChild(U.el('div', 'run-pick-sub',
+      'Played under a rule, if you like. It is fixed for the life of the save.'));
+
+    const list = U.el('div', 'run-list');
+    VF.runs.list.forEach(function (r) {
+      const row = U.el('button', 'run-row');
+      const nm = U.el('div', 'run-name');
+      nm.appendChild(U.el('span', null, r.name));
+      if (r.short) {
+        const t = U.el('span', 'tag', r.short);
+        t.style.color = 'var(--warn)';
+        nm.appendChild(t);
+      }
+      row.appendChild(nm);
+      row.appendChild(U.el('div', 'run-desc', r.desc));
+      row.addEventListener('click', function () {
+        VF.audio.click();
+        startRun(sl, r.id);
+      });
+      list.appendChild(row);
+    });
+    card.appendChild(list);
+
+    const cancel = U.el('button', 'btn btn-sm', 'Not now');
+    cancel.addEventListener('click', function () { VF.audio.click(); refresh('settings'); });
+    card.appendChild(cancel);
+
+    const b = body();
+    b.appendChild(card);
+    const p = shell('A New Game', 'and how it will be played');
+    p.appendChild(b);
+    U.clear(host);
+    host.appendChild(p);
+  }
+
+  function startRun(sl, runId) {
+    const res = VF.save.use(sl.slot);
+    VF.state.data.run = runId;
+    /* A rule that removes charms removes the ones already in the slots too —
+       a fresh slot has none, but this is also the only place the value is
+       ever set, so it is the only place that can be sure. */
+    if (!VF.runs.charmsAllowed()) {
+      VF.state.data.charms = [];
+      VF.state.data.charmSlots = [null, null, null, null, null];
+    }
+    if (!VF.runs.rodAllowed(VF.state.data.rod)) VF.state.data.rod = 'wood';
+    VF.save.save();
+    adoptGame();
+    VF.tutorial.reset();
+    refresh('settings');
+    const r = VF.runs.get(runId);
+    VF.toast.plain('slot ' + (sl.slot + 1) + ' · ' +
+                   (runId === 'none' ? 'a new game' : r.name.toLowerCase()), 'good', 3600);
+  }
+
+  function switchSlot(sl) {
+    VF.audio.click();
+    const res = VF.save.use(sl.slot);
+    adoptGame();
+    if (res.fresh) VF.tutorial.reset();
+    refresh('settings');
+    VF.toast.plain(res.fresh
+      ? 'slot ' + (sl.slot + 1) + ' · a new game'
+      : 'slot ' + (sl.slot + 1) + ' · level ' + sl.level + ' · ' +
+        U.commas(sl.species) + ' species', 'good', 3600);
+  }
+
+  function confirmErase(sl) {
+    VF.audio.click();
+    const here = sl.slot === VF.save.slot();
     const dlg = U.el('div', 'dialog');
-    dlg.appendChild(U.el('h3', null, 'Reset everything?'));
+    dlg.appendChild(U.el('h3', null, 'Erase slot ' + (sl.slot + 1) + '?'));
     dlg.appendChild(U.el('p', null,
-      'This erases your money, level, collection, records and settings. It cannot be undone.'));
+      'Level ' + sl.level + ', ' + U.commas(sl.species) + ' species and ' +
+      U.duration(sl.playSeconds) + ' at the water.' +
+      (here ? ' It is the game you are playing, and it will start again empty.' : '') +
+      ' This cannot be undone.'));
     const acts = U.el('div', 'dialog-actions');
     const no = U.el('button', 'btn', 'Cancel');
-    no.addEventListener('click', function () { VF.audio.back(); refresh(); });
-    const yes = U.el('button', 'btn btn-danger', 'Reset');
+    no.addEventListener('click', function () { VF.audio.back(); refresh('settings'); });
+    const yes = U.el('button', 'btn btn-danger', 'Erase');
     yes.addEventListener('click', function () {
-      VF.save.reset();
-      VF.catchUI.close();
-      VF.fishing.hardReset();
-      VF.loot.invalidatePool();
-      VF.encounters.reset();
-      VF.fx.reset();
-      VF.particles.clearAll();
-      VF.scene.rebuild();
-      VF.scene.seedAmbient();
-      VF.audio.setVolumes();
-      document.body.className = 'q-' + VF.state.data.settings.quality;
-      VF.hud.refreshAll();
-      VF.tutorial.reset();
-      close();
-      VF.toast.plain('Everything reset', 'warn');
+      const wasHere = VF.save.erase(sl.slot);
+      if (wasHere) { adoptGame(); VF.tutorial.reset(); }
+      refresh('settings');
+      VF.toast.plain('slot ' + (sl.slot + 1) + ' erased', 'warn', 3000);
     });
     acts.appendChild(no); acts.appendChild(yes);
     dlg.appendChild(acts);
@@ -1722,6 +3418,7 @@
     node = dlg;
     if (prev && prev.parentNode) prev.parentNode.replaceChild(dlg, prev);
   }
+
 
   /* ------------------------------------------------- the case opening
      The result is decided before the animation starts. The strip is then
@@ -1746,7 +3443,7 @@
       cell.appendChild(cosThumb(it, 118, 70, i * 0.4));
       cell.appendChild(U.el('div', 'rn', it.name));
       const bar = U.el('div', 'rbar');
-      bar.style.background = VF.rarities.color(it.rarity);
+      VF.rarities.paint(bar, it.rarity, 'background');
       cell.appendChild(bar);
       strip.appendChild(cell);
     });
@@ -1808,7 +3505,7 @@
       const slotName = (VF.cosmetics.slots.filter(function (s2) { return s2.id === res.item.slot; })[0] || {}).name;
       resultBox.appendChild(U.el('div', 'result-slot', slotName || res.item.slot));
       const rr = U.el('div', 'result-rarity', VF.rarities.get(res.rarity).name);
-      rr.style.color = VF.rarities.color(res.rarity);
+      VF.rarities.paint(rr, res.rarity, 'color');
       resultBox.appendChild(rr);
       if (res.duplicate) {
         resultBox.appendChild(U.el('div', 'result-dupe',

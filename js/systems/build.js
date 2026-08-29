@@ -21,8 +21,13 @@
 
   function currentKey() {
     const d = VF.state.data;
+    const p = VF.parasite && VF.parasite.current();
+    const mp = VF.zones && VF.zones.moonPhase();
+    const bt = VF.boat && VF.boat.shape();
     return d.rod + '|' + d.bait + '|' + d.charmSlots.join(',') + '|' +
-           VF.time.phase() + '|' + d.level;
+           VF.time.phase() + '|' + d.level + '|' + (p ? p.id + p.left : '') + '|' +
+           d.location + '|' + (mp ? mp.id : '') + '|' +
+           (bt ? bt.hull + JSON.stringify(bt.modules) + Math.round((bt.wear || 0) * 20) : '');
   }
 
   function compute() {
@@ -46,6 +51,15 @@
       }
       if (c.dynamic) { try { c.dynamic(s); } catch (e) { /* a charm must not break a cast */ } }
     }
+
+    /* And whatever is living on the rod. It folds in here rather than being
+       read separately by the loot roll, so a passenger is worth exactly what
+       a charm is worth and every clamp below applies to it too. */
+    if (VF.parasite) VF.parasite.stats(s);
+    /* And whatever this water does. The moon, the depth reading, the trench's
+       darkness — a zone rule becomes a number here and nowhere else. */
+    if (VF.zones) VF.zones.stats(s);
+    if (VF.boat) VF.boat.stats(s);
 
     // keep the extremes sane no matter how the build is stacked
     s.bite = U.clamp(s.bite, 0.35, 2.6);

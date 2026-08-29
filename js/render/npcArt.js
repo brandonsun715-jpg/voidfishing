@@ -1,4 +1,4 @@
-/* VOID FISHING — the five people you can actually go and stand in front of.
+/* VOID FISHING — the people you can actually go and stand in front of.
 
    Each one is a standing silhouette with its own build, garment and prop, so
    you can tell who is waiting for you from across the shore before a word
@@ -23,7 +23,14 @@
     drifter:   { h: 1.00, build: 0.95, stoop: 0.00, hat: 'hood', coat: 'rags',    prop: null,      arms: 'down', drift: 1 },
     collector: { h: 1.02, build: 0.92, stoop: 0.02, hat: 'tall', coat: 'tails',   prop: 'case',    arms: 'one' },
     astronomer:{ h: 1.04, build: 0.88, stoop: 0.14, hat: 'hood', coat: 'robe',    prop: 'scope',   arms: 'one' },
-    merchant:  { h: 0.98, build: 1.10, stoop: 0.08, hat: 'brim', coat: 'tails',   prop: 'case',    arms: 'one' }
+    merchant:  { h: 0.98, build: 1.10, stoop: 0.08, hat: 'brim', coat: 'tails',   prop: 'case',    arms: 'one' },
+    /* The cartographer is bent over a table she is not standing at, so she
+       has the deepest stoop in the cast; the mechanic is the only broad one
+       and the only one with nothing in his hands; the child is two thirds of
+       everybody else's height, which is the whole characterisation. */
+    cartographer: { h: 0.96, build: 0.90, stoop: 0.34, hat: null,  coat: 'robe',    prop: 'book',    arms: 'hold' },
+    mechanic:     { h: 0.95, build: 1.30, stoop: 0.16, hat: 'cap',  coat: 'oilskin', prop: 'lantern', arms: 'one' },
+    child:        { h: 0.64, build: 0.82, stoop: 0.00, hat: null,  coat: 'rags',    prop: null,      arms: 'down' }
   };
 
   function tone(rgb, k) {
@@ -400,6 +407,42 @@
         ctx.beginPath();
         ctx.moveTo(-w * 0.5, -L * 0.20); ctx.lineTo(w * 0.5, -L * 0.20);
         ctx.stroke();
+        ctx.restore();
+        break;
+      }
+      /* Named in the comment at the top of this file since the first draft
+         and never actually implemented. The mechanic is the only person in
+         the cast carrying his own light, which means he is the only one you
+         can find in the dark. */
+      case 'lantern': {
+        ctx.save();
+        ctx.translate(hand.x + face * H * 0.010,
+                      hand.y + H * 0.070 + Math.sin(t * 0.9) * H * 0.006);
+        ctx.rotate(Math.sin(t * 0.9) * 0.06);
+        const lw = H * 0.030, lh = H * 0.044;
+        // the bail
+        ctx.strokeStyle = U.rgbToCss(U.mixRgb(cloth, accent, 0.35));
+        ctx.lineWidth = Math.max(0.8, H * 0.005);
+        ctx.beginPath();
+        ctx.arc(0, -lh * 0.5, lw * 0.52, Math.PI, 0);
+        ctx.stroke();
+        // the body, and the flame in it
+        ctx.fillStyle = U.rgbToCss(U.shade(U.mixRgb(cloth, accent, 0.20), -0.30));
+        ctx.fillRect(-lw * 0.5, -lh * 0.5, lw, lh);
+        const fg = ctx.createLinearGradient(0, -lh * 0.5, 0, lh * 0.5);
+        fg.addColorStop(0, 'rgba(255,206,132,0.30)');
+        fg.addColorStop(0.5, 'rgba(255,190,110,0.80)');
+        fg.addColorStop(1, 'rgba(255,170,90,0.20)');
+        ctx.fillStyle = fg;
+        ctx.fillRect(-lw * 0.30, -lh * 0.34, lw * 0.60, lh * 0.68);
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const bg = ctx.createRadialGradient(0, 0, 0, 0, 0, lw * 4.6);
+        bg.addColorStop(0, 'rgba(255,198,124,0.34)');
+        bg.addColorStop(1, 'rgba(255,198,124,0)');
+        ctx.fillStyle = bg;
+        ctx.fillRect(-lw * 5, -lw * 5, lw * 10, lw * 10);
+        ctx.restore();
         ctx.restore();
         break;
       }

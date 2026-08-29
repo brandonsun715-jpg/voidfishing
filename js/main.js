@@ -9,7 +9,7 @@
   function boot() {
     const res = VF.save.load();
     const s = VF.state.data.settings;
-    document.body.className = 'q-' + s.quality;
+    U.syncBody();
 
     const canvas = document.getElementById('scene');
     VF.scene.init(canvas);
@@ -17,13 +17,20 @@
     VF.scene.seedAmbient();
 
     VF.toast.init();
+    // the boot load has already been and gone; this is for a slot picked up later
+    VF.bus.on('save:revoked', saidRevoked);
     VF.hud.init();
     VF.panels.init();
     VF.catchUI.init();
+    VF.aquariumUI.init();
+    VF.encounterUI.init();
 
     VF.weather.reconcile();
     VF.secrets.registerFound();
     VF.loot.invalidatePool();
+    // rolled here, shown after Begin — a catch card over the title card is a
+    // strange way to say hello
+    if (VF.away) VF.away.boot();
 
     window.addEventListener('resize', onResize, { passive: true });
     window.addEventListener('orientationchange', onResize, { passive: true });
@@ -64,14 +71,45 @@
     document.getElementById('hud').classList.remove('hidden');
     VF.hud.show();
     VF.hud.refreshAll();
+    saidRevoked(VF.save.revoked());
     VF.tutorial.init();
     VF.achievements.check();
     if (VF.state.data.stats.casts === 0) VF.hud.showPrompt(VF.locations.current().name, VF.locations.current().glow, 1.8);
+    if (VF.away) VF.away.announce();
   }
 
+  /* A save can arrive holding something no game could have given it. Taking
+     it back quietly would read as the save being broken, so it is said out
+     loud, once, and only to somebody it actually happened to.
+
+     Boot has to ask save.js for this rather than listen for it: the load runs
+     before there is a toast to show it in. A slot picked up later goes
+     through the event instead, which by then has somewhere to land. */
+  function saidRevoked(info) {
+    if (!info) return;
+    const bits = [];
+    if (info.rods) bits.push(info.rods === 1 ? 'a rod that is not in the game'
+                                            : info.rods + ' rods that are not in the game');
+    if (info.took) bits.push(U.money(info.took));
+    if (!bits.length) return;
+    VF.toast.show('<strong>this save was carrying something it could not have earned</strong>' +
+                  '<br><span style="color:var(--ink-3)">' + U.esc(bits.join(' and ')) +
+                  ' taken back. everything you caught is still here.</span>', 'warn', 7000);
+  }
+
+  /* Dragging a window edge fires resize dozens of times a second, and every
+     one of them was resizing the canvas, recomputing the layout, throwing away
+     the baked backdrop and reseeding the drift. None of that can show up more
+     than once a frame, so it only runs once a frame. */
+  let resizePending = false;
   function onResize() {
-    VF.scene.resize();
-    VF.scene.seedAmbient();
+    if (resizePending) return;
+    resizePending = true;
+    requestAnimationFrame(function () {
+      resizePending = false;
+      VF.scene.resize();
+      VF.scene.seedAmbient();
+    });
   }
 
   function startLoop() {
@@ -112,7 +150,7 @@
       perf.stepped++;
       const next = q === 'high' ? 'medium' : 'low';
       VF.state.data.settings.quality = next;
-      document.body.className = 'q-' + next;
+      U.syncBody();
       VF.scene.resize();
       VF.bus.emit('settings:quality');
       VF.save.save();
@@ -144,12 +182,18 @@
       VF.palette.update();
 
       if (started) {
+        if (VF.pace) VF.pace.tick(dt);
         VF.visit.tick(dt);
         VF.fishing.tick(dt);
         VF.conditions.tick(dt);
         VF.encounters.tick(dt);
+        VF.creature.tick(dt);
+        VF.voyage.tick(dt);
+        VF.zones.tick(dt);
         VF.quests.tick(dt);
         VF.merchant.tick(dt);
+        VF.charter.tick(dt);
+        VF.aquarium.tick(dt);
         VF.cutscene.tick(dt);
         VF.wrong.tick(dt);
         VF.achievements.tick(dt);

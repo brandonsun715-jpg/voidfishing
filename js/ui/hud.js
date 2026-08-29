@@ -9,21 +9,36 @@
   let shownMoney = 0;
   let pressed = false;
   let shownBarW = -1;
+  /* The fight bar is moved with `transform`, which wants pixels rather than
+     percentages, so the strip it runs in has to be measured. Measuring forces a
+     layout — the point of the exercise is to do it once when a fight opens and
+     once more if the window changes shape, instead of sixty times a second. */
+  let mgW = 0;
   let hintTimer = 0;
   let promptTimer = 0;
 
   function init() {
     [
-      'hud', 'moneyVal', 'levelVal', 'xpFill', 'xpText', 'locName', 'wxName', 'timeName',
+      'hud', 'moneyVal', 'levelVal', 'xpFill', 'xpText', 'streakVal', 'locName', 'wxName', 'timeName',
       'chipLoc', 'gearRod', 'gearBait', 'rodName', 'baitName', 'baitCount',
       'castMeter', 'castFill', 'actionBtn', 'actionLabel', 'actionHint',
+      'boatHud',
       'fightUI', 'fightName', 'fightWarn', 'mgTrack', 'mgBar', 'mgFish',
       'mgProg', 'mgProgFill', 'fightHint', 'fightPct',
       'prompt', 'hintBox', 'edgeGlow', 'encounter', 'encText',
-      'chipCond', 'condName'
+      'chipCond', 'condName', 'condLeft', 'condFuse'
     ].forEach(function (id) { D[id] = document.getElementById(id); });
 
     shownMoney = VF.state.data.money;
+    /* The bump takes itself off when it has finished, which is what lets the
+       next one restart it: an animation-name that never goes away never
+       replays, and forcing a reflow to make it replay is a layout per bump. */
+    D.moneyVal.addEventListener('animationend', function () {
+      D.moneyVal.classList.remove('bump');
+    });
+    window.addEventListener('resize', function () {
+      if (!D.fightUI.classList.contains('hidden')) measureFight();
+    });
     bindInput();
     bindBus();
     refreshAll();
@@ -31,31 +46,77 @@
 
   /* ------------------------------------------------------------- input */
 
+  /* A control in the HUD that keeps focus after a mouse click keeps the space
+     bar with it, and the space bar is how you fish — so it lets go.
+
+     Only after a real pointer click: a click event raised by the keyboard
+     carries detail 0, and somebody who tabbed to a button and pressed it needs
+     the focus left where it is or they have nowhere to come back to. */
+  function dropFocus(e) {
+    if (e && e.detail > 0 && e.currentTarget && e.currentTarget.blur) e.currentTarget.blur();
+  }
+
+  /* What, if anything, currently owns the keyboard instead of the game. */
+  const CONTROLS = 'button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+  function focusedControl() {
+    const el = document.activeElement;
+    if (!el || el === document.body || !el.closest) return null;
+    if (!el.closest(CONTROLS)) return null;
+    /* Two things that report as focused without being on the screen: a control
+       inside a panel that has been torn down, and the Begin button, which is
+       still the focused element long after the veil over it has lifted. */
+    if (!el.isConnected || !el.getClientRects().length) return null;
+    if (el.closest('#boot')) return null;
+    return el;
+  }
+
+  /* Where on the water a press landed, in the coordinates the scene draws in.
+     The context carries the device ratio, so the rect maps straight across. */
+  function scenePoint(e, canvas) {
+    const r = canvas.getBoundingClientRect();
+    if (!r.width || !r.height) return null;
+    return { x: (e.clientX - r.left) * (VF.scene.L.w / r.width),
+             y: (e.clientY - r.top) * (VF.scene.L.h / r.height) };
+  }
+
   /* A click on the figure standing up the shore opens what he is carrying,
      rather than starting a cast into him. */
   function merchantPress(e, canvas) {
     if (!VF.merchant || !VF.merchant.here()) return false;
     if (VF.state.rt.panelOpen || VF.visit.active()) return false;
     if (VF.fishing.state() === 'reeling') return false;
-    // the scene draws in CSS pixels (the context carries the device ratio), so
-    // the rect maps straight onto scene coordinates
-    const r = canvas.getBoundingClientRect();
-    if (!r.width || !r.height) return false;
-    const px = (e.clientX - r.left) * (VF.scene.L.w / r.width);
-    const py = (e.clientY - r.top) * (VF.scene.L.h / r.height);
-    if (!VF.scene.merchantHit(px, py)) return false;
+    if (VF.creature && VF.creature.active()) return false;
+    const p = scenePoint(e, canvas);
+    if (!p || !VF.scene.merchantHit(p.x, p.y)) return false;
     VF.audio.click();
     VF.panels.open('merchant');
     return true;
   }
 
-  function pressStart(e) {
+  function pressStart(e, px, py) {
+    // a crossing owns the whole screen, and its own card takes the press
+    if (VF.voyage && VF.voyage.active()) { VF.voyage.press(); return; }
     // a sequence owns the input while it is running
     if (VF.cutscene && VF.cutscene.active()) { VF.cutscene.skip(); return; }
     if (VF.state.rt.panelOpen) return;
     if (e && e.type === 'pointerdown' && e.button !== undefined && e.button !== 0) return;
     // a conversation owns the input while it is running
     if (VF.visit.active()) { VF.visit.advance(); return; }
+    /* And so does an encounter, except while it has handed the rod back for
+       the fight — that half of it is an ordinary fight and takes the ordinary
+       press. `px`/`py` are scene coordinates when the press came from the
+       water and undefined when it came from a key, which is exactly the
+       difference between "press that patch of water" and "hold". */
+    if (VF.creature && VF.creature.holdsRod()) {
+      pressed = true;
+      VF.creature.press(px === undefined ? null : px, py === undefined ? null : py);
+      return;
+    }
+    /* And then whatever this particular water has floating on it. A bottle,
+       a sonar return, a shard, a shape coming in over the flats — pointing at
+       one of those is not a cast, so the zone gets first refusal before the
+       rod does. It only ever takes a press that actually landed on something. */
+    if (VF.zones && px !== undefined && VF.zones.press(px, py)) return;
     if (pressed) return;
     pressed = true;
     const st = VF.fishing.state();
@@ -71,6 +132,7 @@
   function pressEnd() {
     if (!pressed) return;
     pressed = false;
+    if (VF.creature && VF.creature.holdsRod()) { VF.creature.release(); return; }
     const st = VF.fishing.state();
     if (st === 'idle' || VF.fishing.S.charging) VF.fishing.releaseCharge();
     if (st === 'reeling') VF.fishing.setReeling(false);
@@ -83,7 +145,8 @@
       e.preventDefault();
       // the wanderer gets the press before the water does
       if (merchantPress(e, canvas)) return;
-      pressStart(e);
+      const p = scenePoint(e, canvas);
+      pressStart(e, p ? p.x : undefined, p ? p.y : undefined);
     });
     D.actionBtn.addEventListener('pointerdown', function (e) { e.preventDefault(); pressStart(e); });
     window.addEventListener('pointerup', pressEnd);
@@ -91,33 +154,74 @@
     window.addEventListener('blur', pressEnd);
 
     window.addEventListener('keydown', function (e) {
-      if (e.repeat) return;
       const tag = document.activeElement && document.activeElement.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
+      const fire = e.code === 'Space' || e.code === 'Enter';
+
       if (VF.cutscene && VF.cutscene.active()) {
-        if (e.code === 'Space' || e.code === 'Enter' || e.code === 'Escape') {
+        if (fire || e.code === 'Escape') {
           e.preventDefault();
-          VF.cutscene.skip();
+          if (!e.repeat) VF.cutscene.skip();
         }
         return;
       }
       if (e.code === 'Escape') {
+        if (e.repeat) return;
         if (VF.panels.isOpen()) { e.preventDefault(); VF.panels.close(); return; }
         if (VF.visit.talking()) { e.preventDefault(); VF.visit.leave(); }
         return;
       }
       if (VF.visit.active()) {
         // nothing else is reachable until the two of you are done
-        if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); VF.visit.advance(); }
+        if (fire) { e.preventDefault(); if (!e.repeat) VF.visit.advance(); }
         return;
       }
-      if (e.code === 'Space' || e.code === 'Enter') {
+      if (fire) {
+        if (VF.catchUI.isOpen()) {
+          e.preventDefault();
+          if (!e.repeat) VF.catchUI.defaultAction();
+          return;
+        }
+        /* A control somebody has deliberately put the focus on gets the press.
+           That is what pressing a focused button means, and without it no
+           button inside any panel could be reached from the keyboard at all —
+           this branch used to swallow both keys unconditionally. A control
+           focused by a mouse click is a different thing and does not reach
+           here: those let go of the focus as they are clicked, see dropFocus. */
+        /* ...but only while the rod is idle. Once a cast is in the air the
+           game takes both keys regardless of what has focus: you cannot be
+           halfway through a fight and also mean to press a menu button, and
+           the cost of guessing that wrong is a panel over the top of the fish
+           you are losing. */
+        const busy = VF.fishing.state() !== 'idle' || VF.fishing.S.charging ||
+                     (VF.creature && VF.creature.active());
+        if (!busy && focusedControl()) return;
+
+        /* Otherwise the game owns these two, and it owns them on EVERY keydown
+           — including the auto-repeats a held key sends, which is most of them,
+           because holding space is how you fight a fish. The repeat guard used
+           to come first, so only the opening keydown of a press was ever
+           default-prevented and every repeat after it went through to the
+           browser, which then does what a browser is supposed to do with a
+           space bar: it presses whatever has focus. Prevent first, bail after. */
         e.preventDefault();
-        if (VF.catchUI.isOpen()) { VF.catchUI.defaultAction(); return; }
+        if (e.repeat) return;
         pressStart(e);
         return;
       }
+
+      if (e.repeat) return;
+/* @admin-only */
+      /* The owner door, and the only thing left of it in a build that does
+         not have js/ui/console.js: there, this module is not defined and the
+         line does nothing. It is asked before the shortcuts below and before
+         the panel check, because the way in has to work with a panel already
+         open, and because the word it watches for has to eat its own letters
+         before `m` gets read as the map. */
+      if (VF.adminDoor && VF.adminDoor.key(e)) return;
+/* @end-admin */
+
       if (VF.state.rt.panelOpen) return;
       switch (e.code) {
         case 'KeyQ': e.preventDefault(); VF.panels.open('shop'); break;
@@ -127,6 +231,7 @@
         case 'KeyM': e.preventDefault(); VF.panels.open('map'); break;
         case 'KeyJ': e.preventDefault(); VF.panels.open('journal'); break;
         case 'KeyC': e.preventDefault(); VF.panels.open('wardrobe'); break;
+        case 'KeyA': e.preventDefault(); VF.panels.open('aquarium'); break;
         case 'KeyR':
           e.preventDefault();
           if (VF.fishing.reelIn()) VF.toast.plain('Line reeled in', null, 1600);
@@ -138,12 +243,14 @@
       if (e.code === 'Space' || e.code === 'Enter') pressEnd();
     });
 
-    D.chipLoc.addEventListener('click', function () { VF.audio.click(); VF.panels.open('map'); });
-    D.gearRod.addEventListener('click', function () { VF.audio.click(); VF.panels.open('shop', 'rods'); });
-    D.gearBait.addEventListener('click', function () { VF.audio.click(); VF.panels.open('shop', 'bait'); });
+    D.chipLoc.addEventListener('click', function (e) { dropFocus(e); VF.audio.click(); VF.panels.open('map'); });
+    D.gearRod.addEventListener('click', function (e) { dropFocus(e); VF.audio.click(); VF.panels.open('shop', 'rods'); });
+    D.gearBait.addEventListener('click', function (e) { dropFocus(e); VF.audio.click(); VF.panels.open('shop', 'bait'); });
 
     U.qsa('.mbtn').forEach(function (b) {
-      b.addEventListener('click', function () { VF.audio.click(); VF.panels.open(b.dataset.panel); });
+      b.addEventListener('click', function (e) {
+        dropFocus(e); VF.audio.click(); VF.panels.open(b.dataset.panel);
+      });
       b.addEventListener('pointerenter', function () { VF.audio.hover(); });
     });
   }
@@ -182,6 +289,38 @@
         speedMin: 30, speedMax: 110 * (sc.shard ? 1.7 : 1), sizeMax: 2.2, grav: 240, lifeMax: 0.7
       });
     });
+    /* Something big enough to be seen coming. The cue is deliberately quiet —
+       the shadow is the announcement, this only makes you look up. */
+    VF.bus.on('fishing:approach', function (a) {
+      VF.audio.surge();
+      VF.audio.duck(0.6);
+      VF.fx.pulse(0.34);
+      VF.fx.shake(1.6);
+      showPrompt(a.rank >= 8 ? 'something is coming'
+               : a.rank >= 7 ? 'the water is wrong' : 'something is coming',
+                 VF.rarities.color(a.rarity), 1.1);
+    });
+
+    /* It is on its way. Quieter than an encounter and louder than a bite,
+       because it is neither — it is the same animal again. */
+    VF.bus.on('returning:coming', function (e) {
+      VF.audio.duck(0.75);
+      VF.fx.pulse(0.42);
+      setTimeout(function () {
+        VF.toast.plain(e.spec.lead, e.stage === 0 ? 'warn' : null, 4200);
+      }, 900);
+    });
+    VF.bus.on('returning:advanced', function (e) {
+      if (e.done) {
+        VF.fx.flash('rgba(255,232,176,0.20)', 0.6, 1.4);
+        VF.toast.show('<strong>that is the end of that</strong><br>' +
+                      '<span style="color:var(--ink-3)">journal · entries</span>', 'good', 6000);
+      } else if (e.stage === 1) {
+        VF.toast.show('<strong>it is still out there</strong><br>' +
+                      '<span style="color:var(--ink-3)">journal · entries</span>', null, 5200);
+      }
+    });
+
     VF.bus.on('fishing:nibble', function () {
       const b = VF.scene.L.bobber;
       VF.audio.nibble();
@@ -209,6 +348,29 @@
     // fish and the bar losing it, which is the thing the player needs to hear
     VF.bus.on('fishing:grip', function () { VF.audio.nibble(); });
     VF.bus.on('fishing:slip', function () { VF.audio.strain(0.9); });
+    /* Not a loss. It has to read as the rod doing something rather than as the
+       game failing to notice you lost, so it gets the snap's whole treatment
+       and then takes it back in gold. */
+    VF.bus.on('fishing:saved', function (e) {
+      VF.audio.snap();
+      VF.fx.shake(6, 4);
+      VF.fx.flash('rgba(255,214,130,0.34)', 0.42);
+      VF.toast.plain(e.reason === 'snap'
+        ? 'the line went — and then it had not gone'
+        : 'the hook came out — and then it was back in', 'good', 3000);
+      showPrompt('Second chance', '#ffd782', 1.35);
+    });
+
+    /* Past the cap, this is the only progression beat left, so it gets one. */
+    VF.bus.on('fathom:reached', function (e) {
+      VF.audio.stinger('grand', 3);
+      VF.fx.flash('rgba(180,138,255,0.22)', 0.36);
+      VF.fx.pulse(0.5);
+      showPrompt('fathom ' + e.fathoms, '#c9a8ff', 1.6);
+      VF.toast.plain('another fathom down. the water is still counting.', 'good', 3600);
+      refreshLevel();
+    });
+
     VF.bus.on('fishing:lost', function (e) {
       VF.audio.reelStop();
       if (e.reason === 'snap') {
@@ -220,6 +382,13 @@
       } else {
         VF.toast.plain('It shook the hook loose', 'warn', 2600);
         showPrompt('It got away', '#ffc36a', 1.0);
+      }
+      /* The run went with it. It is only worth saying when the run was long
+         enough to have been worth something, which is the same threshold the
+         tag itself appears at. */
+      if (e.streak >= 3 && e.bonus > 0) {
+        VF.toast.plain('the run ends at ' + e.streak + ' — that was +' + e.bonus + '% on every catch',
+                       'warn', 3200);
       }
       if (VF.quests.anyArmed()) {
         VF.toast.plain('it goes back up, and it waits. cast again.', null, 4200);
@@ -264,8 +433,15 @@
     VF.bus.on('quest:started', function (def) {
       VF.audio.discover();
       VF.fx.pulse(0.4);
+      /* Say who to go and see. A thread opening used to be a name and a line of
+         flavour, and the person carrying it was somewhere on a shore with no
+         indication that they were now the point. */
+      const who = def.giver ? VF.npcs.name(def.giver).toLowerCase() : null;
       VF.toast.show('<strong>' + U.esc(def.name) + '</strong><br><span style="color:var(--ink-3)">' +
-        U.esc(def.blurb) + '</span>', null, 7000);
+        U.esc(def.blurb) + '</span>' +
+        (who ? '<br><span style="color:var(--accent)">go and see ' + U.esc(who) + '</span>' : ''),
+        null, 8000);
+      showPrompt('a thread opens', '#9ec6ff', 1.3);
       flashMenu('journal');
     });
 
@@ -302,15 +478,32 @@
 
     /* Four phases, and each one announces itself before it starts hurting. */
     VF.bus.on('fishing:phase', function (e) {
-      VF.audio.surge();
-      VF.fx.shake(4.5 + e.index * 1.6, 4);
-      VF.fx.pulse(0.5 + e.index * 0.12);
-      VF.fx.flash(e.index >= 3 ? 'rgba(255,228,160,0.22)' : 'rgba(190,215,255,0.13)', 0.26, 1.6);
-      showPrompt(e.name, e.index >= 3 ? '#ffe6a8' : '#cfe0ff', 1.1);
+      const spec = e.fight && e.fight.trial ? e.fight.trial.spec : null;
+      /* A tier writes most of these now, so the announcement has to say what
+         is actually on the line rather than calling every phased fight the
+         heaven's trial. The two authored ones keep the gold. */
+      const written = !(spec && spec.generated);
+      const c = e.fight ? e.fight.c : null;
+      const col = written ? '#ffe6a8'
+                : (c ? VF.rarities.color(c.rarity) : '#cfe0ff');
+
+      /* The opening phase arrives in the same breath as the hookset, which
+         already has its own shake, flash and prompt. Doubling it on every
+         mythic reads as a bug rather than as an event. */
+      const opening = e.index === 0 && !written;
+      if (!opening) {
+        VF.audio.surge();
+        VF.fx.shake(4.5 + e.index * 1.6, 4);
+        VF.fx.pulse(0.5 + e.index * 0.12);
+        VF.fx.flash(written && e.index >= 3 ? 'rgba(255,228,160,0.22)' : 'rgba(190,215,255,0.13)', 0.26, 1.6);
+        showPrompt(e.name, col, 1.1);
+      }
       if (D.fightName) {
-        D.fightName.textContent = 'heaven’s trial · ' + e.name.toLowerCase() +
+        const who = written ? 'heaven’s trial'
+                  : (c && c.fish ? c.fish.name.toLowerCase() : 'something');
+        D.fightName.textContent = who + ' · ' + e.name.toLowerCase() +
                                   ' · ' + (e.index + 1) + ' of ' + e.of;
-        D.fightName.style.color = '#ffd88a';
+        D.fightName.style.color = col;
       }
     });
 
@@ -333,9 +526,14 @@
       }, 1500);
       setTimeout(function () {
         D.hud.classList.remove('dimmed');
+        /* "one ancient power has awakened. something beneath the ocean has
+           noticed." — the exact register this game spends the rest of its
+           writing not being. Elias has just handed over a rod that fell out
+           of the sky and told you the ocean will come looking for you and
+           that it is a schedule. That is the tone. */
         VF.toast.show('<strong>' + U.esc(def.name) + '</strong> — complete<br>' +
-          '<span style="color:var(--ink-3)">one ancient power has awakened. something beneath ' +
-          'the ocean has noticed.</span>', 'good', 12000);
+          '<span style="color:var(--ink-3)">something registered that. you will find out ' +
+          'what, and it will not be at a time of your choosing.</span>', 'good', 12000);
         flashMenu('journal');
         refreshGear();
       }, 3400);
@@ -512,6 +710,14 @@
     refreshAll();
   }
 
+  /* The aquarium is the one menu that can have news in it while you are
+     standing somewhere else — a species finishing its research, or the desk
+     working something out. */
+  VF.bus.on('aquarium:discovery', function () { flashMenu('aquarium'); });
+  VF.bus.on('aquarium:research', function (e) {
+    if (e && e.milestone && e.milestone.at >= 1) flashMenu('aquarium');
+  });
+
   function flashMenu(panel) {
     const b = U.qs('.mbtn[data-panel="' + panel + '"]');
     if (!b) return;
@@ -627,57 +833,189 @@
     const d = VF.state.data;
     const rod = VF.rods.get(d.rod);
     const bait = VF.bait.get(d.bait);
-    D.rodName.textContent = rod.name;
-    D.baitName.textContent = bait.name;
+    setText(D.rodName, rod.name);
+    setText(D.baitName, bait.name);
     const n = VF.bait.count(d.bait);
-    D.baitCount.textContent = n === Infinity ? '∞' : n;
+    setText(D.baitCount, n === Infinity ? '∞' : String(n));
     D.baitCount.classList.toggle('low', n !== Infinity && n <= 3);
   }
 
+  /* A condition runs eighty to three hundred seconds and carries the largest
+     multipliers in the game, so how long is left is the whole decision — stay,
+     re-bait, swap a charm, or travel. The chip showed a name and nothing else.
+     The fuse drains along the bottom; the number is for when the answer
+     matters to the minute. */
+  function tickCondition() {
+    const c = VF.conditions.current();
+    if (!c) return;
+    const left = VF.conditions.remain();
+    D.condFuse.style.transform = 'scaleX(' + VF.conditions.fraction().toFixed(4) + ')';
+    setText(D.condLeft, left >= 60
+      ? Math.ceil(left / 60) + 'm'
+      : Math.max(1, Math.ceil(left)) + 's');
+    D.condLeft.classList.toggle('urgent', left < 30);
+  }
+
   function refreshChips() {
-    D.locName.textContent = VF.locations.current().name;
-    D.wxName.textContent = VF.weather.name();
-    D.timeName.textContent = VF.time.phaseName() + ' · ' + VF.time.clock();
+    setText(D.locName, VF.locations.current().name);
+    setText(D.wxName, VF.weather.name());
+    /* The moon only earns a place in the chip when it is up and doing
+       something. Naming a phase at midday is noise. */
+    let when = VF.time.phaseName() + ' · ' + VF.time.clock();
+    if (VF.time.moonName && VF.time.elevation() < 0.30) {
+      when += ' · ' + VF.time.moonName().toLowerCase();
+    }
+    setText(D.timeName, when);
     const c = VF.conditions.current();
     D.chipCond.classList.toggle('hidden', !c);
     if (c) {
-      D.condName.textContent = c.name;
+      setText(D.condName, c.name);
       D.chipCond.style.borderColor = U.rgbToCss(U.hexToRgb(c.tint), 0.55);
       D.condName.style.color = c.tint;
       D.chipCond.title = c.blurb;
+      D.condFuse.style.background = c.tint;
+      tickCondition();
     }
+  }
+
+  /* Writing textContent replaces the text node whether or not the string
+     changed, and a replaced text node dirties layout. The HUD rewrites the
+     clock, the weather, the level, the fuse and the fight percentage on a
+     timer, so most of those writes were identical strings costing a layout
+     apiece — measurably the largest source of layout work in an idle frame.
+     Compare first, and an unchanged label costs nothing. */
+  function setText(el, s) {
+    if (el && el.textContent !== s) el.textContent = s;
+  }
+
+  /* Every bar in the HUD is a full-width element squeezed from its left edge
+     rather than an element whose width is written each time. A width is a
+     layout property and a transform is not, so what used to be style, layout,
+     paint and composite is now a composite and nothing else. The gradients come
+     out identical — a 90deg ramp is measured against the element's own box
+     either way. */
+  function setFill(el, v) {
+    el.style.transform = 'scaleX(' + U.clamp(v, 0, 1).toFixed(4) + ')';
   }
 
   function refreshLevel() {
     const d = VF.state.data;
-    D.levelVal.textContent = 'LV ' + d.level + (d.streak >= 5 ? '  ×' + d.streak : '');
-    const need = VF.progression.xpToNext();
-    const pctv = U.clamp(d.xp / Math.max(1, need), 0, 1);
-    D.xpFill.style.width = (pctv * 100).toFixed(1) + '%';
-    D.xpText.textContent = U.commas(d.xp) + ' / ' + U.commas(need);
+    const capped = d.level >= VF.progression.MAX_LEVEL;
+
+    /* At the cap the bar used to freeze part-filled and never move again,
+       because the experience was being thrown away. It counts fathoms now, so
+       there is still something arriving. */
+    if (capped) {
+      setText(D.levelVal, 'LV 99');
+      D.levelVal.classList.add('deep');
+      D.xpFill.classList.add('deep');
+      setFill(D.xpFill, VF.progression.fathomPct());
+      setText(D.xpText, (d.fathoms | 0) + ' fathoms · ' +
+        U.commas(d.fathomXp | 0) + ' / ' + U.commas(VF.progression.FATHOM_XP));
+    } else {
+      setText(D.levelVal, 'LV ' + d.level);
+      D.levelVal.classList.remove('deep');
+      D.xpFill.classList.remove('deep');
+      const need = VF.progression.xpToNext();
+      setFill(D.xpFill, U.clamp(d.xp / Math.max(1, need), 0, 1));
+      setText(D.xpText, U.commas(d.xp) + ' / ' + U.commas(need));
+    }
+
+    /* And the run, saying what it is worth rather than sitting next to the
+       level looking like a multiplier on everything. */
+    const n = d.streak | 0;
+    const bonus = Math.round((VF.progression.streakMult() - 1) * 100);
+    if (n >= 3 && bonus > 0) {
+      setText(D.streakVal, n + ' in a row · +' + bonus + '% value');
+      D.streakVal.classList.remove('hidden');
+      D.streakVal.classList.toggle('hot', bonus >= Math.round(VF.progression.STREAK_CAP * 100));
+    } else {
+      D.streakVal.classList.add('hidden');
+    }
   }
 
   /* --------------------------------------------------------------- tick */
 
   let chipTimer = 0;
 
+  /* The boat and the water, as two or three chips in the corner. Rebuilt only
+     when what it says changes — this is next to a canvas that is already
+     using the frame, and a DOM write per frame for a string that changes
+     every forty seconds is forty seconds of wasted layout. */
+  /* Whatever this water is saying right now goes through the prompt the game
+     already has, rather than a fourth kind of message box. */
+  let saidZone = '';
+  function tickZoneSay() {
+    if (!VF.zones) return;
+    const line = VF.zones.prompt();
+    if (line === saidZone) return;
+    saidZone = line;
+    if (line) showPrompt(line, VF.locations.current().glow, 3.4);
+  }
+
+  /* This used to be a row of instruments that were on the screen the whole
+     time you were on the water: the boat's name, the moon phase, a resonance
+     percentage, a depth percentage, and the word "clear" next to the sonar.
+     Four of those five were readouts of things the player could already see
+     or could not act on, and the fifth told them nothing was happening.
+
+     What is left is only state you are CARRYING and would otherwise not know
+     about — a parasite with a count on it, and a sonar return while there
+     actually is one. The moon is the largest object in the sky. The abyss
+     charges its own crystals in front of you. The descent darkens the water.
+     None of them need a number. */
+  let boatKey = '';
+  function tickBoatHud() {
+    if (!D.boatHud || !VF.boat) return;
+    const show = VF.boat.afloat() && !VF.state.rt.panelOpen;
+    D.boatHud.classList.toggle('hidden', !show);
+    if (!show) return;
+
+    const rows = [];
+    const sound = Math.round(VF.boat.integrity() * 100);
+    if (sound < 70) rows.push(['hull', sound + '%']);
+
+    const z = VF.zones ? VF.zones.view() : null;
+    if (z && z.rule === 'sonar' && z.contact) rows.push(['sonar', 'CONTACT']);
+
+    const par = VF.parasite && VF.parasite.current();
+    if (par) rows.push([par.def.name.toLowerCase(), par.left + ' left']);
+
+    const key = rows.map(function (r) { return r.join(':'); }).join('|');
+    if (key === boatKey) return;
+    const ping = boatKey && key.indexOf('CONTACT') >= 0 && boatKey.indexOf('CONTACT') < 0;
+    boatKey = key;
+    U.clear(D.boatHud);
+    rows.forEach(function (r) {
+      const c = U.el('div', 'boat-chip' + (ping ? ' ping' : ''));
+      c.appendChild(document.createTextNode(r[0] + (r[1] ? ' ' : '')));
+      if (r[1]) c.appendChild(U.el('b', null, r[1]));
+      D.boatHud.appendChild(c);
+    });
+  }
+
   function tick(dt) {
+    if (VF.encounterUI) VF.encounterUI.tick();
+    tickBoatHud();
+    tickZoneSay();
+    if (VF.conditions.current()) tickCondition();
     const d = VF.state.data;
     const S = VF.fishing.S;
 
     tickCaption();
     watchForVisitors(dt);
 
-    /* money counts up rather than snapping */
+    /* Money counts up rather than snapping. The bump used to be restarted on
+       every frame that crossed a whole Jias — which during a payout is every
+       frame — so a 460ms animation never got past its first sixteen
+       milliseconds, and each restart forced a synchronous layout in order to
+       do it. It fires once now, at the moment the count begins, and is left
+       alone to finish. */
     if (Math.abs(shownMoney - d.money) > 0.5) {
-      const before = Math.floor(shownMoney);
+      if (!D.moneyVal.classList.contains('bump')) D.moneyVal.classList.add('bump');
       shownMoney = U.approach(shownMoney, d.money, 0.0006, dt);
       if (Math.abs(shownMoney - d.money) < 1) shownMoney = d.money;
       D.moneyVal.textContent = U.money(shownMoney);
-      if (Math.floor(shownMoney) > before + 1) {
-        D.moneyVal.classList.remove('bump'); void D.moneyVal.offsetWidth;
-        D.moneyVal.classList.add('bump');
-      }
     } else if (D.moneyVal.textContent !== U.money(d.money)) {
       shownMoney = d.money;
       D.moneyVal.textContent = U.money(d.money);
@@ -689,7 +1027,7 @@
     /* cast meter */
     if (S.charging) {
       D.castMeter.classList.add('on');
-      D.castFill.style.width = (S.charge * 100).toFixed(1) + '%';
+      setFill(D.castFill, S.charge);
       D.actionBtn.classList.add('charging');
     } else {
       D.castMeter.classList.remove('on');
@@ -719,9 +1057,16 @@
     else if (st === 'reeling') { label = 'Reel'; h = 'hold to reel'; cls = 'reeling'; }
     else if (st === 'landed') { label = '—'; h = ''; cls = 'busy'; }
 
-    if (D.actionLabel.textContent !== label) D.actionLabel.textContent = label;
-    if (D.actionHint.textContent !== h) D.actionHint.textContent = h;
+    setText(D.actionLabel, label);
+    setText(D.actionHint, h);
     D.actionBtn.className = 'action-btn' + (cls ? ' ' + cls : '') + (S.charging ? ' charging' : '');
+  }
+
+  /* One forced layout, at the moment a fight opens. Everything the fight does
+     after this is a transform. */
+  function measureFight() {
+    const inner = D.mgBar && D.mgBar.parentNode;
+    mgW = inner ? inner.clientWidth : 0;
   }
 
   /* The catch bar. Everything here is a straight read of the fight state the
@@ -744,14 +1089,38 @@
     const f = S.fight;
     if (D.fightUI.classList.contains('hidden')) {
       D.fightUI.classList.remove('hidden');
+      measureFight();
       D.fightUI.classList.add('enter');
       setTimeout(function () { D.fightUI.classList.remove('enter'); }, 320);
       const col = f.c.kind === 'treasure' ? '#d8c79a' : VF.rarities.color(f.c.rarity);
+      /* One tier has no single colour. The marker reads --fishcol, which is
+         normally written here once and then left alone; for that tier the
+         inline value is cleared instead so the animation in css/hud.css owns
+         the variable — an inline custom property on the element beats an
+         animation on an ancestor, so the class has to go on the marker. */
+      const bow = f.c.kind !== 'treasure' && VF.rarities.rainbow(f.c.rarity);
+      D.fightName.classList.toggle('bow-fg', !!bow);
+      D.mgFish.classList.toggle('fight-bow', !!bow);
       D.fightName.textContent = f.c.kind === 'treasure' ? 'something heavy'
         : f.c.isNew ? 'unknown — something new'
         : VF.traits.title(f.c.traits, f.c.fish.name);
       D.fightName.style.color = col;
-      D.mgFish.style.setProperty('--fishcol', col);
+      if (bow) {
+        D.mgFish.style.removeProperty('--fishcol');
+        /* And the marker stops being a fish, because this one is not one.
+           Its own outline only once it has been landed before, though — the
+           bar is on screen for the whole fight and the shape of what is on
+           the end of the line is the reveal. Until then the tier's own mark
+           in css/hud.css stands in, which gives nothing away and is still
+           not a trout. */
+        const seen = !!VF.state.data.fishdex[f.c.id];
+        const gl = seen ? VF.fishArt.glyph(f.c.fish) : '';
+        if (gl) D.mgFish.style.setProperty('--fishglyph', gl);
+        else D.mgFish.style.removeProperty('--fishglyph');
+      } else {
+        D.mgFish.style.setProperty('--fishcol', col);
+        D.mgFish.style.removeProperty('--fishglyph');
+      }
       // sized here and then only when the fight itself moves the walls, which
       // ordinarily never happens and in the heaven's trial happens four times
       shownBarW = -1;
@@ -762,13 +1131,18 @@
         : key + ' to go right, let go to go left';
     }
 
-    /* the bar and the fish */
+    /* The bar and the fish. The width is still a width because the walls only
+       move when the fight itself moves them — ordinarily never, and four times
+       in the heaven's trial. The positions are transforms, every frame. */
     if (f.barW !== shownBarW) {
       shownBarW = f.barW;
       D.mgBar.style.width = (f.barW * 100).toFixed(2) + '%';
     }
-    D.mgBar.style.left = ((f.bar - f.barW * 0.5) * 100).toFixed(3) + '%';
-    D.mgFish.style.left = (f.fish * 100).toFixed(3) + '%';
+    if (!mgW) measureFight();
+    D.mgBar.style.transform =
+      'translate3d(' + ((f.bar - f.barW * 0.5) * mgW).toFixed(2) + 'px,0,0)';
+    D.mgFish.style.transform =
+      'translate3d(' + (f.fish * mgW).toFixed(2) + 'px,0,0)';
     D.mgFish.classList.toggle('left', f.fishV < -0.02);
     D.mgBar.classList.toggle('grip', f.inside);
     D.mgBar.classList.toggle('right', f.barV > 0.05);
@@ -776,16 +1150,16 @@
 
     /* the progress */
     const pr = U.clamp(f.progress, 0, 1);
-    D.mgProgFill.style.width = (pr * 100).toFixed(2) + '%';
+    setFill(D.mgProgFill, pr);
     D.mgProg.classList.toggle('gain', f.inside);
     D.mgProg.classList.toggle('drain', !f.inside);
     D.mgProg.classList.toggle('low', pr < 0.22);
-    D.fightPct.textContent = Math.round(pr * 100) + '%';
+    setText(D.fightPct, Math.round(pr * 100) + '%');
 
     /* the warning line only says something once it means something */
     const losing = !f.inside && f.outsideT > 0.28;
     const warn = pr < 0.18 ? 'nearly gone' : losing ? 'losing it' : '';
-    if (D.fightWarn.textContent !== warn) D.fightWarn.textContent = warn;
+    setText(D.fightWarn, warn);
     D.fightWarn.classList.toggle('on', !!warn);
     D.fightUI.classList.toggle('shake', f.shakeAmt > 0.45);
 

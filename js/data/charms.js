@@ -70,73 +70,73 @@
        you hold the fish inside. Size makes the bar wider; speed changes how
        hard it is to stop. Faster is not automatically better — a steadier bar
        is easier to place, a quicker one covers ground. */
-    { id: 'luckyscale', name: '\ud83c\udf40 Lucky Scale', kind: 'charm', rarity: 'common', cost: 1800, level: 6,
+    { id: 'luckyscale', name: 'Lucky Scale', kind: 'charm', rarity: 'common', cost: 1800, level: 6,
       icon: '\ud83c\udf40',
       desc: 'A polished fish scale that makes the fishing zone easier to control.',
       note: '+10% white bar size',
       stats: { barSize: 1.10 } },
 
-    { id: 'frostcharm', name: '\ud83e\uddca Frost Charm', kind: 'charm', rarity: 'uncommon', cost: 4800, level: 7,
+    { id: 'frostcharm', name: 'Frost Charm', kind: 'charm', rarity: 'uncommon', cost: 4800, level: 7,
       icon: '\ud83e\uddca',
       desc: 'A frozen charm that slows the movement of the fishing zone.',
       note: '-10% white bar movement speed',
       stats: { barSpeed: 0.90 } },
 
-    { id: 'moonpearl', name: '\ud83c\udf19 Moon Pearl', kind: 'charm', rarity: 'uncommon', cost: 5200, level: 8,
+    { id: 'moonpearl', name: 'Moon Pearl', kind: 'charm', rarity: 'uncommon', cost: 5200, level: 8,
       icon: '\ud83c\udf19',
       desc: 'A glowing pearl that makes the fishing zone slightly easier to manage.',
       note: '+10% white bar size + 5% slower movement',
       stats: { barSize: 1.10, barSpeed: 0.95 } },
 
-    { id: 'stormcharm', name: '\u26a1 Storm Charm', kind: 'charm', rarity: 'uncommon', cost: 5600, level: 9,
+    { id: 'stormcharm', name: 'Storm Charm', kind: 'charm', rarity: 'uncommon', cost: 5600, level: 9,
       icon: '\u26a1',
       desc: 'A lightning-powered charm that makes the fishing zone move faster.',
       note: '+15% white bar movement speed',
       stats: { barSpeed: 1.15 } },
 
-    { id: 'tidalpearl', name: '\ud83c\udf0a Tidal Pearl', kind: 'charm', rarity: 'uncommon', cost: 7500, level: 10,
+    { id: 'tidalpearl', name: 'Tidal Pearl', kind: 'charm', rarity: 'uncommon', cost: 7500, level: 10,
       icon: '\ud83c\udf0a',
       desc: 'A pearl that helps the fishing zone stay steady against strong fish.',
       note: '+15% white bar size',
       stats: { barSize: 1.15 } },
 
-    { id: 'embercharm', name: '\ud83d\udd25 Ember Charm', kind: 'charm', rarity: 'rare', cost: 12000, level: 11,
+    { id: 'embercharm', name: 'Ember Charm', kind: 'charm', rarity: 'rare', cost: 12000, level: 11,
       icon: '\ud83d\udd25',
       desc: 'A hot ember that makes the fishing zone react much quicker.',
       note: '+20% white bar movement speed',
       stats: { barSpeed: 1.20 } },
 
-    { id: 'currentcharm', name: '\ud83c\udf00 Current Charm', kind: 'charm', rarity: 'rare', cost: 15000, level: 12,
+    { id: 'currentcharm', name: 'Current Charm', kind: 'charm', rarity: 'rare', cost: 15000, level: 12,
       icon: '\ud83c\udf00',
       desc: 'A swirling ocean charm that keeps the fishing zone moving smoothly.',
       note: '+15% white bar size + 5% slower movement',
       stats: { barSize: 1.15, barSpeed: 0.95 } },
 
-    { id: 'shellguard', name: '\ud83d\udc1a Shell Guard', kind: 'charm', rarity: 'rare', cost: 24000, level: 13,
+    { id: 'shellguard', name: 'Shell Guard', kind: 'charm', rarity: 'rare', cost: 24000, level: 13,
       icon: '\ud83d\udc1a',
       desc: 'A reinforced shell that gives you a larger area to catch fish.',
       note: '+20% white bar size',
       stats: { barSize: 1.20 } },
 
-    { id: 'crystalscale', name: '\ud83d\udc8e Crystal Scale', kind: 'charm', rarity: 'epic', cost: 62000, level: 18,
+    { id: 'crystalscale', name: 'Crystal Scale', kind: 'charm', rarity: 'epic', cost: 62000, level: 18,
       icon: '\ud83d\udc8e',
       desc: 'A rare crystal scale that improves control over the fishing zone.',
       note: '+25% white bar size',
       stats: { barSize: 1.25 } },
 
-    { id: 'starfallcharm', name: '\ud83c\udf20 Starfall Charm', kind: 'charm', rarity: 'epic', cost: 110000, level: 22,
+    { id: 'starfallcharm', name: 'Starfall Charm', kind: 'charm', rarity: 'epic', cost: 110000, level: 22,
       icon: '\ud83c\udf20',
       desc: 'A piece of fallen starlight that makes the fishing zone incredibly stable.',
       note: '+25% white bar size + 10% slower movement',
       stats: { barSize: 1.25, barSpeed: 0.90 } },
 
-    { id: 'abysscharm', name: '\ud83c\udf0c Abyss Charm', kind: 'charm', rarity: 'epic', cost: 210000, level: 26,
+    { id: 'abysscharm', name: 'Abyss Charm', kind: 'charm', rarity: 'epic', cost: 210000, level: 26,
       icon: '\ud83c\udf0c',
       desc: 'A mysterious charm from the deepest ocean trenches.',
       note: '+30% white bar size',
       stats: { barSize: 1.30 } },
 
-    { id: 'fisherking', name: '\ud83d\udc51 Fisher King Charm', kind: 'charm', rarity: 'legendary', cost: 640000, level: 32,
+    { id: 'fisherking', name: 'Fisher King Charm', kind: 'charm', rarity: 'legendary', cost: 640000, level: 32,
       icon: '\ud83d\udc51',
       desc: 'A legendary charm made for master anglers.',
       note: '+35% white bar size',
@@ -173,7 +173,19 @@
     { id: 'coin', name: 'Tideworn Coin', kind: 'relic', rarity: 'rare', found: true,
       desc: 'Currency of somewhere that no longer takes payment.',
       note: 'everything sells for more',
-      stats: { value: 1.65, xp: 0.88 } }
+      stats: { value: 1.65, xp: 0.88 } },
+
+    /* The two at the end of the long threads. Neither is sold and neither is
+       in the water: they are what somebody hands you for finishing. */
+    { id: 'olderplate', name: 'The Older Plate', kind: 'relic', rarity: 'legendary', found: true,
+      desc: 'The names on it have not finished being on it.',
+      note: 'the old and the enormous come up, and they take their time about it',
+      stats: { size: 1.48, value: 1.35, xp: 1.28, trait: 1.25, bite: 0.78 } },
+
+    { id: 'nightglass', name: 'Night Glass', kind: 'relic', rarity: 'legendary', found: true,
+      desc: 'Held up to the dark it shows the dark, only nearer.',
+      note: 'finds what is hidden and what is strange, and never hurries',
+      stats: { secret: 2.0, rare: 1.42, trait: 1.35, encounter: 1.30, reel: 0.76 } }
   ];
 
   const BY_ID = VF.util.byId(LIST);
@@ -182,6 +194,7 @@
      than just stronger. */
   const SLOT_LEVELS = [6, 14, 26, 42, 58];
   function slotCount() {
+    if (VF.runs && !VF.runs.charmsAllowed()) return 0;
     const lv = VF.state.data.level;
     let n = 0;
     for (let i = 0; i < SLOT_LEVELS.length; i++) if (lv >= SLOT_LEVELS[i]) n++;
@@ -210,6 +223,10 @@
   function equip(id, slot) {
     const d = VF.state.data;
     if (!owned(id)) return false;
+    /* A run may not have charms at all. Refused here rather than only in the
+       panel, so a relic pulled out of the water cannot equip itself past the
+       rule on its way in. */
+    if (VF.runs && !VF.runs.charmsAllowed()) return false;
     const max = slotCount();
     if (slot === undefined || slot < 0 || slot >= max) {
       slot = d.charmSlots.findIndex(function (x, i) { return i < max && !x; });

@@ -10,6 +10,24 @@
       bite: 1.00, rare: 1.00, luck: 0.00, color: '#b07a5a',
       desc: 'Free, endless, and dug from a bank that does not exist. Common fish adore them.' },
 
+    /* The way back down.
+
+       Good gear erases the bottom of the catalogue: on the last rod at the
+       last water, Common came up seventeen times in twenty-four thousand
+       draws, and the shore species a completionist still needs are the ones
+       the gear is best at not catching. The only fix used to be unequipping
+       everything and remembering which rod you started with, which is a chore
+       reverse-engineered rather than a choice made.
+
+       So: the same worm, used on purpose. It throws away every rarity bonus
+       on the rod, the bait, the water, the weather and the charms, and hands
+       back the curve a beginner fishes. Nothing else about the loadout
+       changes — the fight is still yours, the bar is still wide. */
+    { id: 'plain', name: 'Plain Worm', cost: 40, pack: 20, level: 12, plain: true,
+      bite: 1.15, rare: 1.00, luck: 0.00, color: '#a08060',
+      desc: 'A worm, held deliberately. Whatever you are carrying, the water answers as if you ' +
+            'had just arrived and did not know any better. The small things come back.' },
+
     { id: 'minnow', name: 'Minnow', cost: 14, pack: 10, level: 2,
       bite: 0.86, rare: 1.22, luck: 0.05, color: '#9fc4d8',
       desc: 'Live bait for things that hunt by movement. Faster bites, better odds.' },
@@ -44,7 +62,17 @@
 
     { id: 'null', name: 'Null Bait', cost: 420000, pack: 5, level: 56,
       bite: 1.10, rare: 14.0, luck: 2.80, color: '#e8e8ff',
-      desc: 'An absence, tied to a hook. Everything down there notices an absence.' }
+      desc: 'An absence, tied to a hook. Everything down there notices an absence.' },
+
+    /* Nobody sells this and nobody made it on purpose. Two specimens in a tank
+       agreed on a colour, and the aquarium bottled some. `discover` keeps it
+       off the shelf entirely until that has happened — see
+       js/data/aquariumData.js, and VF.bait.available() below. */
+    { id: 'lure_pale', name: 'Pale Lure', cost: 120000, pack: 8, level: 20,
+      discover: 'deeplure',
+      bite: 0.68, rare: 9.40, luck: 1.90, color: '#dff6ff',
+      desc: 'A colour two lanterns settled on between them, which is not a colour either of ' +
+            'them was carrying. Things come a long way to look at it.' }
   ];
 
   const BY_ID = VF.util.byId(LIST);
@@ -71,8 +99,16 @@
     VF.state.data.baitCounts[id] = Math.min(99999, (VF.state.data.baitCounts[id] | 0) + n);
   }
 
+  /* Bait that exists as far as this save is concerned. A lure the aquarium has
+     not found yet is not stock the shop is out of — it is not a thing. */
+  function available() {
+    const found = VF.state.data.discovered || {};
+    return LIST.filter(function (b) { return !b.discover || !!found[b.discover]; });
+  }
+
   VF.bait = {
     list: LIST,
+    available: available,
     get: function (id) { return BY_ID[id] || BY_ID.worm; },
     count: count, has: has, consume: consume, add: add
   };

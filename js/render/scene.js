@@ -26,21 +26,87 @@
 
   /* ---------------------------------------------------------------- stars */
   let stars = null;
+  /* The field is baked: magnitudes on a power law, colour temperature, and the
+     galaxy lying across it. Only the two dozen brightest come back to be
+     animated, because a blit cannot twinkle and a sky where nothing moves is a
+     photograph. */
   function buildStars() {
     const q = VF.state.data.settings.quality;
-    const n = q === 'low' ? 80 : q === 'medium' ? 165 : 255;
-    stars = new Array(n);
-    const rnd = VF.rng.make(0xBEEF ^ VF.locations.index(VF.state.data.location) * 7919);
-    for (let i = 0; i < n; i++) {
-      stars[i] = {
-        x: rnd(), y: Math.pow(rnd(), 1.35),
-        s: 0.4 + Math.pow(rnd(), 2.6) * 2.1,
-        tw: rnd() * TAU,
-        sp: 0.4 + rnd() * 1.5,
-        bright: 0.35 + rnd() * 0.65,
-        big: rnd() < 0.05
-      };
+    const loc = VF.locations.current();
+    /* DPR is in the key because the field is baked at device resolution now —
+       a field baked for one ratio and blitted at another is exactly the soft,
+       doubled-up star it was built to stop being. */
+    const key = loc.id + ':' + Math.round(W) + 'x' + Math.round(L.horizonY) + ':' + q + ':' + DPR;
+    if (starKey === key && starField) return;
+    starKey = key;
+    const built = VF.skyArt.buildField(W, Math.max(8, L.horizonY),
+                                       0xBEEF ^ VF.locations.index(loc.id) * 7919,
+                                       q, U.hexToRgb(loc.starTint), DPR);
+    starField = built.canvas;
+    stars = built.bright;
+  }
+
+  /* --------------------------------------------------------------- clouds
+
+     Two layers at different scales drifting at different speeds. Baked at a
+     third resolution because a cloud has no edge worth resolving, and scrolled
+     by drawing each twice side by side so the wrap is seamless. */
+  function buildClouds() {
+    const q = VF.state.data.settings.quality;
+    if (q === 'low') { clouds = null; return; }
+    const loc = VF.locations.current();
+    const wx = VF.weather.id();
+    const key = loc.id + ':' + wx + ':' + Math.round(W) + 'x' + Math.round(L.horizonY) + ':' + q;
+    if (cloudKey === key && clouds) return;
+    cloudKey = key;
+
+    const P = VF.palette.P;
+    const bandH = Math.max(24, L.horizonY);
+    const seedBase = 0xC10D ^ VF.locations.index(loc.id) * 6151;
+    // how much sky the weather is covering
+    // clear weather means a few streaks, not an overcast lid
+    const cover = U.clamp(0.10 + VF.weather.fog() * 0.30 + VF.weather.rain() * 0.34, 0.06, 0.70);
+
+    clouds = [];
+    const layers = q === 'high' ? 2 : 1;
+    for (let i = 0; i < layers; i++) {
+      clouds.push({
+        canvas: VF.skyArt.buildCloudLayer(W, bandH, {
+          downscale: q === 'high' ? 3 : 4,
+          scale: i === 0 ? 2.4 : 4.6,
+          seed: seedBase + i * 977,
+          cover: cover * (i === 0 ? 1 : 0.78),
+          soft: i === 0 ? 0.34 : 0.26,
+          lit: U.mixRgb(U.hexToRgb(loc.glow), [255, 255, 255], 0.20),
+          dark: U.mixRgb(U.hexToRgb(loc.fog), [0, 0, 0], 0.62),
+          lightX: L.glowX / Math.max(1, W),
+          lightY: L.glowY / Math.max(1, bandH)
+        }),
+        // the high layer is further away, so it moves slower
+        speed: i === 0 ? 0.0042 : 0.0092,
+        alpha: i === 0 ? 0.13 : 0.085,
+        h: bandH
+      });
     }
+  }
+
+  function drawClouds(P) {
+    if (!clouds || !clouds.length) return;
+    // they are the first thing the void takes away
+    const k = U.clamp((0.85 - P.void) / 0.40, 0, 1);
+    if (k <= 0.01) return;
+    ctx.save();
+    for (let i = 0; i < clouds.length; i++) {
+      const c = clouds[i];
+      const off = ((t * c.speed) % 1) * W;
+      // and they are lit by the sky, so at night there is very little of them
+      ctx.globalAlpha = c.alpha * k * (0.18 + P.bright * 0.95);
+      // twice, side by side, so the drift never shows a seam
+      ctx.drawImage(c.canvas, -off, 0, W, c.h);
+      ctx.drawImage(c.canvas, W - off, 0, W, c.h);
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
   }
 
   /* --------------------------------------------------------------- grain
@@ -66,106 +132,340 @@
 
   /* ------------------------------------------------------- backdrop cache */
   let backdrop = null, backdropKey = '';
+  let landPad = null, landOne = null, landKey = '';   // the tinted land, baked
+  let starField = null, starKey = '';                 // the baked field
+  let clouds = null, cloudKey = '';                   // the drifting layers
 
+  /* The land was three layers of flat black at different opacities, which is
+     why it read as cardboard: distance does not make a hill more transparent,
+     it puts more air in front of it, and air has a colour. Each layer is baked
+     on its own now and tinted at draw time toward whatever the fog is doing,
+     so the far ridge sits back in the haze and the near one stands in front of
+     it. The bake is still cached — only the tint is per frame. */
   function buildBackdrop() {
     const loc = VF.locations.current();
     const key = loc.id + ':' + Math.round(W) + 'x' + Math.round(H) + ':' + VF.state.data.settings.quality;
     if (backdropKey === key && backdrop) return;
     backdropKey = key;
+    landKey = '';        // the tint is baked against the old ridges
 
-    const c = document.createElement('canvas');
-    c.width = Math.max(1, Math.round(W)); c.height = Math.max(1, Math.round(H));
-    const g = c.getContext('2d');
-    const rnd = VF.rng.make(0xC0FFEE ^ VF.locations.index(loc.id) * 104729);
     const hy = L.horizonY;
-    drawSilhouette(g, loc.silhouette, rnd, hy);
-    backdrop = c;
+    backdrop = [];
+    for (let l = 0; l < 5; l++) {
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(W)); c.height = Math.max(1, Math.round(H));
+      const g = c.getContext('2d');
+      // the same seed for every layer, so the ridges stay the ridges
+      const rnd = VF.rng.make(0xC0FFEE ^ VF.locations.index(loc.id) * 104729);
+      drawSilhouette(g, loc.silhouette, rnd, hy, l);
+      backdrop.push(c);
+    }
+  }
+
+  /* Paint the three baked ridges, each mixed toward the haze by how far away
+     it is.
+
+     This has to be CACHED, not composited per frame. Tinting three full-screen
+     layers with a source-atop fill and drawing them costs about 24ms — the
+     whole frame budget and half again — which is the exact trap the renderer
+     is otherwise built to avoid: full-screen translucent fills dominate 2D
+     canvas cost, so anything that covers the screen gets baked once and
+     blitted after.
+
+     The tint only depends on the haze colours, and those move slowly, so the
+     key is those colours quantised hard. In practice it rebakes a handful of
+     times over a day/night cycle and blits on every other frame. */
+  function drawLand(P) {
+    if (!backdrop || !backdrop.length) return;
+    const q = function (c) { return (c[0] >> 3) + ',' + (c[1] >> 3) + ',' + (c[2] >> 3); };
+    const key = backdropKey + '|' + q(P.fog) + '|' + q(P.skyBot) + '|' + (P.fogAmt * 12 | 0) +
+                '|' + (P.bright * 10 | 0) + '|' + (q(P.glow));
+    if (key !== landKey || !landPad) {
+      landKey = key;
+      bakeLand(P);
+    }
+    if (landPad) ctx.drawImage(landPad, 0, 0);
+  }
+
+  function bakeLand(P) {
+    if (!landPad) landPad = document.createElement('canvas');
+    if (landPad.width !== Math.round(W) || landPad.height !== Math.round(H)) {
+      landPad.width = Math.max(1, Math.round(W)); landPad.height = Math.max(1, Math.round(H));
+    }
+    const pg = landPad.getContext('2d');
+    const hy = L.horizonY;
+    pg.clearRect(0, 0, landPad.width, landPad.height);
+
+    if (!landOne) landOne = document.createElement('canvas');
+    if (landOne.width !== landPad.width || landOne.height !== landPad.height) {
+      landOne.width = landPad.width; landOne.height = landPad.height;
+    }
+    const og = landOne.getContext('2d');
+
+    for (let l = 0; l < backdrop.length; l++) {
+      // layer 0 is furthest: most air in front of it, and the least of it
+      const far = 1 - l / Math.max(1, backdrop.length - 1);
+      og.globalCompositeOperation = 'source-over';
+      og.clearRect(0, 0, landOne.width, landOne.height);
+      og.drawImage(backdrop[l], 0, 0);
+
+      /* What is baked is the FORM in greys — where the light falls on the
+         range — so the colour arrives in two passes here rather than being
+         painted over the top of it.
+
+         MULTIPLY puts the rock and the snow in: grey times a colour is that
+         colour at that luminance, so the lit faces come out bright and the
+         shadowed ones stay dark instead of the whole shape becoming one flat
+         fill, which is what a source-atop pass would have done to it.
+
+         Then SOURCE-ATOP lifts it toward the haze, which is the half of
+         aerial perspective that a multiply cannot do: distance does not only
+         dim a thing, it washes it out toward the colour of the air. */
+      /* Near ranges are dark and far ones are pale — that is the whole of
+         aerial perspective, and getting it the wrong way round turns a
+         mountain into a fog bank. `far` runs 1 at the back to 0 at the front,
+         so the rock darkens hard as it comes toward you. */
+      const rock = U.shade(U.mixRgb(P.fog, [255, 255, 255], 0.26 + P.bright * 0.22),
+                           -0.62 * (1 - far));
+      og.globalCompositeOperation = 'multiply';
+      const mg = og.createLinearGradient(0, hy - H * 0.16, 0, hy + 2);
+      mg.addColorStop(0, U.rgbToCss(U.mixRgb(rock, [255, 255, 255], 0.14)));
+      mg.addColorStop(1, U.rgbToCss(U.shade(rock, -0.42)));
+      og.fillStyle = mg;
+      og.fillRect(0, 0, landOne.width, landOne.height);
+
+      /* A blend mode is not a mask. Canvas composites `multiply` as
+         source-over wherever the destination is empty, so filling the whole
+         canvas painted the colour across the entire sky as well as into the
+         range — which is exactly what it did, turning a night into an
+         overcast afternoon. Clip it back to the shape it was meant to tint. */
+      og.globalCompositeOperation = 'destination-in';
+      og.drawImage(backdrop[l], 0, 0);
+
+      og.globalCompositeOperation = 'source-atop';
+      const air = U.mixRgb(P.skyBot, P.fog, 0.42);
+      const hazeK = far * (0.46 + P.fogAmt * 0.34);
+      const ag = og.createLinearGradient(0, hy - H * 0.13, 0, hy + 2);
+      ag.addColorStop(0, U.rgbToCss(air, hazeK * 0.80));
+      ag.addColorStop(1, U.rgbToCss(air, hazeK));
+      og.fillStyle = ag;
+      og.fillRect(0, 0, landOne.width, landOne.height);
+      og.globalCompositeOperation = 'source-over';
+
+      pg.globalAlpha = U.lerp(0.86, 1, 1 - far);
+      pg.drawImage(landOne, 0, 0);
+      pg.globalAlpha = 1;
+    }
+
+    /* The haze band itself: the air at the waterline is thicker than the air
+       above it, so the horizon is a soft seam rather than a cut edge. This is
+       what actually sells the distance, and it bakes in with the rest. */
+    /* The haze has to fade out at BOTH ends. Ramping up to full alpha and then
+       stopping at the rectangle's edge draws a pale bar across the horizon
+       with a hard bottom to it — which is worse than the clean seam it was
+       meant to soften. */
+    const top = hy - H * 0.085, bot = hy + H * 0.055;
+    const band = pg.createLinearGradient(0, top, 0, bot);
+    const hz = U.mixRgb(P.fog, P.glow, 0.20);
+    const peak = (0.055 + P.fogAmt * 0.11) * (0.28 + P.bright * 0.72);
+    band.addColorStop(0, U.rgbToCss(hz, 0));
+    band.addColorStop(0.55, U.rgbToCss(hz, peak * 0.72));
+    band.addColorStop(0.66, U.rgbToCss(hz, peak));
+    band.addColorStop(0.80, U.rgbToCss(hz, peak * 0.45));
+    band.addColorStop(1, U.rgbToCss(hz, 0));
+    pg.fillStyle = band;
+    pg.fillRect(0, top, W, bot - top);
   }
 
   /* Distant land: layered dark shapes sitting on the horizon line. */
-  function drawSilhouette(g, style, rnd, hy) {
+  /* Distant land.
+
+     It used to be a run of rounded bumps or a row of triangles — a shape with
+     an outline and nothing inside it, which is why layering it still read as
+     cardboard. A mountain is not an outline. It is a ridgeline with faces
+     either side of it, and the faces are what you actually see: one turned
+     toward the light and one away, snow above the line where snow stays, and
+     rock showing wherever the slope is too steep to hold any.
+
+     The ridgeline is ridged fractal noise — fBm with each octave folded around
+     its midpoint, which is the fold that turns soft hills into crests. The
+     part that took a rebuild: the shading cannot key on the slope between one
+     column and the next. Noise that looks perfectly smooth still changes
+     direction about thirty times across a screen, and shading off that gives
+     you a barcode rather than a mountain. So the heights are built into an
+     array first, smoothed, and the slope is measured across a window wide
+     enough to mean "which face is this" rather than "which way is this one
+     pixel going". */
+
+  /* One range's heights, in pixels above the horizon. */
+  function ridgeline(style, W2, step, seed, freq, phase, maxH) {
+    const n = Math.ceil(W2 / step) + 3;
+    const h = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const u = (i * step - step) / Math.max(1, W2);
+      let v;
+      if (style === 'spires' || style === 'crystals') {
+        // sharper and taller at the peaks: these are not hills
+        v = Math.pow(VF.skyArt.fbm(u * freq * 1.7 + phase, 0.37, seed, 4, 1.92, 0.42, true), 0.62);
+      } else if (style === 'trees') {
+        v = VF.skyArt.fbm(u * freq * 2.2 + phase, 0.61, seed, 3, 1.9, 0.5, false) * 0.6 + 0.22;
+      } else if (style === 'bones' || style === 'ruins') {
+        v = VF.skyArt.fbm(u * freq * 1.4 + phase, 0.5, seed, 4, 2.0, 0.44, true);
+        // broken: stretches of the range are simply missing
+        if (VF.skyArt.noise2(u * 5 + phase, 3.3, seed) < 0.30) v *= 0.20;
+      } else {
+        v = VF.skyArt.fbm(u * freq + phase, 0.5, seed, 4, 1.95, 0.45, true);
+      }
+      h[i] = v;   // raw for now; the range is normalised once it is all known
+    }
+
+    /* Ridged fBm comes out bunched around the middle — measured, about 0.46 to
+       0.76 for the open styles — so used raw it gives gentle dunes rather than
+       a range. It has to be stretched to fill the height.
+
+       Stretching against FIXED bounds was the first attempt and it clipped:
+       every peak that ran past the top came out as a flat-topped mesa, which
+       is what the crystals at the abyss turned into. Normalising against what
+       this particular range actually produced cannot clip, and works for
+       whichever style asked. */
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 0; i < n; i++) { if (h[i] < lo) lo = h[i]; if (h[i] > hi) hi = h[i]; }
+    const span = Math.max(1e-4, hi - lo);
+    for (let i = 0; i < n; i++) {
+      // a curve on the normalised value: most of a range is low, peaks are rare
+      h[i] = Math.pow((h[i] - lo) / span, 1.30) * maxH;
+    }
+    /* Two passes of a small blur. The high octaves are what give a range its
+       texture, and they are also what makes the slope meaningless; blurring
+       the line keeps the shape and loses the jitter. */
+    for (let pass = 0; pass < 2; pass++) {
+      const c = h.slice();
+      for (let i = 1; i < n - 1; i++) h[i] = c[i - 1] * 0.26 + c[i] * 0.48 + c[i + 1] * 0.26;
+    }
+    return h;
+  }
+
+  /* The same line, blurred much harder. Shading has to be read off THIS, not
+     off the ridge: the ridge carries the texture that makes a range look like
+     rock, and that texture is exactly what makes a slope measured on it
+     meaningless. Two separate lines — one to draw, one to light by. */
+  function shadingLine(h) {
+    const n = h.length;
+    let a = Float32Array.from(h);
+    let b = new Float32Array(n);
+    for (let pass = 0; pass < 8; pass++) {
+      for (let i = 0; i < n; i++) {
+        const p0 = a[Math.max(0, i - 2)], p1 = a[Math.max(0, i - 1)];
+        const p2 = a[i];
+        const p3 = a[Math.min(n - 1, i + 1)], p4 = a[Math.min(n - 1, i + 2)];
+        b[i] = (p0 + p1 * 2 + p2 * 3 + p3 * 2 + p4) / 9;
+      }
+      const t2 = a; a = b; b = t2;
+    }
+    return a;
+  }
+
+  function drawSilhouette(g, style, rnd, hy, only) {
     if (style === 'none') return;
-    const layers = 3;
-    for (let l = 0; l < layers; l++) {
-      const depth = l / (layers - 1 || 1);
-      const alpha = 0.30 + depth * 0.55;
-      const maxH = H * (0.026 + depth * 0.052);
-      g.globalAlpha = alpha;
-      g.fillStyle = '#000';
+    const LAYERS = 5;
+    const lightX = L.glowX / Math.max(1, W);
+
+    for (let l = 0; l < LAYERS; l++) {
+      const depth = l / (LAYERS - 1 || 1);       // 0 furthest, 1 nearest
+      const seed = 7001 + l * 613 + Math.floor(rnd() * 4096);
+      const freq = 3.4 + depth * 3.6 + rnd() * 1.4;
+      const phase = rnd() * 40;
+      if (only !== undefined && only !== l) continue;   // stream stays in step above
+
+      const maxH = H * (0.052 + depth * 0.145);
+      const step = depth < 0.5 ? 3 : 2;
+      const h = ridgeline(style, W, step, seed, freq, phase, maxH);
+      const sh = shadingLine(h);      // the same range, smooth enough to light by
+
+      // the snow line, and the band it fades in over
+      const snowAt = maxH * (0.56 - depth * 0.12);
+      const snowFade = Math.max(1, maxH * 0.42);
+      const win = Math.max(3, Math.round(26 / step));   // the face window
+
+      /* Clip to the ridgeline before painting the strips. Without this a steep
+         face comes out as a staircase, because each column is a rectangle and
+         a rectangle has a flat top — on a gentle slope that is invisible and
+         on a peak it is all you can see. The path is the real line; the strips
+         only carry the shading. */
+      g.save();
       g.beginPath();
       g.moveTo(-4, hy + 2);
-
-      if (style === 'rocks') {
-        // eroded, rounded headlands rather than sharp peaks
-        let x = -4;
-        let prev = 0;
-        while (x < W + 8) {
-          const wid = W * (0.08 + rnd() * 0.16);
-          const ht = maxH * (0.30 + rnd() * 0.85);
-          g.quadraticCurveTo(x + wid * 0.18, hy - ht * 0.85, x + wid * 0.42, hy - ht);
-          g.quadraticCurveTo(x + wid * 0.70, hy - ht * (0.72 + rnd() * 0.28), x + wid, hy - prev);
-          prev = maxH * (0.10 + rnd() * 0.30);
-          x += wid;
-        }
-      } else if (style === 'trees') {
-        let x = -4;
-        while (x < W + 8) {
-          const wid = W * (0.010 + rnd() * 0.024);
-          const ht = maxH * (0.5 + rnd() * 1.3);
-          g.lineTo(x, hy - ht * 0.2);
-          g.lineTo(x + wid * 0.5, hy - ht);
-          g.lineTo(x + wid, hy - ht * 0.15);
-          x += wid * (1 + rnd() * 0.8);
-        }
-      } else if (style === 'spires') {
-        let x = -4;
-        while (x < W + 8) {
-          const wid = W * (0.02 + rnd() * 0.05);
-          const ht = maxH * (0.5 + rnd() * 1.6);
-          g.lineTo(x + wid * 0.5, hy - ht);
-          g.lineTo(x + wid, hy - ht * 0.08);
-          x += wid * (1.1 + rnd() * 1.6);
-        }
-      } else if (style === 'crystals') {
-        let x = -4;
-        while (x < W + 8) {
-          const wid = W * (0.03 + rnd() * 0.07);
-          const ht = maxH * (0.4 + rnd() * 1.5);
-          g.lineTo(x + wid * 0.2, hy - ht * 0.5);
-          g.lineTo(x + wid * 0.5, hy - ht);
-          g.lineTo(x + wid * 0.78, hy - ht * 0.42);
-          g.lineTo(x + wid, hy);
-          x += wid * (1 + rnd() * 1.1);
-        }
-      } else if (style === 'ruins') {
-        let x = -4;
-        while (x < W + 8) {
-          const wid = W * (0.03 + rnd() * 0.08);
-          const ht = maxH * (0.3 + rnd() * 1.2);
-          if (rnd() < 0.7) {
-            g.lineTo(x, hy - ht);
-            g.lineTo(x + wid, hy - ht * (0.6 + rnd() * 0.5));
-            g.lineTo(x + wid, hy);
-          }
-          x += wid * (1 + rnd() * 1.5);
-        }
-      } else if (style === 'bones') {
-        let x = -4;
-        while (x < W + 8) {
-          const wid = W * (0.02 + rnd() * 0.05);
-          const ht = maxH * (0.6 + rnd() * 1.5);
-          g.lineTo(x + wid * 0.5, hy - ht);
-          g.lineTo(x + wid * 0.5 + wid * 0.16, hy - ht * 0.86);
-          g.lineTo(x + wid, hy - ht * 0.1);
-          x += wid * (1.4 + rnd() * 2.4);
-        }
-      }
-      g.lineTo(W + 8, hy + 2);
+      for (let i = 1; i < h.length - 1; i++) g.lineTo(i * step - step, hy - h[i]);
+      g.lineTo(W + 4, hy + 2);
       g.closePath();
-      g.fill();
+      g.clip();
+
+      for (let i = 1; i < h.length - 1; i++) {
+        const x = i * step - step;
+        const ht = h[i];
+        const y = hy - ht;
+
+        /* Slope across a wide window on the SMOOTH line. Everything here is a
+           smoothstep rather than a threshold: a shading model that can flip
+           between two regimes on a small change in slope will find a way to do
+           it every few pixels, which is a barcode, which is what this was. */
+        const a2 = sh[Math.max(0, i - win)], b2 = sh[Math.min(sh.length - 1, i + win)];
+        const slope = (b2 - a2) / (win * 2 * step);
+        const u = x / Math.max(1, W);
+
+        /* Which way the light is coming from. This used to be a sign flip at
+           the moon's own x, which put a hard vertical seam down the middle of
+           every range — the two halves lit oppositely with nothing between
+           them. The moon is far away, so the direction barely changes across
+           the scene: a tanh over the whole width turns that seam into the
+           gentle sweep it should have been. */
+        const toward = -Math.tanh((lightX - u) * 2.6);
+        const facing = Math.tanh(slope * toward * 5.5);   // saturates, never clips
+
+        let v = 0.44 + facing * 0.26;
+        /* Snow on height alone, eased in over a band. Steepness used to gate
+           it, which is true of real mountains and was the whole problem: the
+           gate flipped. */
+        const snow = U.smoothstep(U.clamp((ht - snowAt) / snowFade, 0, 1));
+        v = U.clamp(U.lerp(v, 0.90 + facing * 0.09, snow * 0.85), 0.03, 1);
+
+        /* Baked in greys: what is baked is the FORM — where the light falls —
+           and the land pass multiplies the colour in afterwards. */
+        const c = Math.round(U.lerp(8, 236, v));
+        g.fillStyle = 'rgb(' + c + ',' + c + ',' + c + ')';
+        // the clip owns the top edge, so overshoot it and let the path cut
+        g.fillRect(x - 1, y - 3, step + 2, hy - y + 6);
+      }
+      g.restore();
+
+      /* A hairline along the crest. Real ridges are lit along their edge
+         because there is nothing behind them to block the sky, and this one
+         line does more for the silhouette than everything above it. */
+      g.strokeStyle = 'rgba(255,255,255,' + (0.16 + depth * 0.16).toFixed(2) + ')';
+      g.lineWidth = 1;
+      g.beginPath();
+      for (let i = 1; i < h.length - 1; i++) {
+        const x = i * step - step, y = hy - h[i];
+        if (i === 1) g.moveTo(x, y); else g.lineTo(x, y);
+      }
+      g.stroke();
     }
     g.globalAlpha = 1;
   }
+
+  /* Paint the three baked ridges, each mixed toward the haze by how far away
+     it is.
+
+     This has to be CACHED, not composited per frame. Tinting three full-screen
+     layers with a source-atop fill and drawing them costs about 24ms — the
+     whole frame budget and half again — which is the exact trap the renderer
+     is otherwise built to avoid: full-screen translucent fills dominate 2D
+     canvas cost, so anything that covers the screen gets baked once and
+     blitted after.
+
+     The tint only depends on the haze colours, and those move slowly, so the
+     key is those colours quantised hard. In practice it rebakes a handful of
+     times over a day/night cycle and blits on every other frame. */
 
   /* ---------------------------------------------------------------- setup */
 
@@ -174,7 +474,11 @@
     ctx = cv.getContext('2d', { alpha: false });
     buildGrain();
     resize();
-    VF.bus.on('location:changed', function () { backdropKey = ''; buildStars(); seedAmbient(); });
+    VF.bus.on('location:changed', function () {
+      backdropKey = ''; buildStars(); seedAmbient(); departure = null; shoalKey = '';
+      if (VF.zoneArt) VF.zoneArt.invalidate();
+    });
+    VF.bus.on('fishing:lost', function (e) { beginDeparture(e.catch); });
     VF.bus.on('settings:quality', function () { backdropKey = ''; buildStars(); VF.particles.clearAll(); seedAmbient(); });
   }
 
@@ -200,14 +504,26 @@
     L.figureH = Math.min(H * 0.30, W * 0.20);
     L.glowX = W * 0.70;
     L.glowY = L.horizonY - H * 0.145;
-    L.seatX = W * 0.20;
-    L.seatY = H * 0.90;
-    L.landPoint.x = W * 0.42;
-    L.landPoint.y = L.horizonY + L.waterH * 0.90;
+    L.seatX = W * U.lerp(0.20, 0.27, U.clamp(((loc.void || 0) - 0.5) / 0.5, 0, 1));
+    /* On a shore the ledge runs off the bottom of the frame and the seat can
+       sit low. Once it is a slab in nothing, the nothing under it is half the
+       picture, so the whole thing lifts to make room for it. */
+    const vd = U.clamp(loc.void || 0, 0, 1);
+    L.seatY = H * U.lerp(0.90, 0.72, U.clamp((vd - 0.5) / 0.5, 0, 1));
+    /* Where a fish is brought to hand. On a shore that is the water just in
+       front of you. On a slab in nothing it has to be clear of the slab: the
+       last seconds of every fight happen here, and so does everything a fish
+       does after it gets off, and none of it is worth watching from behind the
+       thing you are sitting on. */
+    const nearEdge = U.clamp((vd - 0.5) / 0.5, 0, 1);
+    L.landPoint.x = W * U.lerp(0.42, 0.55, nearEdge);
+    L.landPoint.y = L.horizonY + L.waterH * U.lerp(0.90, 0.72, nearEdge);
   }
 
   function seedAmbient() {
     VF.particles.clearKind(VF.particles.KIND.MOTE);
+    // nothing drifts in the last water, because there is nothing to drift in
+    if ((VF.locations.current().void || 0) > 0.9) return;
     const q = VF.state.data.settings.quality;
     const n = q === 'low' ? 14 : q === 'medium' ? 30 : 52;
     VF.particles.ambient(W, H, n, VF.palette.P.star);
@@ -218,11 +534,15 @@
   let castLateral = 0.62;
 
   function update(dt) {
+    if (VF.creatureArt) VF.creatureArt.tick(dt);
+    if (VF.zoneArt) VF.zoneArt.tick(dt);
     t += dt;
 
     computeLayout();
     updateRod(dt);
     updateBobber(dt);
+    VF.rodArt.tick(dt);
+    if (departure) departure.t += dt;
     updateWeatherParticles(dt);
     VF.particles.update(dt, W, H, L.horizonY + L.waterH * 0.35);
   }
@@ -262,9 +582,18 @@
     rodState.bend = U.clamp(U.approach(rodState.bend, targetBend, 0.002, dt), 0, 0.78);
   }
 
+  /* A fishing rod is somewhere near twice the height of the person holding it.
+     `art.len` drifted upward as rods were added — the shelf started at 0.78 and
+     the newest ones are past 1.7, which came out over three times the angler —
+     so the spread is compressed here, against the wooden rod as the anchor,
+     rather than by rewriting sixty art blocks. Wood stays where it was; the top
+     of the list lands near 2.2x instead of 3.2x. */
+  const ROD_ANCHOR = 0.78, ROD_SPREAD = 0.435;
+
   function rodTipPoint() {
     const fh = L.figureH;
-    const len = fh * 1.85 * VF.rods.get(VF.state.data.rod).art.len;
+    const rl = VF.rods.get(VF.state.data.rod).art.len;
+    const len = fh * 1.85 * (ROD_ANCHOR + (rl - ROD_ANCHOR) * ROD_SPREAD);
     const a = rodState.angle + rodState.sway;
     const bend = rodState.bend;
     // quadratic curve: control point offset perpendicular to the rod line
@@ -285,20 +614,36 @@
     L.rodTip.x = tip.x; L.rodTip.y = tip.y;
 
     const b = L.bobber;
+    const vd = VF.palette.P.void || 0;
     const near = L.horizonY + L.waterH * 0.80;
     const far = L.horizonY + L.waterH * 0.09;
-    const distT = U.clamp(S.castDist / 1.5, 0, 1);
+    /* Distance is how far out across the water the throw reaches. Where there
+       is no water to reach across, the same power puts the hook straight down
+       instead, so the range collapses toward the near end. */
+    const distT = U.clamp(S.castDist / 1.5, 0, 1) * (1 - vd * 0.55);
     L.castTarget.x = W * castLateral;
     L.castTarget.y = U.lerp(near, far, distT);
 
-    if (S.state === 'idle' || S.state === 'landed') { b.visible = false; return; }
+    const out = S.state === 'casting' || S.state === 'waiting' ||
+                S.state === 'bite' || S.state === 'reeling';
+    if (out) rigOut = true;
+    else if (rigOut) beginRetract(b, tip);
+
+    if (!out) return updateRetract(dt, b, tip);
     b.visible = true;
 
     if (S.state === 'casting') {
       const k = U.easeOutCubic(S.flight);
       b.x = U.lerp(tip.x, L.castTarget.x, k);
-      const arc = Math.sin(S.flight * Math.PI) * L.waterH * 0.55;
-      b.y = U.lerp(tip.y, L.castTarget.y, k) - arc;
+      /* The throw lifts on its way out, but the rig is a weight on a line, not
+         a bird: it cannot climb over the horizon into the sky. The lift is
+         capped at the water's top edge, and where the straight path is already
+         higher than that — the first moments, leaving a raised tip — no lift
+         is added at all. */
+      const straight = U.lerp(tip.y, L.castTarget.y, k);
+      const arc = Math.sin(S.flight * Math.PI) * L.waterH * 0.42 * (0.35 + distT * 0.65);
+      const ceiling = Math.min(straight, L.horizonY + L.waterH * 0.05);
+      b.y = Math.max(ceiling, straight - arc);
       b.scale = U.lerp(1.0, scaleAt(L.castTarget.y), k);
     } else if (S.state === 'reeling' && S.fight) {
       const k = U.clamp(S.fight.distance, 0, 1);
@@ -316,19 +661,62 @@
     }
   }
 
+  /* Bringing the line in is a movement, not a disappearance. Whatever the rig
+     was doing, it travels back up the line to the rod tip and goes out there —
+     otherwise it blinks out wherever it happened to be sitting, which is what
+     it looked like every time a cast was cancelled or a fish came off. */
+  let rigOut = false;
+  const retract = { t: 0, dur: 0, x: 0, y: 0, scale: 1 };
+
+  function beginRetract(b, tip) {
+    rigOut = false;
+    retract.x = b.x;
+    retract.y = b.y + b.bob;
+    retract.scale = b.scale;
+    // a long cast takes longer to wind back than a short one
+    const d = Math.hypot(retract.x - tip.x, retract.y - tip.y);
+    retract.dur = U.clamp(0.16 + d / Math.max(1, W) * 0.55, 0.16, 0.52);
+    retract.t = retract.dur;
+  }
+
+  function updateRetract(dt, b, tip) {
+    if (retract.t <= 0) { b.visible = false; return; }
+    retract.t = Math.max(0, retract.t - dt);
+    const k = U.easeInCubic(1 - retract.t / retract.dur);   // slow off the water, quick at the hand
+    b.visible = true;
+    b.x = U.lerp(retract.x, tip.x, k);
+    b.y = U.lerp(retract.y, tip.y, k);
+    b.scale = U.lerp(retract.scale, 0.42, k);
+    b.bob = 0;
+  }
+
   function scaleAt(y) {
     const k = U.clamp((y - L.horizonY) / Math.max(1, L.waterH), 0, 1);
     return U.lerp(0.34, 1.0, Math.pow(k, 0.85));
   }
 
   function newCastLateral() {
-    castLateral = 0.54 + VF.rng.g() * 0.22;
+    /* Out across the water on the shore. In the last water there is nothing to
+       cast across, so the throw shortens and the line goes down instead — but
+       it goes down off the edge of the slab rather than through it, so however
+       short the throw is it never lands nearer than where the slab stops.
+       Read off the location and not off the palette: the palette catches up a
+       frame later, and the first cast after arriving used the old number. */
+    const vd = U.clamp(VF.locations.current().void || 0, 0, 1);
+    const near = U.clamp((vd - 0.5) / 0.5, 0, 1);
+    const raw = (0.54 + VF.rng.g() * 0.22) * (1 - vd * 0.30);
+    const edge = (L.seatX + (L.figureH || W * 0.2) * 1.16) / Math.max(1, W);
+    castLateral = Math.max(raw, U.lerp(0, edge, near));
   }
 
   /* ------------------------------------------------- weather particles */
 
   function updateWeatherParticles(dt) {
     const K = VF.particles.KIND;
+    /* Rain needs somewhere to land and fog needs air to sit in. Neither is
+       available at the bottom, and the weather still does everything it does
+       to the odds — it simply stops being visible as weather. */
+    if ((VF.locations.current().void || 0) > 0.9) return;
     const q = VF.state.data.settings.quality;
     const scale = q === 'low' ? 0.35 : q === 'medium' ? 0.65 : 1;
 
@@ -494,17 +882,32 @@
 
     buildBackdrop();
     mark('sky', function () { drawSky(P); });
-    mark('stars', function () { drawStars(P, q); });
+    mark('stars', function () { buildStars(); drawStars(P, q); });
+    mark('clouds', function () { buildClouds(); drawClouds(P); });
     mark('horizon', function () { drawHorizonFeature(P); });
-    mark('land', function () { if (backdrop) ctx.drawImage(backdrop, 0, 0, W, H); });
+    mark('land', function () { drawLand(P); });
+    /* The zone's landmarks go in here, behind the fog and the water, so they
+       sit in the weather with the ridgeline instead of on top of the frame.
+       Half of what makes a place a place. */
+    mark('zoneback', function () { if (VF.zoneArt) VF.zoneArt.drawBack(ctx, L, P); });
     mark('aurora', function () { drawAurora(P); });
     mark('lightning', function () { drawLightning(P); });
     mark('fog', function () { drawFog(P, q); });
     mark('water', function () { drawWater(P, q); });
-    mark('under', function () { drawUnderwater(P); });
+    mark('under', function () { if (P.void < 0.9) drawUnderwater(P); });
+    mark('shoal', function () { seedShoal(); drawShoal(P, q); });
+    mark('surface', function () { seedGlints(); drawSurface(P, q); drawSurfaceMist(P, q); });
     mark('skyfall', function () { drawSkyfall(); });
-    mark('ripples', function () { VF.fx.drawRipples(ctx, 0.26); });
-    mark('line', function () { drawLineAndBobber(P); });
+    mark('ripples', function () { if (P.void < 0.9) VF.fx.drawRipples(ctx, 0.26); });
+    /* An encounter draws under the line and over the surface: it is in the
+       water, not on the screen. Everything it puts there inherits the fog,
+       the palette and the shake because it is inside the same transform. */
+    /* What is on the water HERE and nowhere else, under the encounter layer
+       and over the surface: the gulls, the panes, the crystals, the contacts,
+       the bottle drifting in. Half of what makes a zone a zone. */
+    mark('zone', function () { if (VF.zoneArt) VF.zoneArt.drawFront(ctx, L, P); });
+    mark('creature', function () { if (VF.creatureArt) VF.creatureArt.draw(ctx, L, P); });
+    mark('line', function () { drawLineAndBobber(P); drawDeparture(P); });
     mark('particles', function () { VF.particles.draw(ctx); });
     mark('fore', function () { drawForeground(P); });
     mark('cutscene', function () { drawCutscene(); });
@@ -525,36 +928,74 @@
 
     // light gathering at the horizon — this is what makes distant land read
     const band = H * 0.26;
+    const far = 1 - P.void;                 // there is no distance in the void
     const hg = ctx.createLinearGradient(0, L.horizonY - band, 0, L.horizonY);
     hg.addColorStop(0, U.rgbToCss(P.glow, 0));
-    hg.addColorStop(0.62, U.rgbToCss(P.glow, 0.045 * P.bright + 0.020));
-    hg.addColorStop(1, U.rgbToCss(P.glow, 0.115 * P.bright + 0.045));
+    hg.addColorStop(0.62, U.rgbToCss(P.glow, (0.045 * P.bright + 0.020) * far));
+    hg.addColorStop(1, U.rgbToCss(P.glow, (0.115 * P.bright + 0.045) * far));
     ctx.fillStyle = hg;
     ctx.fillRect(0, L.horizonY - band, W, band);
   }
 
   function drawStars(P, q) {
-    if (P.starAlpha <= 0.01 || !stars) return;
+    if (P.starAlpha <= 0.01) return;
     const sky = L.horizonY;
-    const col = U.rgbToCss(P.star);
-    ctx.fillStyle = col;
+
+    // the baked field: one blit for two thousand stars and a galaxy
+    if (starField) {
+      ctx.globalAlpha = P.starAlpha;
+      ctx.drawImage(starField, 0, 0, W, sky);
+      ctx.globalAlpha = 1;
+    }
+    if (!stars) return;
+
+    /* The ten worth animating — a blit cannot twinkle, and a sky where nothing
+       moves is a photograph. Two or three of them carry diffraction spikes: the
+       cross an eye or a lens puts on a point source, and the cheapest thing
+       there is for making a star read as BRIGHT rather than as big.
+
+       Everything here used to be about three times this size. A halo nine
+       pixels across on two dozen stars is not a sky, it is a scattering of
+       soft lamps, and it was the loudest thing above the horizon. */
     for (let i = 0; i < stars.length; i++) {
       const s = stars[i];
       const y = s.y * sky;
       if (y > sky - 2) continue;
-      const tw = 0.62 + 0.38 * Math.sin(t * s.sp + s.tw);
-      const a = P.starAlpha * s.bright * tw;
+      const tw = 0.55 + 0.45 * Math.sin(t * s.sp + s.tw);
+      const a = P.starAlpha * (0.45 + s.mag * 0.55) * tw;
       if (a <= 0.02) continue;
-      ctx.globalAlpha = a;
       const x = s.x * W;
-      if (s.big && q === 'high') {
-        ctx.globalAlpha = a * 0.22;
-        ctx.beginPath(); ctx.arc(x, y, s.s * 3.2, 0, TAU); ctx.fill();
-        ctx.globalAlpha = a;
+
+      ctx.globalAlpha = 1;
+      // the halo, close in and barely there
+      ctx.fillStyle = U.rgbToCss(s.col, a * 0.10);
+      ctx.beginPath(); ctx.arc(x, y, s.s * 2.0, 0, TAU); ctx.fill();
+
+      if (s.spikes && q === 'high') {
+        ctx.strokeStyle = U.rgbToCss(s.col, a * 0.34);
+        ctx.lineWidth = 0.5;
+        const len = s.s * (2.0 + tw * 1.1);
+        ctx.beginPath();
+        ctx.moveTo(x - len, y); ctx.lineTo(x + len, y);
+        ctx.moveTo(x, y - len); ctx.lineTo(x, y + len);
+        ctx.stroke();
       }
+      ctx.fillStyle = U.rgbToCss(s.col, a);
       ctx.fillRect(x - s.s * 0.5, y - s.s * 0.5, s.s, s.s);
     }
     ctx.globalAlpha = 1;
+  }
+
+  /* Zero unless a surge is running somewhere the surge cannot otherwise be
+     seen. It rises and falls across about eight seconds of a twenty-second
+     cycle, so it reads as something looking up and then away rather than as a
+     light being switched on and left on. */
+  function surgeLook(P) {
+    const s = VF.weather.surge();
+    if (s <= 0.01 || (P.void || 0) < 0.9) return 0;
+    const c = (t * 0.05) % 1;
+    if (c > 0.40) return 0;
+    return Math.pow(Math.sin((c / 0.40) * Math.PI), 1.7) * 0.46 * s;
   }
 
   /* The one big light source: moon, ring, arch, monolith, crystal, tear, eye. */
@@ -564,49 +1005,137 @@
     const R = Math.min(W, H) * 0.046 * P.glowSize;
     const glow = U.rgbToCss(P.glow);
 
+    /* Whatever is out there does not survive the descent, and at the bottom it
+       does not survive at all. A dim shape is still a shape: against a ground
+       of rgb(9,5,18) even a quarter-strength one came out three times the
+       brightness of everything around it, with an edge you could trace. */
+    /* Except while a surge is running. Down there the weather has nothing left
+       to move — no rain to slant, no fog to thicken, not one particle — so it
+       expresses itself through the only thing still out there: the eye opens,
+       looks for a few seconds, and closes again. */
+    const feat = Math.max(U.clamp((0.92 - P.void) / 0.32, 0, 1), surgeLook(P));
+    if (feat <= 0.001) return;
+
+    ctx.save();
+    ctx.globalAlpha = feat;
+
     // ambient bloom around the feature
     drawBloom(P, gx, gy, R);
 
-    ctx.save();
     switch (loc.horizon) {
       case 'moon': {
-        ctx.fillStyle = U.rgbToCss(U.shade(P.glow, 0.55));
-        ctx.globalAlpha = 1;
+        /* The lit face, and the shadow the earth is putting on it. `age` runs
+           0 at new through 0.5 at full and back; the terminator is an ellipse
+           whose width is the cosine of that, which is why a quarter moon is a
+           straight edge and a crescent is a curve going the other way. */
+        const age = VF.time.moonAge ? VF.time.moonAge() : 0.5;
+        const lit = U.clamp(VF.time.moonLight ? VF.time.moonLight() : 1, 0, 1);
+
+        // the dark disc is still there — it occults stars, so it is drawn
+        ctx.globalAlpha = (0.55) * feat;
+        ctx.fillStyle = U.rgbToCss(U.shade(P.glow, -0.72));
         ctx.beginPath(); ctx.arc(gx, gy, R, 0, TAU); ctx.fill();
-        // craters
-        ctx.globalAlpha = 0.12;
-        ctx.fillStyle = '#000';
-        ctx.beginPath(); ctx.arc(gx - R * 0.28, gy - R * 0.18, R * 0.22, 0, TAU); ctx.fill();
-        ctx.beginPath(); ctx.arc(gx + R * 0.30, gy + R * 0.22, R * 0.15, 0, TAU); ctx.fill();
-        ctx.beginPath(); ctx.arc(gx + R * 0.05, gy - R * 0.42, R * 0.10, 0, TAU); ctx.fill();
+
+        ctx.save();
+        ctx.beginPath(); ctx.arc(gx, gy, R, 0, TAU); ctx.clip();
+        ctx.fillStyle = U.rgbToCss(U.shade(P.glow, 0.55));
+        ctx.globalAlpha = (1) * feat;
+        if (lit > 0.995) {
+          ctx.beginPath(); ctx.arc(gx, gy, R, 0, TAU); ctx.fill();
+        } else if (lit > 0.005) {
+          /* Waxing lights from the right, waning from the left. */
+          const waxing = age < 0.5;   // which limb is lit
+          const k = Math.cos(age * TAU);          // +1 new, -1 full
+          const half = waxing ? -Math.PI / 2 : Math.PI / 2;
+          ctx.beginPath();
+          ctx.arc(gx, gy, R, half, half + Math.PI);              // the lit limb
+          /* The terminator bulges toward the lit limb on a crescent and away
+             from it on a gibbous, which is the sign of k in both directions —
+             waxing or waning does not enter into it, only which side the limb
+             is on, and `half` has already said that. */
+          ctx.ellipse(gx, gy, R * Math.abs(k), R, 0,
+                      half + Math.PI, half, k > 0);              // the terminator
+          ctx.closePath();
+          ctx.fill();
+        }
+        /* Maria: broad, soft, low-contrast darkenings rather than three hard
+           black dots. A moon is mostly featureless with a few large stains on
+           it, and the stains have no edges. */
+        const mr = VF.rng.make(0x3f00d);
+        for (let i = 0; i < 9; i++) {
+          const a2 = mr() * TAU, rad = Math.sqrt(mr()) * R * 0.82;
+          const cx2 = gx + Math.cos(a2) * rad, cy2 = gy + Math.sin(a2) * rad;
+          const rr2 = R * (0.10 + mr() * 0.26);
+          const mg = ctx.createRadialGradient(cx2, cy2, 0, cx2, cy2, rr2);
+          mg.addColorStop(0, 'rgba(0,0,0,' + (0.055 + mr() * 0.075).toFixed(3) + ')');
+          mg.addColorStop(0.6, 'rgba(0,0,0,' + (0.03 + mr() * 0.04).toFixed(3) + ')');
+          mg.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.globalAlpha = feat;
+          ctx.fillStyle = mg;
+          ctx.beginPath(); ctx.arc(cx2, cy2, rr2, 0, TAU); ctx.fill();
+        }
+
+        /* Limb darkening. A sphere lit from in front is not a flat disc: it
+           falls off toward the edge, and without this the moon reads as a
+           sticker cut out of paper — which is exactly what it was. */
+        const ld = ctx.createRadialGradient(gx - R * 0.12, gy - R * 0.12, R * 0.18, gx, gy, R);
+        /* The falloff has to start early and stay gentle. Stacked hard against
+           the edge it stops being a sphere and becomes a disc with a line
+           drawn round it, which is a different wrong answer to the one this
+           replaced. */
+        ld.addColorStop(0, 'rgba(255,255,255,0.11)');
+        ld.addColorStop(0.42, 'rgba(255,255,255,0)');
+        ld.addColorStop(0.70, U.rgbToCss(U.shade(P.glow, -0.5), 0.06));
+        ld.addColorStop(0.90, U.rgbToCss(U.shade(P.glow, -0.6), 0.15));
+        ld.addColorStop(1, U.rgbToCss(U.shade(P.glow, -0.62), 0.20));
+        ctx.globalAlpha = feat;
+        ctx.fillStyle = ld;
+        ctx.beginPath(); ctx.arc(gx, gy, R, 0, TAU); ctx.fill();
+        ctx.restore();
+
+        /* The air immediately around it. The wide bloom is already down; this
+           is the tight ring of scattered light that a bright thing actually
+           has against a dark sky, and it is what makes it read as a source
+           rather than a shape. */
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = feat;
+        const hal = ctx.createRadialGradient(gx, gy, R * 0.92, gx, gy, R * 3.2);
+        hal.addColorStop(0, U.rgbToCss(P.glow, 0.22 * (0.4 + P.bright * 0.6)));
+        hal.addColorStop(0.35, U.rgbToCss(P.glow, 0.06 * (0.4 + P.bright * 0.6)));
+        hal.addColorStop(1, U.rgbToCss(P.glow, 0));
+        ctx.fillStyle = hal;
+        ctx.beginPath(); ctx.arc(gx, gy, R * 3.2, 0, TAU); ctx.fill();
+        ctx.restore();
+        ctx.globalAlpha = feat;
         break;
       }
       case 'ring': {
-        ctx.strokeStyle = glow; ctx.globalAlpha = 0.55; ctx.lineWidth = R * 0.16;
+        ctx.strokeStyle = glow; ctx.globalAlpha = (0.55) * feat; ctx.lineWidth = R * 0.16;
         ctx.beginPath(); ctx.ellipse(gx, gy, R * 3.1, R * 0.85, -0.13, Math.PI * 0.06, Math.PI * 1.34); ctx.stroke();
-        ctx.globalAlpha = 0.28; ctx.lineWidth = R * 0.07;
+        ctx.globalAlpha = (0.28) * feat; ctx.lineWidth = R * 0.07;
         ctx.beginPath(); ctx.ellipse(gx, gy, R * 3.6, R * 1.0, -0.13, Math.PI * 1.5, Math.PI * 1.92); ctx.stroke();
-        ctx.globalAlpha = 0.85; ctx.fillStyle = glow;
+        ctx.globalAlpha = (0.85) * feat; ctx.fillStyle = glow;
         ctx.beginPath(); ctx.arc(gx, gy, R * 0.42, 0, TAU); ctx.fill();
         break;
       }
       case 'arch': {
-        ctx.strokeStyle = glow; ctx.globalAlpha = 0.42; ctx.lineWidth = R * 0.20;
+        ctx.strokeStyle = glow; ctx.globalAlpha = (0.42) * feat; ctx.lineWidth = R * 0.20;
         ctx.beginPath(); ctx.arc(gx, L.horizonY, R * 3.4, Math.PI, TAU); ctx.stroke();
-        ctx.globalAlpha = 0.20; ctx.lineWidth = R * 0.09;
+        ctx.globalAlpha = (0.20) * feat; ctx.lineWidth = R * 0.09;
         ctx.beginPath(); ctx.arc(gx, L.horizonY, R * 4.3, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke();
         break;
       }
       case 'monolith': {
-        ctx.globalAlpha = 0.9; ctx.fillStyle = '#05070b';
+        ctx.globalAlpha = (0.9) * feat; ctx.fillStyle = '#05070b';
         const mw = R * 0.72, mh = R * 6.2;
         ctx.fillRect(gx - mw / 2, L.horizonY - mh, mw, mh);
-        ctx.globalAlpha = 0.55; ctx.fillStyle = glow;
+        ctx.globalAlpha = (0.55) * feat; ctx.fillStyle = glow;
         ctx.fillRect(gx - mw * 0.10, L.horizonY - mh * 0.86, mw * 0.20, mh * 0.66);
         break;
       }
       case 'crystal': {
-        ctx.globalAlpha = 0.70; ctx.fillStyle = glow;
+        ctx.globalAlpha = (0.70) * feat; ctx.fillStyle = glow;
         for (let i = 0; i < 5; i++) {
           const ox = gx + (i - 2) * R * 1.25;
           const hh = R * (2.0 + (i % 3) * 1.5);
@@ -617,35 +1146,35 @@
           ctx.lineTo(ox - R * 0.26, L.horizonY + 2);
           ctx.lineTo(ox - R * 0.44, L.horizonY - hh * 0.38);
           ctx.closePath();
-          ctx.globalAlpha = 0.22 + (i % 3) * 0.16;
+          ctx.globalAlpha = (0.22 + (i % 3) * 0.16) * feat;
           ctx.fill();
         }
         break;
       }
       case 'tear': {
-        ctx.globalAlpha = 0.85; ctx.fillStyle = '#000';
+        ctx.globalAlpha = (0.85) * feat; ctx.fillStyle = '#000';
         ctx.beginPath();
         ctx.moveTo(gx, gy - R * 3.0);
         ctx.quadraticCurveTo(gx + R * 0.55, gy, gx, gy + R * 2.6);
         ctx.quadraticCurveTo(gx - R * 0.34, gy, gx, gy - R * 3.0);
         ctx.fill();
-        ctx.globalAlpha = 0.6; ctx.strokeStyle = glow; ctx.lineWidth = R * 0.06;
+        ctx.globalAlpha = (0.6) * feat; ctx.strokeStyle = glow; ctx.lineWidth = R * 0.06;
         ctx.stroke();
         break;
       }
       case 'eye': {
         const open = 0.34 + 0.14 * Math.sin(t * 0.19);
-        ctx.globalAlpha = 0.34; ctx.fillStyle = glow;
+        ctx.globalAlpha = (0.34) * feat; ctx.fillStyle = glow;
         ctx.beginPath(); ctx.ellipse(gx, gy, R * 4.2, R * 4.2 * open, 0, 0, TAU); ctx.fill();
-        ctx.globalAlpha = 0.95; ctx.fillStyle = '#000';
+        ctx.globalAlpha = (0.95) * feat; ctx.fillStyle = '#000';
         ctx.beginPath(); ctx.ellipse(gx, gy, R * 1.5, R * 1.5 * Math.min(1, open * 2.4), 0, 0, TAU); ctx.fill();
-        ctx.globalAlpha = 0.7; ctx.fillStyle = glow;
+        ctx.globalAlpha = (0.7) * feat; ctx.fillStyle = glow;
         ctx.beginPath(); ctx.arc(gx + R * 0.4, gy - R * 0.4, R * 0.22, 0, TAU); ctx.fill();
         break;
       }
     }
     ctx.restore();
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = (1) * feat;
   }
 
   /* The bloom around the horizon feature is a big translucent radial fill, so it
@@ -742,13 +1271,15 @@
     g.addColorStop(0, U.rgbToCss(P.waterTop));
     g.addColorStop(0.50, U.rgbToCss(U.mixRgb(P.waterTop, P.waterBot, 0.68)));
     g.addColorStop(0.78, U.rgbToCss(P.waterBot));
-    g.addColorStop(1, U.rgbToCss(U.mixRgb(P.waterBot, [0, 0, 0], 0.45)));
+    g.addColorStop(1, U.rgbToCss(U.mixRgb(P.waterBot, [0, 0, 0], 0.45 * (1 - P.void))));
     ctx.fillStyle = g;
     ctx.fillRect(0, hy, W, wh + 2);
 
-    // horizon seam: brightest where the light source meets it, gone at the edges
+    // horizon seam: brightest where the light source meets it, gone at the
+    // edges — and gone everywhere once there is no far side for it to be the
+    // near edge of
     const seam = ctx.createLinearGradient(0, 0, W, 0);
-    const seamA = 0.55 * P.bright + 0.16;
+    const seamA = (0.55 * P.bright + 0.16) * (1 - P.void);
     seam.addColorStop(0, U.rgbToCss(P.glow, seamA * 0.18));
     seam.addColorStop(U.clamp(L.glowX / W, 0.05, 0.95), U.rgbToCss(P.glow, seamA));
     seam.addColorStop(1, U.rgbToCss(P.glow, seamA * 0.22));
@@ -756,10 +1287,19 @@
     ctx.fillRect(0, hy - 1, W, 1.4);
     ctx.globalAlpha = 1;
 
-    if (q !== 'low') { drawBackdropReflection(P); drawReflection(P); }
-    drawMoonpath(P);
-    drawSwell(P, q);
-    drawWaveLines(P, q);
+    /* Everything that makes water read as water — a reflection, a path of
+       light across it, swell, the lines of the waves — is a property of a
+       surface, and the surface is what the void takes last. */
+    const surf = 1 - P.void;
+    if (surf > 0.02) {
+      ctx.save();
+      ctx.globalAlpha = surf;
+      if (q !== 'low') { drawBackdropReflection(P); drawReflection(P); }
+      drawMoonpath(P);
+      drawSwell(P, q);
+      drawWaveLines(P, q);
+      ctx.restore();
+    }
 
   }
 
@@ -767,10 +1307,17 @@
      baked into a cached strip, so each frame is a single sheared blit. */
   let reflect = null, reflectKey = '';
 
+  /* The mirror has to be of the land AS PAINTED, not of the shapes it was
+     built from. Those are baked in greys — the FORM, where the light falls —
+     and the colour only arrives when bakeLand multiplies it in. Mirroring the
+     raw layers put a pale grey band of upside-down mountains across the top of
+     the water with a hard edge under it, which is what a mirror of the wrong
+     thing looks like. So this keys off the tinted result and rebuilds whenever
+     that does. */
   function buildReflection() {
-    const key = backdropKey + ':' + Math.round(L.horizonY);
+    if (!landPad || !landKey) return;
+    const key = landKey + ':' + Math.round(L.horizonY);
     if (reflectKey === key && reflect) return;
-    if (!backdrop) return;
     reflectKey = key;
     const hy = L.horizonY;
     const depth = Math.max(2, Math.round(Math.min(L.waterH * 0.42, H * 0.20)));
@@ -780,10 +1327,11 @@
     const g = c.getContext('2d');
     g.clearRect(0, 0, c.width, depth);
     g.save();
-    g.globalAlpha = 0.32;
+    g.globalAlpha = 0.30;
     g.translate(0, hy);
     g.scale(1, -1);
-    g.drawImage(backdrop, 0, 0, W, H);
+    // one image: the whole range, already coloured and already hazed
+    g.drawImage(landPad, 0, 0, W, H);
     g.restore();
     // erase with a downward ramp so the mirror dissolves into the water
     g.globalCompositeOperation = 'destination-out';
@@ -1039,8 +1587,329 @@
     shadows.push(Object.assign({ life: 9, max: 9, x: -0.1, y: 0.5, sp: 0.06, size: 1, alpha: 0.5 }, opts));
   }
 
+  /* The shadow of something rare crossing the water toward the hook, in the
+     seconds before it takes it. Nothing below the void tier gets one: the
+     whole value of it is that seeing one means something. */
+  function drawApproach() {
+    const A = VF.fishing.S.approach;
+    if (!A) return;
+    const b = L.bobber;
+    if (!b.visible) return;
+    const wh = L.waterH;
+    const k = U.clamp(A.t / Math.max(0.5, A.dur), 0, 1);
+    const e = U.smoothstep(k);
+
+    // out of the deep water on the far side, in toward the line
+    const fromX = W * 1.06, fromY = L.horizonY + wh * 0.10;
+    const x = U.lerp(fromX, b.x, e);
+    const y = U.lerp(fromY, b.y + wh * 0.10, e * e);
+    const sc = scaleAt(y) * U.lerp(0.55, 2.35, e);
+    // it fades up out of nothing and thins again as it reaches the hook
+    const a = U.clamp(Math.sin(Math.min(1, k * 1.12) * Math.PI) * 1.45, 0, 1);
+    if (a <= 0.01) return;
+
+    const col = VF.rarities.colorAt(A.rarity, t);
+    const wob = Math.sin(t * 1.7) * wh * 0.012 * (1 - e * 0.6);
+
+    ctx.save();
+    // the shape itself
+    ctx.globalAlpha = a * 0.82;
+    ctx.fillStyle = '#000';
+    ctx.beginPath();
+    ctx.ellipse(x, y + wob, W * 0.085 * sc, wh * 0.030 * sc,
+                Math.sin(t * 0.5) * 0.10 - (1 - e) * 0.18, 0, TAU);
+    ctx.fill();
+    // a second, smaller mass behind it, so it reads as long rather than round
+    ctx.globalAlpha = a * 0.5;
+    ctx.beginPath();
+    ctx.ellipse(x + W * 0.070 * sc, y + wob * 0.6, W * 0.040 * sc, wh * 0.017 * sc,
+                Math.sin(t * 0.5 + 1) * 0.14, 0, TAU);
+    ctx.fill();
+
+    // and the colour of whatever tier it is, bleeding up through the water
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = a * (0.22 + 0.16 * Math.sin(t * 2.4));
+    const g = ctx.createRadialGradient(x, y + wob, 0, x, y + wob, W * 0.20 * sc);
+    g.addColorStop(0, U.rgbToCss(col, 0.55));
+    g.addColorStop(0.45, U.rgbToCss(col, 0.13));
+    g.addColorStop(1, U.rgbToCss(col, 0));
+    ctx.fillStyle = g;
+    ctx.fillRect(x - W * 0.20 * sc, y - W * 0.20 * sc, W * 0.40 * sc, W * 0.40 * sc);
+    ctx.restore();
+  }
+
+  /* ------------------------------------------------------------ the shoal
+
+     The water had nothing in it. It was a surface with lines on it, and
+     whatever you were fishing for existed only at the moment it took the hook.
+
+     These are the species that actually live at this spot, cruising below the
+     surface at depth. Which is the point of drawing them from the real pool
+     rather than inventing a generic fish shape: the water shows you what is in
+     it, so a strange silhouette going past at the Cradle is a real thing you
+     could catch, and the shoal at the shore is minnows because the shore has
+     minnows in it.
+
+     Perspective does the work. Depth 0 is up at the horizon — small, faint,
+     slow, barely a mark — and depth 1 is close to the near bank, large and
+     dark and quick. Nothing here is a particle system; it is a dozen shapes
+     with a sine on them, which is all a fish seen through water is. */
+
+  const shoal = [];
+  let shoalKey = '';
+
+  /* Every one of these is a full procedural species — scales, fins, gradients,
+     the lot — and drawing fourteen of them a frame cost seven milliseconds,
+     which is most of a frame for something nobody is looking straight at. They
+     are baked to small sprites instead, one per species per size bucket, and
+     blitted. Buckets are coarse because at this size and this alpha nobody can
+     tell the difference between a fish drawn at 19 pixels and one drawn at 20. */
+  const finCache = Object.create(null);
+  const FIN_PAD = 1.7;   // room for fins and tail beyond the nominal size
+
+  function finSprite(fish, size) {
+    const bucket = Math.max(3, Math.round(size / 3) * 3);
+    const key = fish.id + '@' + bucket;
+    const hit = finCache[key];
+    if (hit) return hit;
+    const S = Math.ceil(bucket * FIN_PAD * 2);
+    const c = document.createElement('canvas');
+    c.width = S; c.height = S;
+    const g = c.getContext('2d');
+    g.translate(S / 2, S / 2);
+    // baked at full strength; the alpha goes on at blit time
+    try { VF.fishArt.drawSilhouette(g, fish, bucket, 1); } catch (e) { /* leave it blank */ }
+    const sp = { canvas: c, half: S / 2, bucket: bucket };
+    finCache[key] = sp;
+    return sp;
+  }
+
+  function seedShoal() {
+    const loc = VF.locations.current();
+    const q = VF.state.data.settings.quality;
+    const key = loc.id + ':' + q;
+    if (shoalKey === key && shoal.length) return;
+    shoalKey = key;
+    shoal.length = 0;
+    for (const k in finCache) delete finCache[k];
+
+    /* The species that are native here, cheapest tiers first — a shoal is
+       made of common things, and a Void fish drifting past every ten seconds
+       would spend the mystery the game is built on. */
+    const pool = (VF.fish.knownList ? VF.fish.knownList() : VF.fish.list).filter(function (f) {
+      return f.locs && f.locs.indexOf(loc.id) >= 0 && VF.rarities.rank(f.rarity) <= 2;
+    });
+    if (!pool.length) return;
+
+    const n = q === 'low' ? 5 : q === 'medium' ? 9 : 14;
+    const rnd = VF.rng.make(0x5F0A1 ^ VF.locations.index(loc.id) * 5471);
+    for (let i = 0; i < n; i++) {
+      shoal.push({
+        f: pool[Math.floor(rnd() * pool.length)],
+        x: rnd(),
+        // biased shallow: most of what you can see is near the surface
+        depth: Math.pow(rnd(), 1.5),
+        dir: rnd() < 0.5 ? -1 : 1,
+        speed: 0.010 + rnd() * 0.030,
+        size: 0.7 + rnd() * 0.7,
+        wob: rnd() * TAU,
+        wobSp: 0.6 + rnd() * 1.1,
+        // one in a few drifts up toward the surface and back down again
+        rise: rnd() < 0.35 ? 0.25 + rnd() * 0.5 : 0,
+        riseSp: 0.05 + rnd() * 0.12,
+        risePh: rnd() * TAU
+      });
+    }
+  }
+
+  function drawShoal(P, q) {
+    if (!shoal.length) return;
+    /* They are the first thing to go when the water stops being water, and
+       they are not down there at all once the void has taken the place. */
+    const k = U.clamp((0.80 - P.void) / 0.40, 0, 1) *
+              (VF.encounters ? 1 - VF.encounters.calm() * 0.9 : 1);
+    if (k <= 0.02) return;
+
+    const hy = L.horizonY, wh = L.waterH;
+    ctx.save();
+    for (let i = 0; i < shoal.length; i++) {
+      const s = shoal[i];
+      s.x += s.speed * s.dir * VF.state.rt.dt;
+      if (s.x > 1.15) s.x = -0.15; else if (s.x < -0.15) s.x = 1.15;
+
+      // where it is, right now, including whatever rising it is doing
+      const rise = s.rise ? s.rise * (0.5 + 0.5 * Math.sin(t * s.riseSp + s.risePh)) : 0;
+      const d = U.clamp(s.depth - rise * s.depth, 0.02, 1);
+
+      /* Perspective. The near bank is the bottom of the frame, so depth maps
+         through a curve — the same one the water gradient uses — and size and
+         contrast follow it. */
+      const y = hy + Math.pow(d, 1.28) * wh;
+      const wobble = Math.sin(t * s.wobSp + s.wob) * wh * 0.006 * (0.3 + d);
+      const x = s.x * W;
+      const size = U.lerp(4, 26, Math.pow(d, 1.15)) * s.size *
+                   U.clamp(Math.min(W, H) / 760, 0.6, 1.5);
+
+      /* Deep water swallows contrast before it swallows anything else, so a
+         far fish is barely a smudge and a near one is a shape. Kept low on
+         purpose: at full strength these stop being things seen THROUGH water
+         and become black cut-outs sitting on top of it, which is worse than
+         having nothing down there at all. */
+      const a = k * U.lerp(0.085, 0.26, Math.pow(d, 0.85));
+      if (a <= 0.012 || size < 2) continue;
+
+      const sp = finSprite(s.f, size);
+      const k2 = size / sp.bucket;          // the bit the bucket rounded off
+      ctx.save();
+      ctx.globalAlpha = a;
+      ctx.translate(x, y + wobble);
+      if (s.dir < 0) ctx.scale(-1, 1);
+      // a fish seen from above and to the side is foreshortened
+      ctx.scale(k2, k2 * 0.82);
+      ctx.drawImage(sp.canvas, -sp.half, -sp.half);
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  /* ---------------------------------------------------- light on the water
+
+     The surface had bands on it and nothing else. Bands say "there are waves";
+     they do not say "this is water", because what actually tells you a thing
+     is water at night is specular — individual facets catching the light and
+     losing it again, hard and quick, thousands of them, concentrated under
+     whatever is bright and thinning out to nothing away from it.
+
+     So: a field of points that flash rather than pulse. The flash is a sine
+     raised to a high power, which spends most of its time near zero and snaps
+     to full for an instant — a wave facet is either pointing at you or it is
+     not. Brightness falls off away from the light with distance, and the
+     points crowd toward the horizon because perspective crowds everything
+     toward the horizon.
+
+     Nothing here is baked. It is a few hundred small fills and it has to move
+     every frame, which is the whole point of it. */
+
+  const glints = [];
+  let glintKey = '';
+
+  function seedGlints() {
+    const q = VF.state.data.settings.quality;
+    const key = q + ':' + Math.round(W) + 'x' + Math.round(H);
+    if (glintKey === key && glints.length) return;
+    glintKey = key;
+    glints.length = 0;
+    const n = q === 'low' ? 70 : q === 'medium' ? 180 : 340;
+    const rnd = VF.rng.make(0x91177);
+    for (let i = 0; i < n; i++) {
+      glints.push({
+        u: rnd(),
+        // crowded toward the horizon, the way a receding plane is
+        d: Math.pow(rnd(), 2.1),
+        ph: rnd() * TAU,
+        sp: 0.7 + rnd() * 2.6,
+        // how sharp this facet is: some wink, some hold for a moment
+        sharp: 5 + rnd() * 16,
+        size: 0.6 + rnd() * 1.5,
+        drift: (rnd() * 2 - 1) * 0.006
+      });
+    }
+  }
+
+  function drawSurface(P, q) {
+    if (!glints.length) return;
+    const hy = L.horizonY, wh = L.waterH;
+    // dead calm means a mirror, and a mirror has no facets to catch anything
+    const calm = Math.max(VF.encounters ? VF.encounters.calm() : 0,
+                          VF.conditions ? VF.conditions.flag('calm') * 0.85 : 0);
+    const chop = U.clamp(0.30 + VF.weather.wind() * 0.9 + VF.weather.rain() * 0.6, 0, 1.6) *
+                 (1 - calm * 0.95);
+    // and the void takes the light long before it takes the water
+    const k = U.clamp((0.92 - P.void) / 0.35, 0, 1) * (0.15 + P.bright * 1.0) * chop;
+    if (k <= 0.02) return;
+
+    const gx = L.glowX;
+    const spread = W * 0.34;          // how far from the light the path reaches
+    const col = U.mixRgb(P.glow, [255, 255, 255], 0.55);
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < glints.length; i++) {
+      const s = glints[i];
+      s.u += s.drift * VF.state.rt.dt;
+      if (s.u > 1.05) s.u -= 1.1; else if (s.u < -0.05) s.u += 1.1;
+
+      const y = hy + Math.pow(s.d, 1.42) * wh;
+      if (y > H + 2) continue;
+      const x = s.u * W;
+
+      /* Away from the light there is nothing to catch. A gaussian rather than
+         a cutoff, so the glade has no edge — the moment it has an edge it
+         stops being light on water and becomes a shape drawn on water. */
+      const dx = (x - gx) / spread;
+      const near = Math.exp(-dx * dx * 0.9);
+      if (near < 0.012) continue;
+
+      /* The flash. sin^n spends almost all of its time dark and snaps to full
+         for an instant, which is what a facet turning through the light
+         actually does; a smooth pulse reads as a firefly. */
+      const w = Math.sin(t * s.sp + s.ph) * 0.5 + 0.5;
+      const flash = Math.pow(w, s.sharp);
+      if (flash < 0.02) continue;
+
+      const a = k * near * flash * U.lerp(0.5, 1, s.d);
+      const r = s.size * U.lerp(0.5, 2.3, s.d) * U.clamp(Math.min(W, H) / 800, 0.6, 1.5);
+
+      ctx.fillStyle = U.rgbToCss(col, a * 0.5);
+      ctx.beginPath(); ctx.arc(x, y, r * 2.6, 0, TAU); ctx.fill();
+      ctx.fillStyle = U.rgbToCss([255, 255, 255], a);
+      ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+
+      // the brightest ones streak along the wave they are sitting on
+      if (q === 'high' && a > 0.35) {
+        ctx.strokeStyle = U.rgbToCss(col, a * 0.5);
+        ctx.lineWidth = Math.max(0.4, r * 0.6);
+        ctx.beginPath();
+        ctx.moveTo(x - r * 3.4, y); ctx.lineTo(x + r * 3.4, y);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
+  /* Mist sitting on the water. Very little of it, very faint, moving slowly —
+     it is there to stop the surface meeting the air along a clean line, which
+     is the last thing on the horizon that still looked drawn. */
+  function drawSurfaceMist(P, q) {
+    if (q === 'low') return;
+    const amt = U.clamp(P.fogAmt * 0.8 + VF.weather.fog() * 0.7, 0, 1);
+    if (amt < 0.05) return;
+    const hy = L.horizonY, wh = L.waterH;
+    const col = U.mixRgb(P.fog, P.glow, 0.22);
+    ctx.save();
+    const n = q === 'high' ? 7 : 4;
+    for (let i = 0; i < n; i++) {
+      const ph = i * 2.399;
+      const d = 0.04 + (i / n) * 0.30;
+      const y = hy + Math.pow(d, 1.4) * wh;
+      const x = ((t * (0.008 + i * 0.004) + i * 0.37) % 1.3 - 0.15) * W;
+      const rw = W * (0.16 + (i % 3) * 0.09);
+      const rh = wh * 0.055 * (1 + d * 2);
+      const a = amt * 0.055 * (0.4 + P.bright * 0.8) * (0.6 + 0.4 * Math.sin(t * 0.2 + ph));
+      const gr = ctx.createRadialGradient(x, y, 0, x, y, rw);
+      gr.addColorStop(0, U.rgbToCss(col, a));
+      gr.addColorStop(1, U.rgbToCss(col, 0));
+      ctx.fillStyle = gr;
+      ctx.beginPath();
+      ctx.ellipse(x, y, rw, rh, 0, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
   function drawUnderwater(P) {
     const hy = L.horizonY, wh = L.waterH;
+    drawApproach();
     for (let i = shadows.length - 1; i >= 0; i--) {
       const s = shadows[i];
       s.life -= 1 / 60;
@@ -1111,11 +1980,13 @@
     const by = b.y + b.bob;
     const r = 5.5 * b.scale;
 
-    // bobber shadow on the water
-    ctx.globalAlpha = 0.35;
-    ctx.fillStyle = '#000';
-    ctx.beginPath(); ctx.ellipse(b.x, by + r * 0.9, r * 1.5, r * 0.45, 0, 0, TAU); ctx.fill();
-    ctx.globalAlpha = 1;
+    // bobber shadow on the water — where there is water for it to be on
+    if (P.void < 0.9) {
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = '#000';
+      ctx.beginPath(); ctx.ellipse(b.x, by + r * 0.9, r * 1.5, r * 0.45, 0, 0, TAU); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
 
     const bc = VF.cosmetics.cfg('bobber');
     const cy2 = by - r * 0.3;
@@ -1167,6 +2038,99 @@
     }
     ctx.fillStyle = U.rgbToCss(P.glow, 0.7);
     ctx.fillRect(b.x - r * 0.18, by - r * 1.5, r * 0.36, r * 0.7);
+  }
+
+  /* What a fish does after it has got off. Up top it turns and goes: one hard
+     kick sideways, down and away under the surface, with a boil left behind on
+     the water. At the bottom there is no water to swim in and nothing to swim
+     away through, so it does the only other thing available and falls —
+     straight down, turning over, getting smaller until the dark has it. */
+  let departure = null;
+
+  function beginDeparture(c) {
+    if (!c) return;
+    const b = L.bobber;
+    const vd = VF.palette.P.void || 0;
+    const falls = vd > 0.9;
+    departure = {
+      c: c, t: 0, dur: falls ? 2.05 : 1.15, falls: falls,
+      x: b.x, y: b.y + b.bob, scale: b.scale,
+      /* Away from the ledge, whichever side of it the hook is on. A fish that
+         drops straight down from where the fight ended goes behind the thing
+         you are sitting on and is never seen again, which is not the same
+         picture as watching it go. */
+      dir: b.x >= L.seatX ? 1 : -1,
+      spin: (VF.rng.g() - 0.5) * 1.6,
+      rank: VF.rarities.rank(c.rarity)
+    };
+    if (!falls) {
+      VF.fx.ripple(b.x, b.y + b.bob, L.w * 0.055 * b.scale, 1.5);
+      VF.fx.ripple(b.x, b.y + b.bob, L.w * 0.028 * b.scale, 1.0);
+    }
+  }
+
+  function drawDeparture(P) {
+    const d = departure;
+    if (!d) return;
+    const k = U.clamp(d.t / d.dur, 0, 1);
+    if (k >= 1) { departure = null; return; }
+
+    const base = Math.min(W, H) * 0.055 * d.scale * 1.4 * (0.7 + d.rank * 0.09);
+    let x, y, rot, size, a;
+
+    let near;
+    if (d.falls) {
+      /* Falling, not sinking. It leaves the hook already moving and picks up
+         speed, and it keeps its colour on the way down instead of going
+         straight to a silhouette — against a ground with nothing in it, a dark
+         shape on dark is not a fish falling, it is nothing happening. */
+      const g = k * 0.30 + k * k * 0.70;
+      // out into the open as it goes, and turning over as it falls
+      x = d.x + d.dir * (base * (0.35 + k * 2.4) + Math.sin(k * 3.4) * base * 0.22);
+      y = d.y + g * (H - d.y + base * 3.0);
+      rot = d.spin * k * 2.4 + 0.5;
+      size = base * (1 - k * 0.66);
+      a = U.clamp((1 - k) * 1.35, 0, 1) * 0.95;
+      near = 0.85 * (1 - k);
+    } else {
+      /* Away and down, the tail doing the work: fast at first, then the water
+         between you and it does the rest. */
+      const e = U.easeOutCubic(k);
+      x = d.x + d.dir * e * W * 0.30;
+      y = d.y + e * L.waterH * 0.30;
+      rot = d.dir * 0.34 + Math.sin(d.t * 22) * 0.16 * (1 - k);
+      size = base * (1 - k * 0.55);
+      a = U.clamp((1 - k) * 1.5, 0, 1) * 0.9;
+      near = 0.55 * (1 - k);
+    }
+
+    ctx.save();
+    /* Falling into a place with no light in it, a dark fish on a dark ground is
+       nothing happening. It takes its own halo down with it — which is also the
+       only thing down there that ever lights anything. */
+    if (d.falls) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const gr = ctx.createRadialGradient(x, y, 0, x, y, size * 2.1);
+      gr.addColorStop(0, U.rgbToCss(P.glow, 0.34 * a));
+      gr.addColorStop(0.45, U.rgbToCss(P.glow, 0.13 * a));
+      gr.addColorStop(1, U.rgbToCss(P.glow, 0));
+      ctx.fillStyle = gr;
+      ctx.fillRect(x - size * 2.1, y - size * 2.1, size * 4.2, size * 4.2);
+      ctx.restore();
+    }
+    ctx.globalAlpha = a;
+    ctx.translate(x, y);
+    ctx.rotate(rot);
+    if (d.dir < 0) ctx.scale(-1, 1);
+    if (d.c.kind === 'treasure') {
+      ctx.fillStyle = '#000';
+      ctx.beginPath(); ctx.ellipse(0, 0, size * 0.85, size * 0.62, 0, 0, TAU); ctx.fill();
+    } else if (d.c.fish && d.c.fish.id) {
+      VF.fishArt.drawSilhouette(ctx, d.c.fish, size, 0.95, near);
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
   }
 
   function drawHookedFish(f, b) {
@@ -1250,29 +2214,78 @@
     const rim = U.rgbToCss(P.glow, rimA);
     const dark = '#03050a';
 
-    /* --- the ledge the angler is sitting on --- */
+    /* --- what you are sitting on ---
+       On the shore this is a shore: it runs off the left of the frame and down
+       past the bottom of it, because there is more of it in both directions.
+       The further down the map you go the less of it there is, until the last
+       water, where it is a slab with nothing under it and nothing beside it —
+       which is the whole of what that place is. The top edge is sampled off
+       groundY rather than drawn as its own curve, so the ledge and the thing
+       standing on it can never disagree about where the ground is. */
     const lipY = seatY + fh * 0.16;
+    const slab = U.clamp((P.void - 0.5) / 0.5, 0, 1);
+    const xL = U.lerp(-12, seatX - fh * 0.72, slab);
+    const endX = seatX + fh * 0.98;
+    const keel = U.lerp(H + 12, lipY + fh * (0.48 + 0.34 * slab), slab);
+
+    const top = [];
+    const STEPS = 9;
+    for (let i = 0; i <= STEPS; i++) {
+      const x = U.lerp(xL, endX, i / STEPS);
+      top.push([x, groundY(x)]);
+    }
+
     ctx.beginPath();
-    ctx.moveTo(-12, H + 12);
-    ctx.lineTo(-12, lipY - fh * 0.10);
-    ctx.quadraticCurveTo(W * 0.07, lipY - fh * 0.16, seatX + fh * 0.10, lipY - fh * 0.03);
-    ctx.quadraticCurveTo(seatX + fh * 0.62, lipY + fh * 0.10, seatX + fh * 0.98, lipY + fh * 0.52);
-    ctx.lineTo(seatX + fh * 1.3, H + 12);
+    ctx.moveTo(top[0][0], top[0][1]);
+    for (let i = 1; i < top.length; i++) ctx.lineTo(top[i][0], top[i][1]);
+    // the near end, then the underside back to where it started
+    ctx.lineTo(U.lerp(seatX + fh * 1.3, endX + fh * 0.16, slab),
+               U.lerp(H + 12, keel - fh * 0.34, slab));
+    ctx.lineTo(U.lerp(seatX + fh * 1.3, endX - fh * 0.30, slab), keel);
+    ctx.lineTo(U.lerp(-12, xL + fh * 0.46, slab), U.lerp(H + 12, keel - fh * 0.22, slab));
+    ctx.lineTo(xL, U.lerp(H + 12, top[0][1] + fh * 0.30, slab));
     ctx.closePath();
     // a hair above pure black so the silhouette separates from the deep water
-    const lg = ctx.createLinearGradient(0, lipY - fh * 0.2, 0, H);
-    lg.addColorStop(0, '#080c13');
-    lg.addColorStop(1, '#010204');
+    const lg = ctx.createLinearGradient(0, lipY - fh * 0.2, 0, U.lerp(H, keel, slab));
+    lg.addColorStop(0, U.rgbToCss(U.mixRgb([8, 12, 19], [16, 12, 30], slab)));
+    lg.addColorStop(0.55, U.rgbToCss(U.mixRgb([4, 6, 12], [8, 5, 18], slab)));
+    lg.addColorStop(1, U.rgbToCss(U.mixRgb([1, 2, 4], [2, 1, 6], slab), U.lerp(1, 0.5, slab)));
     ctx.fillStyle = lg;
     ctx.fill();
+
+    /* Under a slab there is nothing to catch light off, so the underside gets
+       the faintest edge there is — enough that the thing you are sitting on
+       has a bottom, not enough to make it look like it is standing on
+       something. */
+    if (slab > 0.02) {
+      ctx.strokeStyle = U.rgbToCss(P.glow, (0.05 + P.bright * 0.05) * slab);
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(top[top.length - 1][0], top[top.length - 1][1]);
+      ctx.lineTo(U.lerp(seatX + fh * 1.3, endX + fh * 0.16, slab),
+                 U.lerp(H + 12, keel - fh * 0.34, slab));
+      ctx.lineTo(U.lerp(seatX + fh * 1.3, endX - fh * 0.30, slab), keel);
+      ctx.lineTo(U.lerp(-12, xL + fh * 0.46, slab), U.lerp(H + 12, keel - fh * 0.22, slab));
+      ctx.lineTo(xL, U.lerp(H + 12, top[0][1] + fh * 0.30, slab));
+      ctx.stroke();
+    }
 
     ctx.strokeStyle = rim;
     ctx.lineWidth = 1.3;
     ctx.beginPath();
-    ctx.moveTo(-12, lipY - fh * 0.10);
-    ctx.quadraticCurveTo(W * 0.07, lipY - fh * 0.16, seatX + fh * 0.10, lipY - fh * 0.03);
-    ctx.quadraticCurveTo(seatX + fh * 0.62, lipY + fh * 0.10, seatX + fh * 0.98, lipY + fh * 0.52);
+    ctx.moveTo(top[0][0], top[0][1]);
+    for (let i = 1; i < top.length; i++) ctx.lineTo(top[i][0], top[i][1]);
     ctx.stroke();
+
+    /* The boat, moored off the end of the ledge.
+
+       It is alongside rather than underneath on purpose. Every location in
+       this game is a place to sit at the edge of water — that composition is
+       what the nine zones ARE — and putting the angler in a hull would have
+       rewritten all nine of them to add one. Moored, it is on screen in every
+       frame, it carries the paint and the trim and whatever is on its deck,
+       and it reads correctly: that is how you got here and how you leave. */
+    drawBoat(P, endX, lipY);
 
     if (VF.visit && VF.visit.active()) { L.merchant = null; drawVisit(P, rim); return; }
 
@@ -1294,6 +2307,49 @@
                           rodState.angle + rodState.sway);
 
     drawMerchant(P, rim);
+  }
+
+  function drawBoat(P, endX, lipY) {
+    if (!VF.boat || !VF.boatArt || !VF.boat.afloat()) return;
+    const fh = L.figureH;
+    /* Moored out rather than alongside the camera. It sits at the depth the
+       perspective ramp calls two thirds of the way out, and takes that
+       depth's scale, so it is unmistakably a boat and unmistakably not the
+       subject of the shot — the subject is the water. */
+    const by = L.horizonY + L.waterH * 0.42;
+    const sc = scaleAt(by);
+    const len = fh * 0.66 * sc;
+    const bx = Math.max(endX + len * 0.80, W * 0.52);
+    const roll = Math.sin(t * 0.7) * 0.030 + Math.sin(t * 1.9) * 0.010;
+    const lift = Math.sin(t * 0.9 + 1) * fh * 0.010 * sc;
+    const light = { bright: P.bright, tint: P.waterTop, k: 0.30 + P.fogAmt * 0.35 };
+
+    ctx.save();
+    // the mooring line back to the ledge
+    ctx.strokeStyle = U.rgbToCss(P.glow, 0.13);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(endX - fh * 0.10, lipY);
+    ctx.quadraticCurveTo((endX + bx) * 0.5, by + fh * 0.16,
+                         bx - len * 0.46, by + lift - len * 0.06);
+    ctx.stroke();
+
+    // and its reflection, before the boat, so the boat sits on top of it
+    ctx.save();
+    ctx.globalAlpha = 0.20 * (1 - P.void * 0.7);
+    ctx.translate(bx, by + lift + len * 0.09);
+    ctx.scale(1, -0.55);
+    ctx.rotate(roll);
+    VF.boatArt.drawMine(ctx, len, { time: t, light: light });
+    ctx.restore();
+
+    ctx.translate(bx, by + lift);
+    ctx.rotate(roll);
+    VF.boatArt.drawMine(ctx, len, { time: t, light: light });
+    ctx.restore();
+
+    // the water it is displacing
+    if (Math.sin(t * 0.7) > 0.985) VF.fx.ripple(bx, by + len * 0.08, len * 0.55, 2.2);
   }
 
   /* The wanderer stands a little up the shore with a case at his side and the
@@ -1401,12 +2457,23 @@
     ctx.restore();
   }
 
+  /* The equipped rod with the player's finish on it. A finish repaints — it
+     does not replace what the rod is, so an apex rod keeps its own flourish
+     and simply wears the new colours: a Gilt dragon is a gold dragon, not a
+     gold rod with no dragon on it. Length and stats are never touched. */
+  function paintedRod() {
+    const rod = VF.rods.get(VF.state.data.rod);
+    const skin = VF.cosmetics.cfg('rodSkin');
+    if (!skin || !skin.c1) return rod;
+    const paint = Object.assign({}, skin);
+    if (rod.art.apex) delete paint.style;
+    return { art: Object.assign({}, rod.art, paint, { len: rod.art.len }) };
+  }
+
   /* The rod, left leaning against the ledge at the seat. */
   function drawRestingRod(P) {
     const fh = L.figureH;
-    let rod = VF.rods.get(VF.state.data.rod);
-    const skin = VF.cosmetics.cfg('rodSkin');
-    if (skin && skin.c1) rod = { art: Object.assign({}, rod.art, skin, { len: rod.art.len }) };
+    const rod = paintedRod();
     const len = fh * 1.30 * rod.art.len;
     const bx = L.seatX + fh * 0.46, by = L.seatY + fh * 0.22;
     const a = -1.06;
@@ -1420,12 +2487,7 @@
 
   /* Rod geometry lives here; the drawing is shared with the shop previews. */
   function drawRod(P) {
-    let rod = VF.rods.get(VF.state.data.rod);
-    const skin = VF.cosmetics.cfg('rodSkin');
-    if (skin && skin.c1) {
-      // a finish repaints the rod without touching its length or its stats
-      rod = { art: Object.assign({}, rod.art, skin, { len: rod.art.len }) };
-    }
+    const rod = paintedRod();
     const tip = rodTipPoint();
     const hand = L.rodHand;
     const a = tip.a;
@@ -1485,13 +2547,16 @@
        centred inside its own silhouette: she is nearly all neck above hers,
        he is a person and splits about evenly. So the frame is worked out from
        the parts that have to be in shot rather than from the middle. */
-    const isNessie = C.id === 'nessie';
-    const TOP = isNessie ? 1.00 : 0.90;    // reach above centre, in half-heights
-    const BOT = isNessie ? 0.50 : 0.95;    // reach below it
-    const box = isNessie ? Math.min(H * 1.10, W * 1.15) : Math.min(H * 0.76, W * 0.55);
+    const F = C.frame || { box: [0.76, 0.55], top: 0.90, bot: 0.95, surf: 0.58 };
+    const TOP = F.top;                     // reach above centre, in half-heights
+    const BOT = F.bot;                     // reach below it
+    const box = Math.min(H * F.box[0], W * F.box[1]);
     const size = VF.fishArt.fitSize(fish, box);
-    const half = size * 2 * VF.fishArt.bodyRatio('being', fish.art.being);
-    const surface = L.horizonY + L.waterH * (isNessie ? 0.62 : 0.58);
+    // whatever body it has — a being, an object or an ordinary fish
+    const half = size * 2 * VF.fishArt.bodyRatio(fish.art.body,
+                                                 fish.art.being || fish.art.object ||
+                                                 fish.art.astral);
+    const surface = L.horizonY + L.waterH * F.surf;
     const k = U.smootherstep(U.clamp(C.rise, 0, 1));
 
     /* The letterbox bars are DOM, drawn over the canvas, so the renderer has
@@ -1503,11 +2568,15 @@
     /* She sits at her own waterline; he stands on the surface. Either way the
        figure is pushed down far enough to clear the top bar — a reveal you
        cannot see the head of is not a reveal. */
+    /* Something that sits in the water rests at its own waterline; something
+       that stands on it clears the surface entirely. `sink` is how much of it
+       stays under when it has finished coming up. */
     const cyEnd = Math.max(ceiling,
-                           isNessie ? surface - half * 0.36 : surface - half * BOT);
+                           F.sink !== undefined ? surface - half * F.sink
+                                                : surface - half * BOT);
     const cyStart = surface + half * (BOT + 1.30);
     const cy = U.lerp(cyStart, cyEnd, k);
-    const cx = W * (isNessie ? 0.50 : 0.50);
+    const cx = W * 0.5;
 
     ctx.save();
     // clip at the surface so nothing floats above water it has not left yet
@@ -1584,13 +2653,28 @@
   function syncVignette() {
     if (!pulseEl) pulseEl = document.getElementById('vigPulse');
     if (!pulseEl) return;
-    const v = Math.round(VF.fx.pulseAmt() * 100) / 100;
+    /* The other half of a surge with nothing to blow around: the frame itself.
+       The edges of the picture draw in and let go on a ten-second breath, under
+       everything else, so the place feels like it is doing something even when
+       nothing on screen has moved. */
+    let raw = VF.fx.pulseAmt();
+    const sg = VF.weather.surge();
+    if (sg > 0.01 && (VF.locations.current().void || 0) > 0.9) {
+      const br = 0.5 - 0.5 * Math.cos(t * 0.62);
+      raw = Math.max(raw, Math.pow(br, 1.8) * 0.30 * sg);
+    }
+    const v = Math.round(raw * 100) / 100;
     if (v !== lastPulse) { lastPulse = v; pulseEl.style.opacity = v; }
   }
 
   VF.scene = {
     init: init, resize: resize, update: update, draw: draw,
     L: L, addShadow: addShadow, newCastLateral: newCastLateral,
+    /* what a lost fish is doing right now, for the tools */
+    debugDeparture: function () {
+      return departure ? { t: departure.t, x: departure.x, y: departure.y,
+                           falls: departure.falls } : null;
+    },
     groundY: groundY, visitSpots: visitSpots,
     /* Is this canvas point on the wanderer? The input layer asks before it
        decides a press was the start of a cast. */
@@ -1603,6 +2687,7 @@
     },
     spawnMeteor: spawnMeteor, seedAmbient: seedAmbient,
     rebuild: function () { backdropKey = ''; buildStars(); },
+    __backdrop: function () { return backdrop; },
     profile: function (on) {
       if (on) { prof = { acc: {}, frames: 0 }; return; }
       if (!prof) return null;

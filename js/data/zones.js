@@ -1,0 +1,171 @@
+/* VOID FISHING — what each place actually DOES.
+
+   js/data/locations.js says what a spot looks like and how the odds lean.
+   That was enough when a zone was a backdrop and a fish table. It is not
+   enough now, and it never made the nine places feel like nine places: they
+   were one place with different multipliers.
+
+   So every zone gets a `rule` — one or two mechanics that only exist there
+   and that change what the player DOES, not what the numbers are:
+
+     shore     bottles wash in, and something is offshore that should not be
+     basin     the moon has phases and the water answers to them
+     flats     you can see what is coming, and you can pick which one
+     trench    the dark is real; the sonar is the only way through it
+     abyss     the crystals charge, and what they discharge into is your choice
+     cradle    the ring opens a section at a time and each one says something
+     nowhere   the chart lies, and leaving does not always work
+     beneath   down is a direction rather than a depth
+     heavens   the light does not come from the sun and it notices you
+
+   `ambient` names the visual layer js/render/zoneArt.js draws over the water,
+   which is the other half of "I know where I am within five seconds".        */
+(function (VF) {
+  'use strict';
+
+  const ZONES = {
+
+    shore: {
+      rule: 'bottles',
+      ambient: 'gulls',
+      line: 'calm, shallow, and about four degrees warmer than it has any right to be',
+      /* How often a bottle comes in, in seconds of fishing. Generous: this is
+         the tutorial zone for the whole discovery system and a player who
+         never sees one never learns that the system exists. */
+      bottle: [95, 210],
+      /* And once, early, something that does not belong in ankle-deep water
+         crosses the middle distance. It is the first sentence of the game's
+         longest chain and it is deliberately not explained. */
+      anomalyAt: 6
+    },
+
+    basin: {
+      rule: 'moon',
+      ambient: 'moonpath',
+      line: 'the moon has not moved since anyone started keeping records',
+      /* Five phases on a real 30-hour cycle, so it is the same for everybody
+         at the same moment and turns over often enough to be worth planning
+         around. Eclipse is rare and is the one that changes the zone. */
+      phases: [
+        { id: 'new', name: 'New', k: 0.00, span: 0.16,
+          mods: { rare: 0.92, bite: 1.10 }, note: 'no moon at all. the water is black and busy.' },
+        { id: 'crescent', name: 'Crescent', k: 0.22, span: 0.20,
+          mods: { rare: 1.06 }, note: 'a rind of it. the reflection is a line.' },
+        { id: 'half', name: 'Half', k: 0.44, span: 0.18,
+          mods: { rare: 1.18, value: 1.10 }, note: 'half lit, and the lit half is the one nearer you.' },
+        { id: 'full', name: 'Full', k: 0.66, span: 0.22,
+          mods: { rare: 1.45, trait: 1.6, encounter: 1.5 }, glowWater: 1,
+          note: 'the water is making its own light and the moon is not the reason.' },
+        { id: 'eclipse', name: 'Eclipse', k: 0.92, span: 0.08,
+          mods: { rare: 2.2, 'void': 1.8, encounter: 2.4 }, dark: 1,
+          note: 'something is in front of it. it is not the world.' }
+      ]
+    },
+
+    flats: {
+      rule: 'clearwater',
+      ambient: 'panes',
+      line: 'you can see the bottom, and the bottom is a long way down, and it is flat',
+      /* The whole zone is one idea: the water is so clear that what is coming
+         is visible before it arrives, and you can choose. Marks drift in from
+         the edges and casting at one takes that one. */
+      marks: [12, 26],
+      /* And the other half of the idea: it is not water. */
+      crackAt: 0.008
+    },
+
+    trench: {
+      rule: 'sonar',
+      ambient: 'dark',
+      line: 'the light stops about nine metres down and the trench is eleven hundred',
+      /* Without a set, this zone is genuinely harder to fish: you cannot see
+         an approach coming and you get no warning at all. With one, contacts
+         appear and can be investigated, which is the only way to reach two of
+         the creatures. */
+      contact: [70, 165],
+      blind: 0.62
+    },
+
+    abyss: {
+      rule: 'resonance',
+      ambient: 'crystals',
+      line: 'the structures are warm, and they are still growing',
+      /* A charge that builds while you fish and discharges into whatever the
+         last shard you picked up was.
+
+         It used to be "spend three shards to tune the resonance toward a
+         trait", which had a shard counter, a percentage readout and a choice
+         of three named modes — and no interface anywhere in the game to make
+         the choice with, so in practice it was a system the player was told
+         about and could not touch. Now the shards come up in three colours,
+         you take the one you want, and the water comes back that colour.
+         Nothing explains this. Doing it twice explains it. */
+      chargePer: 0.055,
+      tunes: [
+        { id: 'size',   colour: [255, 216, 150], trait: 'massive',     note: 'bigger' },
+        { id: 'colour', colour: [150, 236, 255], trait: 'shimmering',  note: 'lit' },
+        { id: 'void',   colour: [196, 148, 255], trait: 'voidtouched', note: 'wrong' }
+      ]
+    },
+
+    cradle: {
+      rule: 'excavate',
+      ambient: 'ring',
+      line: 'the ring overhead is most of a ring, and the missing part is below you',
+      /* Four sections, opened one at a time by things the player does
+         elsewhere. Each writes a piece of what the ring was for, and the last
+         one is the way down. */
+      sections: [
+        { id: 'rim', name: 'The Outer Rim', need: 3,
+          text: 'the outer plating comes away in sheets and there is a corridor behind it that ' +
+                'ran all the way round. it was pressurised. some of it still is.' },
+        { id: 'spine', name: 'The Spine', need: 8,
+          text: 'the load path goes inward, not down. whatever this was built to hold was in ' +
+                'the middle of the ring, and the middle of the ring is where the water is.' },
+        { id: 'yard', name: 'The Yard', need: 16,
+          text: 'a bay with the doors open and the gantries still extended. something the size ' +
+                'of a district was assembled here and then it left through the bottom.' },
+        { id: 'shaft', name: 'The Shaft', need: 28,
+          text: 'the missing part of the ring is not missing. it goes down, and it is still ' +
+                'going down, and it has been going down for four hundred years.' }
+      ]
+    },
+
+    nowhere: {
+      rule: 'drift',
+      ambient: 'wrongsky',
+      line: 'no coordinates were recorded and none can be',
+      /* Leaving does not always work. A crossing out of the Nowhere Sea has a
+         real chance of landing somewhere other than where it was pointed, and
+         the game says so afterwards rather than before. */
+      driftChance: 0.26,
+      /* And things repeat out here. */
+      echoAt: [40, 110]
+    },
+
+    beneath: {
+      rule: 'inverted',
+      ambient: 'under',
+      line: 'there is no surface. the line goes down and down is a direction, not a depth',
+      /* Down is somewhere you can go further into. Each cast at depth adds to
+         a reading; the deeper the reading the better the water, and it resets
+         if you leave. It is the one zone that rewards staying put. */
+      depthPer: 0.06
+    },
+
+    the_heavens: {
+      rule: 'celestial',
+      ambient: 'above',
+      line: 'water lying on top of the cloud, with nothing under it but weather',
+      /* The light up here is a thing rather than a condition, and it moves. */
+      passAt: [80, 170]
+    }
+  };
+
+  VF.zoneData = {
+    zones: ZONES,
+    get: function (id) { return ZONES[id] || null; },
+    rule: function (id) { const z = ZONES[id]; return z ? z.rule : null; },
+    ambient: function (id) { const z = ZONES[id]; return z ? z.ambient : null; }
+  };
+})(window.VF = window.VF || {});

@@ -105,6 +105,7 @@
 
   function tryStartEncounter() {
     if (encPhase) return false;
+    if (VF.creature && VF.creature.active()) return false;
     if (VF.fishing.state() !== 'waiting') return false;
     if (VF.fishing.S.encounterActive) return false;
     const loc = VF.locations.current();
@@ -161,6 +162,16 @@
 
   function tick(dt) {
     calm = U.approach(calm, calmTarget, 0.06, dt);
+
+    /* This module is the ambient water — splashes, drifting shapes, the odd
+       legendary. js/systems/creature.js is a scene with a creature in it, and
+       while one of those is running the water belongs to it: a stray shoal
+       crossing the middle of the Lurker would read as the game losing track
+       of what it was doing. */
+    if (VF.creature && VF.creature.active()) {
+      if (encPhase) abortEncounter();
+      return;
+    }
 
     if (encPhase) { updateEncounter(dt); return; }
 

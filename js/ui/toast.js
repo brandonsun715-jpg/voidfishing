@@ -29,7 +29,11 @@
     live.splice(i, 1);
     clearTimeout(rec.timer);
     rec.el.classList.add('out');
-    setTimeout(function () { if (rec.el.parentNode) rec.el.parentNode.removeChild(rec.el); }, 340);
+    /* Matched to the exit animation. It used to outlive it by nearly two
+       hundred milliseconds, and for all of that time an invisible toast was
+       still holding its place in the stack — so the ones underneath sat waiting
+       to move up long after the one above them had gone. */
+    setTimeout(function () { if (rec.el.parentNode) rec.el.parentNode.removeChild(rec.el); }, 190);
   }
 
   function plain(text, kind, ms) { return show(U.esc(text), kind, ms); }

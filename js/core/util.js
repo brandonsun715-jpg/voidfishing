@@ -58,15 +58,33 @@
   function commas(n) {
     return Math.floor(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   }
+  /* Above a million tonnes the comma form stops being a number a person can
+     read and starts being a layout problem — the widest catch card in the game
+     is about twenty characters and 5.97e24 is twenty-nine of them. So the top
+     of the catalogue prints in scientific notation, which is both shorter and
+     the honest way to write it. */
   function weight(kg) {
     if (kg < 0.1) return (kg * 1000).toFixed(0) + ' g';
     if (kg < 1) return kg.toFixed(2) + ' kg';
     if (kg < 100) return kg.toFixed(1) + ' kg';
-    return commas(Math.round(kg)) + ' kg';
+    if (kg < 1e9) return commas(Math.round(kg)) + ' kg';
+    return sci(kg) + ' kg';
   }
   function length(m) {
     if (m < 1) return (m * 100).toFixed(0) + ' cm';
-    return m.toFixed(2) + ' m';
+    if (m < 1e6) return m.toFixed(2) + ' m';
+    return sci(m / 1000) + ' km';
+  }
+  /* 5.97 × 10^24, with a real multiplication sign and a real superscript, so
+     it reads as a magnitude rather than as a broken number. */
+  function sci(n) {
+    const e = Math.floor(Math.log10(Math.abs(n)));
+    const m = n / Math.pow(10, e);
+    const SUP = '\u2070\u00b9\u00b2\u00b3\u2074\u2075\u2076\u2077\u2078\u2079';
+    const digits = String(e).split('').map(function (d) {
+      return d === '-' ? '\u207b' : SUP[+d];
+    }).join('');
+    return m.toFixed(2) + '\u00d710' + digits;
   }
   function duration(sec) {
     sec = Math.max(0, Math.floor(sec));
@@ -123,11 +141,31 @@
   }
   function now() { return performance.now() / 1000; }
 
+  /* The <body> carries three independent flags — the graphics tier, the
+     reduced-flashing switch, and whether you have wandered off your spot. The
+     first was written in four different places by assigning `className`, which
+     does not add a class, it replaces every class: turning the graphics down
+     mid-fight silently cleared the away state, and so did erasing a save.
+     One writer for everything that comes from settings, and it adds and removes
+     rather than assigning, so nothing it does not know about is destroyed. */
+  const TIERS = ['q-low', 'q-medium', 'q-high'];
+  function syncBody() {
+    const s = VF.state.data.settings;
+    const b = document.body.classList;
+    for (let i = 0; i < TIERS.length; i++) b.remove(TIERS[i]);
+    b.add('q-' + s.quality);
+    /* "reduce flashing" is a setting in this game as well as a preference in
+       the operating system, and until now it reached the canvas and nothing
+       else — the interface went on strobing. The stylesheet reads this. */
+    b.toggle('calm', !!s.reduceFlash);
+  }
+
   VF.util = {
     TAU, clamp, lerp, invLerp, smoothstep, smootherstep,
     easeOutCubic, easeInCubic, easeOutBack, easeInOutSine, approach,
     hexToRgb, rgbToCss, mixRgb, shade,
-    money, commas, weight, length, duration, pct, ordinalPercentile,
-    el, qs, qsa, clear, esc, deepClone, byId, now
+    money, commas, weight, length, sci, duration, pct, ordinalPercentile,
+    el, qs, qsa, clear, esc, deepClone, byId, now,
+    syncBody
   };
 })(window.VF = window.VF || {});
