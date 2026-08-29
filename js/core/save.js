@@ -47,7 +47,7 @@
             k === 'quests' || k === 'discovered' || k === 'research' || k === 'seen' ||
             k === 'seas' || k === 'creatures' || k === 'clues' || k === 'leads' ||
             k === 'expeditions' || k === 'zoneState' || k === 'modules' || k === 'trophies' ||
-            k === 'paint') {
+            k === 'paint' || k === 'world') {
           target[k] = sv;
         } else {
           merge(tv, sv);

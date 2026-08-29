@@ -569,6 +569,7 @@
     if (VF.space) VF.space.sync(L, VF.palette.P);
     if (VF.camera) VF.camera.tick(dt);
     placeLight();
+    if (VF.landmarks) VF.landmarks.tick(dt);
     updateRod(dt);
     updateBobber(dt);
     VF.rodArt.tick(dt);
@@ -969,7 +970,12 @@
     /* The zone's landmarks go in here, behind the fog and the water, so they
        sit in the weather with the ridgeline instead of on top of the frame.
        Half of what makes a place a place. */
-    mark('zoneback', function () { if (VF.zoneArt) VF.zoneArt.drawBack(ctx, L, P); });
+    /* The zone's landmarks: the ones at or past the horizon go in with the
+       ridgeline, so they sit in the same weather as the distant land. */
+    mark('zoneback', function () {
+      if (VF.landmarkArt) VF.landmarkArt.drawBehind(ctx, L, P);
+      if (VF.zoneArt) VF.zoneArt.drawBack(ctx, L, P);
+    });
     mark('aurora', function () { drawAurora(P); });
     mark('lightning', function () { drawLightning(P); });
     mark('fog', function () { drawFog(P, q); });
@@ -985,7 +991,12 @@
     /* What is on the water HERE and nowhere else, under the encounter layer
        and over the surface: the gulls, the panes, the crystals, the contacts,
        the bottle drifting in. Half of what makes a zone a zone. */
-    mark('zone', function () { if (VF.zoneArt) VF.zoneArt.drawFront(ctx, L, P); });
+    mark('zone', function () {
+      if (VF.zoneArt) VF.zoneArt.drawFront(ctx, L, P);
+      /* and the ones standing in the water go over it, under the encounter
+         layer, so a wreck is in the sea rather than on the screen */
+      if (VF.landmarkArt) VF.landmarkArt.drawOn(ctx, L, P);
+    });
     mark('creature', function () { if (VF.creatureArt) VF.creatureArt.draw(ctx, L, P); });
     mark('line', function () { drawLineAndBobber(P); drawDeparture(P); });
     mark('particles', function () { VF.particles.draw(ctx); });

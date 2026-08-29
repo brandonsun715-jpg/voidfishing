@@ -113,7 +113,7 @@
      amount is an extinction coefficient: over a long enough path everything
      goes to the fog colour, and how long "long enough" is, is the zone. */
   function fadeAt(d) {
-    return 1 - Math.exp(-S.density * Math.max(0, d) * 1.9);
+    return 1 - Math.exp(-S.density * Math.max(0, d) * 0.95);
   }
 
   /* What is left of an object's internal contrast at that distance. Distant
@@ -172,8 +172,31 @@
 
   /* How far off the near edge of the world u is — used to keep the camera and
      the cast inside the water rather than out past the end of it. */
+
+  /* How many world units of water fit between the middle of the frame and its
+     edge, at this distance.
+
+     This matters more than it looks. The visible water is a WEDGE, not a
+     rectangle: a world unit is 1.45 half-screens wide at the hull and 0.55 at
+     the horizon, so the frame holds about 0.7 units of near water and about
+     1.8 units of far water. Placing anything by a flat u range therefore puts
+     the near half of it off the sides of the screen — which is exactly what
+     the first pass at the shore did, and why its wreck ended up 700px past
+     the right edge.
+
+     So placement works in fractions of this instead, and a zone's `width` is
+     read as "how many frames across the world is", which is the same number
+     at every depth and is what anybody would assume it meant. */
+  function uSpan(d) {
+    return 1 / Math.max(0.05, spread(d));
+  }
+
   function clampU(u) {
-    return U.clamp(u, -S.halfWorld, S.halfWorld);
+    /* halfWorld is in FRAMES, like everything else the placement code counts
+       in, so the camera can reach the edge of the world and not a step past
+       it. Measured at mid-water, where a frame and a world unit agree. */
+    const lim = Math.max(0, S.halfWorld - 1) * uSpan(0.5);
+    return U.clamp(u, -lim, lim);
   }
 
   /* ---------------------------------------------------------------- sync
@@ -203,7 +226,7 @@
     xAt: xAt, yAt: yAt, dAt: dAt,
     scaleAt: scaleAt, spread: spread,
     fadeAt: fadeAt, contrastAt: contrastAt, airMix: airMix,
-    clampU: clampU,
+    clampU: clampU, uSpan: uSpan,
     halfWorld: function () { return S.halfWorld; },
     density: function () { return S.density; },
     DEPTH_POW: DEPTH_POW
