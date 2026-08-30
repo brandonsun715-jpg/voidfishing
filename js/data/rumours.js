@@ -150,7 +150,33 @@
 
     { id: 'you_ignored', topic: 'you', claim: 'ignored', truth: 'true', spawned: 1,
       from: ['fisherman', 'keeper'],
-      line: 'somebody was calling out there a while back. they stopped.' }
+      line: 'somebody was calling out there a while back. they stopped.' },
+
+    /* ===================================================== the boat that went
+
+       Spawned by the chain in js/data/chains.js, three crossings after the
+       player sailed past a signal and kept going. Two accounts, and the one
+       that is false is the comfortable one — which is the point. It settles
+       by going to the trench and seeing the hull, not by being told a third
+       time and not by waiting. */
+
+    { id: 'wreck_went', topic: 'thewreck', claim: 'went down', truth: 'true', spawned: 1,
+      from: ['fisherman'],
+      line: 'a boat was calling on the crossing a while back and then it was not. ' +
+            'she is on the shelf above the trench now, if you want to go and look at her.',
+      settle: {
+        when: function () {
+          return VF.landmarks && VF.landmarks.seenAnywhere('consequence:wreck_at_signal');
+        },
+        text: 'she is there. bow into the seam, on the shelf, exactly where he said. ' +
+              'nobody has been down to her.'
+      } },
+
+    { id: 'wreck_nothing', topic: 'thewreck', claim: 'nothing', truth: 'false', spawned: 1,
+      from: ['keeper', 'collector'],
+      line: 'he tells that one to everybody. there is no boat out there. there has never ' +
+            'been a boat out there.',
+      needs: function (c) { return c.heard('wreck_went'); } }
   ];
 
   const BY_ID = VF.util.byId(LIST);

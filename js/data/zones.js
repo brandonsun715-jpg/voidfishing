@@ -177,7 +177,16 @@
         ],
         micro: { arts: ['spark', 'debris'], count: 9, dMin: 0.15, dMax: 0.95 },
         /* And past the range of the set, one light. */
-        secret: { art: 'farlight', dMin: 0.88, dMax: 1.0, scale: 1 }
+        secret: { art: 'farlight', dMin: 0.88, dMax: 1.0, scale: 1 },
+        /* Not part of the grammar. This is here only if a chain in
+           js/data/chains.js has put it here, which happens only if the player
+           sailed past somebody calling and kept going. Nothing announces it.
+           It is on the near side of the seam, in the open, where a hull that
+           went down within sight of help would be. */
+        consequences: [
+          { fact: 'wreck_at_signal', art: 'wreck', kind: 'meso',
+            s: -0.62, d: 0.52, scale: 0.85 }
+        ]
       },
       /* Without a set, this zone is genuinely harder to fish: you cannot see
          an approach coming and you get no warning at all. With one, contacts

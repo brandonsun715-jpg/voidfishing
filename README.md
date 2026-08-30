@@ -179,8 +179,9 @@ js/systems/           time, weather, progression, economy, loot, fishing,
                       charter
 js/gl/                the WebGL2 layer: context and passes, sky and sea
 js/world/             world coordinates and the camera, the shapes a place is
-                      built from, the landmark graph, the event director and
-                      the rumour ledger
+                      built from, the landmark graph, the event director, the
+                      rumour ledger, the player's history, delayed
+                      consequences, and what people notice about you
 js/render/            palette, particles, screen effects, fish art, the chart,
                       landmark art, scene
 js/audio/             procedural WebAudio engine
@@ -238,6 +239,30 @@ going a real alternative. Only the answers that differ once you are already
 there stay on a card. `node tools/consequences.js` plays every branch from an
 identical save and diffs the world with the text excluded, because a different
 sentence is not a different outcome.
+
+**Some things come back later.** A consequence you meet in the same breath as
+the choice is a result, not a consequence. `js/world/chains.js` is the other
+kind: a condition arms it, a distance measured in things the player DID —
+crossings, casts, trips, conversations — has to pass, and then the world is
+different and nothing says so. Sail past something calling on a crossing and
+the game does not scold you; three crossings later there is a hull on the
+shelf above the trench, a man on the shore who will tell you about it, and
+somebody at the counter who says he makes it up. The delay is never in
+seconds: a consequence on a wall clock would go off while the game sat on a
+title screen, and `node tools/chains.js` asserts that six minutes of game time
+fires nothing. A chain may set a fact, arm a rumour or write one journal line.
+It may not raise a toast, open a panel or start a quest, and that is checked
+too.
+
+**People notice.** The dialogue is a ladder, and a ladder can only ever say
+the next thing — which is right for a story somebody is telling you and wrong
+for everything else, because a ladder cannot say "you look terrible". So
+`js/world/react.js` sits between the ladder and the rumours: lines scored
+against the state of the world rather than ordered, so the mechanic remarks on
+the hull you keep breaking, the child on where your boots have been, the
+cartographer on a number you have now settled. Nothing there advances
+anything, so it cannot be missed and cannot be farmed. It is recorded, so
+nobody says the same thing twice running.
 
 **People tell you things, and they may be wrong.** A clue is always true, has
 no source, and always opens a lead — the right shape for evidence and the
@@ -378,6 +403,11 @@ node tools/space.js       the projection's invariants: round-trip, parallax,
 node tools/trips.js       fifty crossings: how many of them ask you anything
 node tools/consequences.js every branch of every choice, diffed
 node tools/rumours.js     being told two things and finding out which was right
+node tools/chains.js      a consequence arms, waits, fires once, and announces
+                          nothing — and time passing alone fires nothing at all
+node tools/react.js       ten states of the world, and what the same nine people
+                          say in each of them
+node tools/boatmath.js    a better engine takes LESS hull damage, on every hull
 node tools/gl.js          every shader builds, the water has light in it, and
                           the game still draws with WebGL2 refused
 node tools/gallery.js      renders the whole catalogue to one sheet

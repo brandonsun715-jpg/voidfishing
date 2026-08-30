@@ -619,8 +619,18 @@
     });
 
     VF.bus.on('ui:toast', function (o) { VF.toast.plain(o.text, o.kind); });
-    VF.bus.on('ui:whisper', function () {
-      showPrompt(VF.rng.g.pick(['listen', 'something moved', 'not alone', 'hello?']), '#b9a8e8', 1.6);
+    /* The quiet channel. A prompt in the frame, gone in a second and a half,
+       with no card, no shake and no sound — which is what noticing something
+       feels like, as opposed to being told about it.
+
+       Anything that does not change what the player can DO belongs here
+       rather than in a toast: finding a small thing, hearing something move,
+       the world remarking on you. A toast is for "that failed", "this is now
+       possible", "you cannot do that yet". */
+    VF.bus.on('ui:whisper', function (o) {
+      const txt = (o && o.text) ||
+        VF.rng.g.pick(['listen', 'something moved', 'not alone', 'hello?']);
+      showPrompt(txt, (o && o.color) || '#b9a8e8', (o && o.hold) || 1.6);
     });
 
     VF.bus.on('encounter:start', function () {
@@ -808,7 +818,11 @@
     newCheck -= dt;
     if (newCheck > 0) return;
     newCheck = 1.1;
-    const now = VF.npcs.anyNew();
+    /* Only a line on a TRACK is worth interrupting for. A remark about the
+       state of your hull is worth having when you walk over and is not worth
+       a card telling you to go and open a menu — which is what this did the
+       moment people started noticing things. */
+    const now = VF.npcs.anyStage();
     if (now && !hadNew && !VF.visit.active()) {
       VF.toast.show('somebody on the shore has something to say &mdash; ' +
                     '<strong>journal &middot; people</strong>', null, 5600);

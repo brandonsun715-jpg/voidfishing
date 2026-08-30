@@ -158,8 +158,14 @@
                     (line ? '<br><span style="color:var(--ink-3)">' + U.esc(line) + '</span>' : ''),
                     'good', 6000);
     } else {
+      /* And a small find gets noticed rather than announced. It used to raise
+         a toast — a card sliding in from the corner of the screen for a shell
+         — which is the same gesture the game uses to say a purchase failed,
+         and it made every small thing feel like an interruption and the toast
+         itself feel like noise. A line in the frame, for a second and a half,
+         and then the game carries on. */
       VF.audio.nibble();
-      VF.toast.show(U.esc(name), null, 3600);
+      VF.bus.emit('ui:whisper', { text: name, color: '#cfe0f2', hold: 2.4 });
     }
     VF.bus.emit('discovery:found', { kind: kind, name: name });
   }
