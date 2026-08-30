@@ -520,6 +520,30 @@
     L.landPoint.y = L.horizonY + L.waterH * U.lerp(0.90, 0.72, nearEdge);
   }
 
+  /* The one big light — moon, ring, arch, monolith, crystal, tear, eye — was
+     nailed to W * 0.70 in all nine zones, which is a large part of why they
+     read as one place: the brightest thing on screen never moved. It is a
+     world position now, out past the horizon where a celestial object belongs,
+     and everything keyed off L.glowX — the moonpath, the horizon seam, the
+     tilt on the water gradient — follows it for nothing.
+
+     The default u is solved rather than typed, so with the camera centred the
+     light lands exactly where it always did and the change is invisible until
+     a zone asks for somewhere else. */
+  const LIGHT_D = 6;
+
+  function placeLight() {
+    if (!VF.space) return;
+    const loc = VF.locations.current();
+    const z = VF.zoneData && VF.zoneData.get(loc.id);
+    const lw = (z && z.spatial && z.spatial.light) || null;
+    const d = lw && lw.d !== undefined ? lw.d : LIGHT_D;
+    // 0.4 / spread(d) puts it at 0.70 W with the camera at rest
+    const u = lw && lw.u !== undefined ? lw.u : 0.4 / VF.space.spread(d);
+    L.glowX = VF.space.xAt(u, d);
+    L.glowY = L.horizonY - H * (lw && lw.h !== undefined ? lw.h : 0.145);
+  }
+
   function seedAmbient() {
     VF.particles.clearKind(VF.particles.KIND.MOTE);
     // nothing drifts in the last water, because there is nothing to drift in
@@ -531,7 +555,6 @@
 
   /* ---------------------------------------------------------------- update */
 
-  let castLateral = 0.62;
 
   function update(dt) {
     if (VF.creatureArt) VF.creatureArt.tick(dt);
@@ -539,6 +562,13 @@
     t += dt;
 
     computeLayout();
+    /* The world learns where the horizon is, then the camera moves, then the
+       light is projected through both — in that order, or the frame is drawn
+       against last frame's geometry. */
+    if (VF.space) VF.space.sync(L, VF.palette.P);
+    if (VF.camera) VF.camera.tick(dt);
+    placeLight();
+    if (VF.landmarks) VF.landmarks.tick(dt);
     updateRod(dt);
     updateBobber(dt);
     VF.rodArt.tick(dt);
@@ -590,11 +620,61 @@
      of the list lands near 2.2x instead of 3.2x. */
   const ROD_ANCHOR = 0.78, ROD_SPREAD = 0.435;
 
-  function rodTipPoint() {
-    const fh = L.figureH;
+  /* --------------------------------------------------------- the rod stage
+
+     Compressing the spread was not enough. The length still came out of the
+     rod and the figure, and the frame had no say in it, so on a 1440x860 the
+     endgame rod ran 563px from a hand at 0.20W and put its tip within twenty
+     pixels of the exact centre of the screen — straight through the horizon,
+     across whatever the zone had put out there, and over the water the player
+     is supposed to be reading.
+
+     So the frame decides, and the rod fits into it. The length falls out of
+     the geometry rather than the geometry falling out of the length, and every
+     rod at every viewport lands its tip in the same composed place.
+
+     Rod identity survives — a long rod is still visibly long — but as a band
+     around the stage rather than as an absolute, which is the difference
+     between a rod that reads as bigger and a rod that eats the frame.
+
+     The constraint that matters is horizontal. A rod tip crossing the skyline
+     is what a held rod does and is fine; a rod tip arriving at the exact
+     centre of the picture is not, because from there the blank is a diagonal
+     through everything behind it. So the stage is a reach — TIP_X across the
+     frame — and the vertical is left alone except for keeping the tip on it.
+
+     Floored against the figure so that a narrow viewport, where the angler is
+     width-capped and the reach to TIP_X is only a few dozen pixels, does not
+     end up with a rod the size of a pencil; and ceilinged at the length the
+     rod would have had anyway, so this can only ever make a rod smaller. */
+  const TIP_X = 0.46;        // how far across the frame the tip may reach
+  const TIP_TOP = 0.16;      // and how much sky it must leave above it
+  const ROD_BAND = 0.16;     // +-16% of the stage, across the whole ladder
+
+  /* Where the rod would reach if the frame had no opinion. Kept so the art can
+     be drawn at the weight it was tuned for. */
+  function rodNaturalLength() {
     const rl = VF.rods.get(VF.state.data.rod).art.len;
-    const len = fh * 1.85 * (ROD_ANCHOR + (rl - ROD_ANCHOR) * ROD_SPREAD);
+    return L.figureH * 1.85 * (ROD_ANCHOR + (rl - ROD_ANCHOR) * ROD_SPREAD);
+  }
+
+  function rodStageLength(a, k) {
+    const cos = Math.cos(a), sin = Math.sin(a);
+    let len = (W * TIP_X - L.rodHand.x) / Math.max(0.25, cos);
+    len *= U.lerp(1 - ROD_BAND, 1 + ROD_BAND, k);
+    len = U.clamp(len, L.figureH * 1.15, rodNaturalLength());
+    // and it stays on the frame, however far back the cast has pulled it
+    if (sin < -0.01) len = Math.min(len, (L.rodHand.y - H * TIP_TOP) / -sin);
+    return Math.max(L.figureH * 0.9, len);
+  }
+
+  function rodTipPoint() {
+    const rl = VF.rods.get(VF.state.data.rod).art.len;
     const a = rodState.angle + rodState.sway;
+    /* Where this rod sits in the ladder, 0 at the wooden one and 1 at the top,
+       mapped onto a band either side of the stage. */
+    const k = U.clamp((rl - ROD_ANCHOR) / 0.95, 0, 1);
+    const len = rodStageLength(a, k);
     const bend = rodState.bend;
     // quadratic curve: control point offset perpendicular to the rod line
     const ex = L.rodHand.x + Math.cos(a) * len;
@@ -614,15 +694,15 @@
     L.rodTip.x = tip.x; L.rodTip.y = tip.y;
 
     const b = L.bobber;
-    const vd = VF.palette.P.void || 0;
-    const near = L.horizonY + L.waterH * 0.80;
-    const far = L.horizonY + L.waterH * 0.09;
-    /* Distance is how far out across the water the throw reaches. Where there
-       is no water to reach across, the same power puts the hook straight down
-       instead, so the range collapses toward the near end. */
-    const distT = U.clamp(S.castDist / 1.5, 0, 1) * (1 - vd * 0.55);
-    L.castTarget.x = W * castLateral;
-    L.castTarget.y = U.lerp(near, far, distT);
+    /* The rig goes where the cast said it went. This used to be a random
+       lateral times the width of the screen, thrown away and re-rolled on
+       every throw — which is why nothing downstream could ever ask where the
+       line was. How far out it reaches, including the collapse in water there
+       is nothing to reach across, is settled in fishing.resolveCast now: it is
+       a question about the cast rather than about the picture. */
+    const pr = VF.space.project(S.castU, S.castD);
+    L.castTarget.x = pr.x;
+    L.castTarget.y = pr.y;
 
     const out = S.state === 'casting' || S.state === 'waiting' ||
                 S.state === 'bite' || S.state === 'reeling';
@@ -641,7 +721,8 @@
          higher than that — the first moments, leaving a raised tip — no lift
          is added at all. */
       const straight = U.lerp(tip.y, L.castTarget.y, k);
-      const arc = Math.sin(S.flight * Math.PI) * L.waterH * 0.42 * (0.35 + distT * 0.65);
+      // a longer throw carries a higher arc, and distance is how far out it went
+      const arc = Math.sin(S.flight * Math.PI) * L.waterH * 0.42 * (0.35 + S.castD * 0.65);
       const ceiling = Math.min(straight, L.horizonY + L.waterH * 0.05);
       b.y = Math.max(ceiling, straight - arc);
       b.scale = U.lerp(1.0, scaleAt(L.castTarget.y), k);
@@ -695,19 +776,10 @@
     return U.lerp(0.34, 1.0, Math.pow(k, 0.85));
   }
 
-  function newCastLateral() {
-    /* Out across the water on the shore. In the last water there is nothing to
-       cast across, so the throw shortens and the line goes down instead — but
-       it goes down off the edge of the slab rather than through it, so however
-       short the throw is it never lands nearer than where the slab stops.
-       Read off the location and not off the palette: the palette catches up a
-       frame later, and the first cast after arriving used the old number. */
-    const vd = U.clamp(VF.locations.current().void || 0, 0, 1);
-    const near = U.clamp((vd - 0.5) / 0.5, 0, 1);
-    const raw = (0.54 + VF.rng.g() * 0.22) * (1 - vd * 0.30);
-    const edge = (L.seatX + (L.figureH || W * 0.2) * 1.16) / Math.max(1, W);
-    castLateral = Math.max(raw, U.lerp(0, edge, near));
-  }
+  /* newCastLateral used to live here: it re-rolled the bobber's lateral to
+     0.54 + rnd() * 0.22 of the screen width on every cast and threw it away
+     afterwards. The cast has a world position now and the renderer reads it,
+     so there is nothing left to randomise. */
 
   /* ------------------------------------------------- weather particles */
 
@@ -889,7 +961,12 @@
     /* The zone's landmarks go in here, behind the fog and the water, so they
        sit in the weather with the ridgeline instead of on top of the frame.
        Half of what makes a place a place. */
-    mark('zoneback', function () { if (VF.zoneArt) VF.zoneArt.drawBack(ctx, L, P); });
+    /* The zone's landmarks: the ones at or past the horizon go in with the
+       ridgeline, so they sit in the same weather as the distant land. */
+    mark('zoneback', function () {
+      if (VF.landmarkArt) VF.landmarkArt.drawBehind(ctx, L, P);
+      if (VF.zoneArt) VF.zoneArt.drawBack(ctx, L, P);
+    });
     mark('aurora', function () { drawAurora(P); });
     mark('lightning', function () { drawLightning(P); });
     mark('fog', function () { drawFog(P, q); });
@@ -905,8 +982,14 @@
     /* What is on the water HERE and nowhere else, under the encounter layer
        and over the surface: the gulls, the panes, the crystals, the contacts,
        the bottle drifting in. Half of what makes a zone a zone. */
-    mark('zone', function () { if (VF.zoneArt) VF.zoneArt.drawFront(ctx, L, P); });
+    mark('zone', function () {
+      if (VF.zoneArt) VF.zoneArt.drawFront(ctx, L, P);
+      /* and the ones standing in the water go over it, under the encounter
+         layer, so a wreck is in the sea rather than on the screen */
+      if (VF.landmarkArt) VF.landmarkArt.drawOn(ctx, L, P);
+    });
     mark('creature', function () { if (VF.creatureArt) VF.creatureArt.draw(ctx, L, P); });
+    mark('aim', function () { drawAim(P); });
     mark('line', function () { drawLineAndBobber(P); drawDeparture(P); });
     mark('particles', function () { VF.particles.draw(ctx); });
     mark('fore', function () { drawForeground(P); });
@@ -915,8 +998,134 @@
     syncVignette();
 
     if (wrongK > 0.01) drawWrong(wrongK);
+    if (debugOn) drawDebug();
     if (prof) { prof.frames++; }
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+
+  /* Where the line is going, while the meter is filling.
+
+     Two marks rather than one, and the gap between them is the whole lesson:
+     the ring is what the player pointed at, and the cross is where the rig
+     will actually land — short of it on a soft throw, and short of it however
+     hard it is thrown if the rod cannot reach that far. Nothing has to explain
+     that a longer rod reaches further once you have watched the gap close.
+
+     It is drawn on the water rather than over it: a flat ellipse on the
+     surface, sized by the perspective, so it reads as a place rather than as a
+     cursor. */
+  function drawAim(P) {
+    const S = VF.fishing.S;
+    if (!S.charging || !VF.space) return;
+    const landD = Math.min(U.clamp(S.aimD, 0.04, 1), VF.fishing.reach()) *
+                  (0.62 + 0.38 * S.charge);
+
+    const want = VF.space.project(S.aimU, S.aimD);
+    const wx = want.x, wy = want.y, ws = want.scale;
+    const land = VF.space.project(S.aimU, landD);
+
+    ctx.save();
+    ctx.lineWidth = 1.2;
+
+    /* The ring reports the water under it. Deep water draws it heavier, and on
+       the trench that is the only reading the player gets of where the seam
+       is between one sonar sweep and the next — so the mark is an instrument
+       as well as a cursor, and the zone's navigation problem is something the
+       hand can solve rather than something the interface announces. */
+    const deep = VF.zones && VF.zones.depthAt ? VF.zones.depthAt(S.aimU, S.aimD) : S.aimD;
+    const r = Math.max(5, W * 0.016 * ws);
+    ctx.strokeStyle = U.rgbToCss(P.glow, 0.18 + deep * 0.34);
+    ctx.lineWidth = 1 + deep * 1.1;
+    ctx.beginPath();
+    ctx.ellipse(wx, wy, r, r * 0.30, 0, 0, TAU);
+    ctx.stroke();
+    ctx.lineWidth = 1.2;
+
+    // and where it is actually going to go
+    const short = Math.abs(land.y - wy) > 2;
+    if (short) {
+      ctx.strokeStyle = U.rgbToCss(P.glow, 0.5);
+      const c = Math.max(3, W * 0.008 * land.scale);
+      ctx.beginPath();
+      ctx.moveTo(land.x - c, land.y); ctx.lineTo(land.x + c, land.y);
+      ctx.moveTo(land.x, land.y - c * 0.42); ctx.lineTo(land.x, land.y + c * 0.42);
+      ctx.stroke();
+      // the shortfall, drawn as the distance it is
+      ctx.strokeStyle = U.rgbToCss(P.glow, 0.14);
+      ctx.beginPath();
+      ctx.moveTo(land.x, land.y); ctx.lineTo(wx, wy);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  /* ------------------------------------------------------------------ F9
+
+     The world with its working shown: the (u, d) lattice the water is
+     addressed by, where the camera is pointed, and — once there are any — the
+     landmark graph with its sightlines.
+
+     This is not a nicety. Placement that is planned rather than scattered is
+     invisible when it works, so the only way to tell a deliberate composition
+     from a lucky one is to be able to see the grid it was composed on. */
+  let debugOn = false;
+
+  function drawDebug() {
+    if (!VF.space || !VF.camera) return;
+    const cam = VF.camera.get();
+    ctx.save();
+    ctx.lineWidth = 1;
+
+    // lines of constant u, running out to the horizon
+    ctx.strokeStyle = 'rgba(120,220,255,0.22)';
+    for (let u = -3; u <= 3; u += 0.5) {
+      ctx.beginPath();
+      for (let d = 0; d <= 1.0001; d += 0.05) {
+        const x = VF.space.xAt(u, d), y = VF.space.yAt(d);
+        if (d === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+    // and of constant d, across it
+    ctx.strokeStyle = 'rgba(120,220,255,0.16)';
+    for (let d = 0; d <= 1.0001; d += 0.1) {
+      const y = VF.space.yAt(d);
+      ctx.beginPath();
+      ctx.moveTo(VF.space.xAt(-3, d), y);
+      ctx.lineTo(VF.space.xAt(3, d), y);
+      ctx.stroke();
+    }
+
+    // the edge of the world, which is what the camera is clamped to
+    const hw = VF.space.halfWorld();
+    ctx.strokeStyle = 'rgba(255,180,90,0.55)';
+    [-hw, hw].forEach(function (u) {
+      ctx.beginPath();
+      for (let d = 0; d <= 1.0001; d += 0.05) {
+        const x = VF.space.xAt(u, d), y = VF.space.yAt(d);
+        if (d === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    });
+
+    if (VF.landmarks && VF.landmarks.debugDraw) VF.landmarks.debugDraw(ctx);
+
+    // the rod stage, so the composition rule is visible rather than asserted
+    ctx.strokeStyle = 'rgba(255,90,120,0.5)';
+    ctx.beginPath();
+    ctx.moveTo(W * TIP_X, L.horizonY);
+    ctx.lineTo(W * TIP_X, H);
+    ctx.moveTo(0, H * TIP_TOP);
+    ctx.lineTo(W, H * TIP_TOP);
+    ctx.stroke();
+
+    ctx.fillStyle = 'rgba(230,245,255,0.9)';
+    ctx.font = '11px ui-monospace, monospace';
+    ctx.fillText('cam u ' + cam.u.toFixed(2) + '  zoom ' + cam.zoom.toFixed(2) +
+                 '  ' + cam.mode + (cam.enabled ? '' : ' (locked)') +
+                 '   air ' + VF.space.density().toFixed(2) +
+                 '   rod ' + Math.round(rodTipPoint().len) + 'px', 12, H - 14);
+    ctx.restore();
   }
 
   function drawSky(P) {
@@ -2493,13 +2702,19 @@
     const a = tip.a;
     const S = VF.fishing.S;
     const reeling = S.state === 'reeling' && S.fight && S.fight.reeling;
+    /* rodArt sizes its guides, bindings and reel off clamp(len / 300) — an
+       absolute pixel count. Shortening the rod to fit the stage would
+       therefore have thinned sixty rods' worth of hand-tuned detail as a side
+       effect of a composition change. So the weight is handed over separately:
+       draw at the stage length, detail at the length the art was tuned for. */
+    const weight = U.clamp(rodNaturalLength() / Math.max(1, tip.len), 0.85, 1.9);
     VF.rodArt.draw(ctx, rod, {
       bx: hand.x - Math.cos(a) * tip.len * 0.13,
       by: hand.y - Math.sin(a) * tip.len * 0.13,
       cx: tip.cx, cy: tip.cy,
       tx: tip.x, ty: tip.y,
       len: tip.len, angle: a
-    }, t, { spin: reeling ? t * 12 : t * 0.4 });
+    }, t, { spin: reeling ? t * 12 : t * 0.4, weight: weight });
   }
 
   /* The two sequences, drawn over the shore rather than instead of it: the
@@ -2669,7 +2884,9 @@
 
   VF.scene = {
     init: init, resize: resize, update: update, draw: draw,
-    L: L, addShadow: addShadow, newCastLateral: newCastLateral,
+    L: L, addShadow: addShadow,
+    debug: function (on) { debugOn = on === undefined ? !debugOn : !!on; return debugOn; },
+    rodLength: function () { return rodTipPoint().len; },
     /* what a lost fish is doing right now, for the tools */
     debugDeparture: function () {
       return departure ? { t: departure.t, x: departure.x, y: departure.y,

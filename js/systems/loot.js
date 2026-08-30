@@ -120,12 +120,57 @@
   /* Preference tags steer WHICH species inside a tier, not how likely the tier
      is — tier odds are bait.rare's job. So the bonus is normalised against the
      tier average before it is applied. */
+  /* ------------------------------------------------------------- the water
+
+     The fourth preference axis, alongside bait, time and weather. A species
+     already says what it bites on and when; this is where it says what kind
+     of water it is in, so that where the line goes is a decision with an
+     answer rather than a lateral the renderer used to randomise.
+
+     Two or three tags describe any patch of water: how deep it is, whether
+     there is structure in it, and whether it is lit. */
+  function waterTags() {
+    const c = VF.fishing && VF.fishing.S.castCtx;
+    if (!c) return null;
+    const t = [];
+    t.push(c.depth > 0.66 ? 'deep' : c.depth > 0.33 ? 'mid' : 'shallow');
+    t.push(c.cover > 0.35 ? 'cover' : 'open');
+    t.push(c.lit > 0.55 ? 'lit' : 'dark');
+    return t;
+  }
+
+  /* Two hundred and thirty-four species are not going to be hand-tagged, and
+     tagging them badly would be worse than not tagging them: an axis nobody
+     tuned is an axis that adds noise. So a species uses `f.water` where an
+     author cared enough to write one, and otherwise the rule below — which
+     says the obvious thing, that the ordinary fish are in the ordinary water
+     near the bank and the ones worth having are not. */
+  function waterOf(f) {
+    if (f.water && f.water.length) return f.water;
+    const rank = VF.rarities.rank(f.rarity);
+    if (rank <= 1) return ['shallow', 'open'];
+    if (rank <= 3) return ['mid', 'cover'];
+    return ['deep', 'cover', 'dark'];
+  }
+
   function prefBonus(f) {
     const d = VF.state.data;
     let k = 1;
     if (f.baits.length) k *= (f.baits.indexOf(d.bait) >= 0) ? 3.0 : 0.55;
     if (f.time.length) k *= (f.time.indexOf(VF.time.phase()) >= 0) ? 1.8 : 0.6;
     if (f.weather.length) k *= (f.weather.indexOf(VF.weather.id()) >= 0) ? 2.2 : 0.7;
+    const here = waterTags();
+    if (here) {
+      /* Deliberately gentler than the other three. Where the line went should
+         lean the draw, not decide it: a player who casts badly should catch
+         something worse, not nothing, and the axis has to survive being
+         stacked on top of bait, hour and weather without collapsing the pool
+         to one species. */
+      const want = waterOf(f);
+      let hit = 0;
+      for (let i = 0; i < want.length; i++) if (here.indexOf(want[i]) >= 0) hit++;
+      k *= U.lerp(0.72, 1.55, want.length ? hit / want.length : 0.5);
+    }
     return k;
   }
 
@@ -134,7 +179,13 @@
   let prefMean = Object.create(null);
   function prefMeans(p, locId) {
     const d = VF.state.data;
-    const key = locId + '|' + d.bait + '|' + VF.time.phase() + '|' + VF.weather.id();
+    /* The water is part of the key. Without it the mean is computed once for
+       the hour and then reused across every cast, so the normalisation that is
+       supposed to keep the tiers balanced would be measuring water the line is
+       no longer in. */
+    const w = waterTags();
+    const key = locId + '|' + d.bait + '|' + VF.time.phase() + '|' + VF.weather.id() +
+                '|' + (w ? w.join(',') : '-');
     if (key === prefKey) return prefMean;
     const sum = Object.create(null), cnt = Object.create(null);
     for (let i = 0; i < p.pool.length; i++) {

@@ -121,6 +121,11 @@
     pressed = true;
     const st = VF.fishing.state();
     if (st === 'idle') {
+      /* Pressing a patch of water is aiming at it. Where the rig can actually
+         reach is the rod's business and how close it lands to the mark is the
+         meter's, but the bearing is the player's — which is the whole reason
+         a zone can now ask a question about where the line goes. */
+      aimFrom(px, py);
       if (VF.fishing.beginCharge()) VF.audio.charge();
     } else if (st === 'bite') {
       VF.fishing.hook();
@@ -138,6 +143,27 @@
     if (st === 'reeling') VF.fishing.setReeling(false);
   }
 
+  /* The arrows do the obvious thing for whatever is happening: they walk the
+     aim along while the meter is filling, and turn the camera when it is not. */
+  function nudge(dir) {
+    const S = VF.fishing.S;
+    if (S.charging && VF.space) {
+      VF.fishing.aimAt(S.aimU + dir * VF.space.uSpan(S.aimD) * 0.09, S.aimD);
+    } else {
+      VF.camera.steer(dir * 0.14);
+    }
+  }
+
+  /* A press, or a drag while the meter fills, points the cast. A press that
+     came from a key has no coordinates, and then the aim is left where it was
+     — so the keyboard still casts exactly as it always did, at whatever the
+     camera is looking at. */
+  function aimFrom(px, py) {
+    if (px === undefined || py === undefined || !VF.space || !VF.fishing.aimAt) return;
+    const at = VF.space.unproject(px, py);
+    if (at) VF.fishing.aimAt(at.u, at.d);
+  }
+
   function bindInput() {
     const canvas = document.getElementById('scene');
 
@@ -148,10 +174,25 @@
       const p = scenePoint(e, canvas);
       pressStart(e, p ? p.x : undefined, p ? p.y : undefined);
     });
+    canvas.addEventListener('pointermove', function (e) {
+      if (!VF.fishing.S.charging) return;
+      const p = scenePoint(e, canvas);
+      if (p) aimFrom(p.x, p.y);
+    });
     D.actionBtn.addEventListener('pointerdown', function (e) { e.preventDefault(); pressStart(e); });
     window.addEventListener('pointerup', pressEnd);
     window.addEventListener('pointercancel', pressEnd);
     window.addEventListener('blur', pressEnd);
+
+    /* F8: take the interface away and look at the game.
+
+       Nothing here is saved and nothing is announced — a toast explaining that
+       the interface has been hidden would be an interface. It reads back off
+       the body class, so the stylesheet is the only thing that knows. */
+    function toggleCinema() {
+      document.body.classList.toggle('cinema');
+      VF.audio.click();
+    }
 
     window.addEventListener('keydown', function (e) {
       const tag = document.activeElement && document.activeElement.tagName;
@@ -222,8 +263,18 @@
       if (VF.adminDoor && VF.adminDoor.key(e)) return;
 /* @end-admin */
 
+      /* The two development keys. They work with a panel open, because half
+         the point of F8 is being able to take the interface away while it is
+         in the way, and neither of them touches the save. */
+      if (e.code === 'F8') { e.preventDefault(); if (!e.repeat) toggleCinema(); return; }
+      if (e.code === 'F9') { e.preventDefault(); if (!e.repeat) VF.scene.debug(); return; }
+
       if (VF.state.rt.panelOpen) return;
       switch (e.code) {
+        /* Looking around. Arrows rather than A and D, which are the aquarium
+           and would have to be taken off somebody. */
+        case 'ArrowLeft': e.preventDefault(); nudge(-1); break;
+        case 'ArrowRight': e.preventDefault(); nudge(1); break;
         case 'KeyQ': e.preventDefault(); VF.panels.open('shop'); break;
         case 'KeyF': e.preventDefault(); VF.panels.open('fishdex'); break;
         case 'KeyB': e.preventDefault(); VF.panels.open('bag'); break;
@@ -260,7 +311,6 @@
   function bindBus() {
     VF.bus.on('fishing:cast', function (e) {
       VF.audio.cast(e.power);
-      VF.scene.newCastLateral();
       const cc = VF.cosmetics.cfg('cast');
       if (cc.n) {
         const tip = VF.scene.L.rodTip;

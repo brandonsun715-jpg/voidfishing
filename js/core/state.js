@@ -95,6 +95,10 @@
       leads: {},              // lead id -> { at, done }   — what a clue points at
       expeditions: {},        // expedition id -> { started, leg, done, found: {} }
       zoneState: {},          // per-zone progress: cradle sections, crystal charge, …
+      /* Which landmarks have been noticed, per zone. The geometry is not in
+         here and never will be: it comes back off the zone's seed, so all
+         that is worth a byte is which of it the player has actually seen. */
+      world: {},
 
       cosmetics: [],          // owned cosmetic ids
       equipped: {},           // cosmetic slot -> id

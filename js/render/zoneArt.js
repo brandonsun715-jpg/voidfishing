@@ -86,64 +86,16 @@
      that goes up out of frame; the lighthouse standing on the end of it is
      there to say how big the headland is. Then a dock, then a wreck, then
      gulls. The thing you may not see is out past all of it. */
-  function shoreBack(g, L, P) {
-    const hy = L.horizonY, W = L.w;
+  /* The headland, the lighthouse and the three islands used to be drawn here,
+     each at a hardcoded fraction of the screen width. They are landmarks now —
+     placed by js/world/landmarks.js on sightlines, drawn by
+     js/render/landmarkArt.js at whatever distance they were placed at, and
+     able to be looked at, approached and missed, none of which a screen
+     fraction can do.
 
-    /* the headland. It leaves the top of the frame, which is the only way to
-       make something on a canvas look tall. */
-    g.fillStyle = shade(P, 0.72);
-    g.beginPath();
-    g.moveTo(-4, -4);
-    g.lineTo(W * 0.20, -4);
-    g.lineTo(W * 0.205, hy * 0.30);
-    g.quadraticCurveTo(W * 0.19, hy * 0.62, W * 0.150, hy * 0.86);
-    g.quadraticCurveTo(W * 0.13, hy * 0.98, W * 0.090, hy + 2);
-    g.lineTo(-4, hy + 2);
-    g.closePath();
-    g.fill();
-    // the strata, which is what stops it reading as a paper cut-out
-    g.strokeStyle = U.rgbToCss(P.skyBot, 0.16);
-    g.lineWidth = 1;
-    for (let i = 1; i < 6; i++) {
-      const y = hy * (0.18 + i * 0.14);
-      g.beginPath();
-      g.moveTo(-4, y);
-      g.lineTo(W * (0.20 - i * 0.012), y - hy * 0.03);
-      g.stroke();
-    }
-
-    /* the lighthouse on the end of it — small, and that is the point */
-    const lx = W * 0.175, ly = hy * 0.30;
-    const lh = hy * 0.14, lw = lh * 0.20;
-    g.fillStyle = shade(P, 0.82);
-    g.beginPath();
-    g.moveTo(lx - lw * 0.62, ly);
-    g.lineTo(lx - lw * 0.40, ly - lh);
-    g.lineTo(lx + lw * 0.40, ly - lh);
-    g.lineTo(lx + lw * 0.62, ly);
-    g.closePath();
-    g.fill();
-    g.fillRect(lx - lw * 0.62, ly - lh - lh * 0.10, lw * 1.24, lh * 0.07);
-
-    /* The lamp is NOT baked. It turns, and `t` inside a bake is whatever the
-       clock said the one time the canvas was drawn — which is how the first
-       version ended up with a permanent white sun in the corner of the sky.
-       The turning light is live, in lighthouseBeam, and it is small. */
-    g.beginPath();
-    g.moveTo(lx - lw * 0.62, ly);
-    g.lineTo(lx - lw * 0.62, ly - lh);
-    edge(g, P, 0.30, 1.1);
-
-    /* two islands, sitting on the horizon, small enough to be far away */
-    g.fillStyle = shade(P, 0.58);
-    [[0.52, 0.020, 0.055], [0.63, 0.011, 0.030], [0.78, 0.008, 0.022]].forEach(function (a) {
-      g.beginPath();
-      g.moveTo(W * (a[0] - a[2]), hy + 1);
-      g.quadraticCurveTo(W * a[0], hy - L.h * a[1], W * (a[0] + a[2]), hy + 1);
-      g.closePath();
-      g.fill();
-    });
-  }
+     What is left in the back layer for this zone is nothing, and that is the
+     right answer: the shore's distance is the ridgeline and its landmarks,
+     and a third layer between them was only ever making the frame busier. */
 
   function shoreFront(g, L, P, v) {
     const hy = L.horizonY, W = L.w, wh = L.waterH;
@@ -171,79 +123,13 @@
     }
 
 
-    /* The dock. Under the headland, in the midground, small — it is there to
-       say that people come here, and to give the cliff behind it a size.
-       Foreground would have put it on top of the boat and the angler, which
-       is where the first version of it went. */
-    const dy = hy + wh * 0.185;
-    const dl = W * 0.145;
-    g.fillStyle = 'rgba(3,5,9,0.90)';
-    g.fillRect(-4, dy, dl, Math.max(2, wh * 0.016));
-    for (let i = 0; i < 5; i++) {
-      const px = dl * (0.12 + i * 0.21);
-      g.fillRect(px, dy, Math.max(1.5, W * 0.0035), wh * 0.075);
-    }
-    // one post taller than the rest, with something tied to it
-    g.fillRect(dl * 0.96, dy - wh * 0.030, Math.max(1.5, W * 0.004), wh * 0.100);
-    g.beginPath();
-    g.moveTo(0, dy);
-    g.lineTo(dl, dy);
-    edge(g, P, 0.20, 1);
-
-    /* A hull, half under, out in the shallows. Nobody mentions it. It reads
-       from the broken mast rather than from the hull, which is the only part
-       of a wreck that is legible at forty pixels. */
-    /* Kept well off centre: the moored boat sits at roughly 0.52W and a
-       black wreck looming directly over your own hull reads as one confused
-       object rather than as two things at different distances. */
-    const bx = W * 0.775, by = hy + wh * 0.205, bl = W * 0.042;
-    g.save();
-    g.translate(bx, by);
-    g.rotate(0.20);
-    g.fillStyle = 'rgba(4,7,12,0.86)';
-    g.beginPath();
-    g.moveTo(-bl, 0);
-    g.quadraticCurveTo(-bl * 0.5, -bl * 0.34, bl * 0.86, -bl * 0.16);
-    g.lineTo(bl, bl * 0.02);
-    g.quadraticCurveTo(0, bl * 0.14, -bl, 0);
-    g.closePath();
-    g.fill();
-    g.beginPath();
-    g.moveTo(-bl * 0.9, -bl * 0.02);
-    g.quadraticCurveTo(-bl * 0.4, -bl * 0.32, bl * 0.82, -bl * 0.15);
-    edge(g, P, 0.26, 1);
-    // the mast, snapped, at the angle it snapped at
-    g.strokeStyle = 'rgba(4,7,12,0.9)';
-    g.lineWidth = Math.max(1.2, W * 0.0026);
-    g.beginPath();
-    g.moveTo(-bl * 0.1, -bl * 0.22);
-    g.lineTo(bl * 0.26, -bl * 1.05);
-    g.stroke();
-    g.beginPath();
-    g.moveTo(bl * 0.26, -bl * 1.05);
-    g.lineTo(bl * 0.62, -bl * 0.86);
-    g.stroke();
-    g.restore();
+    /* The dock, the wreck and the thing standing out past the last island
+       were all here, at fractions of the screen width. They are landmarks now.
+       What stays in the front layer is what belongs to the zone's RULE rather
+       than to its geography: the island that goes away, and the gulls. */
 
     gullsOver(g, L, P);
 
-    /* And past all of it, once in a very long while and for about a second,
-       something stands up out of the water beyond the last island and goes
-       back down. No sound, no shake, no caption. */
-    const far = Math.sin(t * 0.021);
-    if (far > 0.99955) {
-      const fx = W * 0.88, fy = hy + wh * 0.035;
-      const k = (far - 0.99955) / 0.00045;
-      g.save();
-      g.globalAlpha = Math.sin(k * Math.PI) * 0.7;
-      g.fillStyle = 'rgba(2,3,6,1)';
-      g.beginPath();
-      g.moveTo(fx - W * 0.004, fy);
-      g.quadraticCurveTo(fx, fy - wh * 0.13, fx + W * 0.004, fy);
-      g.closePath();
-      g.fill();
-      g.restore();
-    }
   }
 
   function gullsOver(g, L, P) {
@@ -1250,7 +1136,8 @@
   /* ================================================================ entry */
 
   const BACK = {
-    shore: shoreBack, basin: basinBack, flats: flatsBack, trench: trenchBack,
+    /* no shore: its back layer is the landmark graph now */
+    basin: basinBack, flats: flatsBack, trench: trenchBack,
     abyss: abyssBack, cradle: cradleBack, nowhere: nowhereBack,
     beneath: beneathBack, the_heavens: heavensBack
   };
@@ -1285,21 +1172,39 @@
   function drawBack(ctx, L, P) {
     if (!VF.zones) return;
     const id = VF.state.data.location;
-    if (!BACK[id]) return;
     seed(id, L);
     /* The lighthouse turns and the ring's opening breathes, so those two draw
-       live over the baked plate rather than into it. */
-    const b = baked(id, L, P);
-    if (b) ctx.drawImage(b, 0, 0, L.w, L.h);
+       live over the baked plate rather than into it — and the shore has no
+       plate left at all, only the turning light. */
+    if (BACK[id]) {
+      const b = baked(id, L, P);
+      if (b) ctx.drawImage(b, 0, 0, L.w, L.h);
+    }
     if (id === 'shore') lighthouseBeam(ctx, L, P);
   }
 
   /* The light turns. It is a cone that sweeps across the frame once every
      nine seconds and faces you for about one of them — which is nine times
      more interesting than a lamp that is on. */
+  /* The beam is live rather than baked — `t` inside a bake is whatever the
+     clock said the one time the canvas was drawn, which is how an earlier
+     version ended up with a permanent white sun in the corner of the sky.
+
+     It hangs off wherever the lighthouse was actually placed. landmarkArt
+     leaves its lamp position on the landmark as it draws it, so the light
+     comes out of the tower instead of out of a coordinate that used to agree
+     with where the tower was. */
   function lighthouseBeam(g, L, P) {
-    const hy = L.horizonY, W = L.w;
-    const lx = W * 0.175, ly = hy * 0.30 - hy * 0.14 * 0.96;
+    const W = L.w;
+    const w = VF.landmarks && VF.landmarks.world();
+    let lamp = null;
+    if (w) {
+      for (let i = 0; i < w.meso.length; i++) {
+        if (w.meso[i].art === 'lighthouse' && w.meso[i].lamp) { lamp = w.meso[i].lamp; break; }
+      }
+    }
+    if (!lamp) return;
+    const lx = lamp.x, ly = lamp.y;
     const a = (t * 0.70) % TAU;
     const face = Math.pow(Math.max(0, Math.sin(t * 0.70)), 6);
 
