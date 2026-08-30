@@ -195,6 +195,7 @@
         VF.charter.tick(dt);
         VF.aquarium.tick(dt);
         VF.cutscene.tick(dt);
+        VF.place.tick(dt);
         VF.wrong.tick(dt);
         VF.achievements.tick(dt);
         VF.state.data.stats.playSeconds += dt;
@@ -202,8 +203,16 @@
       }
 
       VF.fx.update(dt);
-      VF.scene.update(dt);
-      VF.scene.draw();
+      /* The harbour is a place rather than a layer over one: while you are in
+         it, the water is not being drawn behind it and the rod is not in your
+         hands. It draws into the same two canvases the water uses — the GL
+         sky and sea at its own horizon, the boards and the people above. */
+      if (VF.place && VF.place.isOpen()) {
+        VF.place.draw();
+      } else {
+        VF.scene.update(dt);
+        VF.scene.draw();
+      }
 
       if (started) VF.hud.tick(dt);
       VF.audio.tick(dt);

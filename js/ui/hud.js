@@ -96,6 +96,12 @@
   function pressStart(e, px, py) {
     // a crossing owns the whole screen, and its own card takes the press
     if (VF.voyage && VF.voyage.active()) { VF.voyage.press(e ? e.clientX : undefined); return; }
+    /* And so does the harbour — including a press that came from the space bar
+       or the action button, which is how a conversation there is advanced. */
+    if (VF.place && VF.place.isOpen()) {
+      if (px === undefined) VF.place.advanceTalk();
+      return;
+    }
     // a sequence owns the input while it is running
     if (VF.cutscene && VF.cutscene.active()) { VF.cutscene.skip(); return; }
     if (VF.state.rt.panelOpen) return;
@@ -170,12 +176,25 @@
 
     canvas.addEventListener('pointerdown', function (e) {
       e.preventDefault();
+      /* In the harbour this canvas is not water and a press on it is not a
+         cast: it is a press on a counter, a boat, a person or the way out of
+         the frame. See js/systems/place.js. */
+      if (VF.place && VF.place.isOpen()) {
+        const q = scenePoint(e, canvas);
+        if (q) VF.place.press(q.x, q.y);
+        return;
+      }
       // the wanderer gets the press before the water does
       if (merchantPress(e, canvas)) return;
       const p = scenePoint(e, canvas);
       pressStart(e, p ? p.x : undefined, p ? p.y : undefined);
     });
     canvas.addEventListener('pointermove', function (e) {
+      if (VF.place && VF.place.isOpen()) {
+        const q = scenePoint(e, canvas);
+        if (q) VF.place.move(q.x, q.y);
+        return;
+      }
       if (!VF.fishing.S.charging) return;
       const p = scenePoint(e, canvas);
       if (p) aimFrom(p.x, p.y);

@@ -2413,34 +2413,32 @@
 
   /* ------------------------------------------------------- foreground */
 
-  /* Where the top of the ledge is at a given x. Both quadratics of the lip are
-     inverted numerically so a figure can stand anywhere along it. */
-  function quadSolve(p0, p1, p2, x) {
-    const a = p0 - 2 * p1 + p2, b = 2 * (p1 - p0), c = p0 - x;
-    if (Math.abs(a) < 1e-6) return b === 0 ? 0 : U.clamp(-c / b, 0, 1);
-    const disc = b * b - 4 * a * c;
-    if (disc < 0) return 0.5;
-    const r = Math.sqrt(disc);
-    const u1 = (-b + r) / (2 * a), u2 = (-b - r) / (2 * a);
-    if (u1 >= -0.001 && u1 <= 1.001) return U.clamp(u1, 0, 1);
-    return U.clamp(u2, 0, 1);
-  }
-  function quadY(p0, p1, p2, u) {
-    const m = 1 - u;
-    return m * m * p0 + 2 * m * u * p1 + u * u * p2;
+  /* Where the top of the ledge is at a given x.
+
+     The maths moved to js/render/ground.js so that a dock, a boatyard floor
+     and the boards of a room can be grounds too — the numbers below are the
+     ledge's own and are unchanged, so this is the same curve it always was.
+     Rebuilt only when the layout moves, because a figure asks for this once
+     per frame and inverting five quadratics per call would be silly. */
+  let ledge = null, ledgeKey = '';
+
+  function ledgeCurve() {
+    const fh = L.figureH, seatX = L.seatX, lipY = L.seatY + fh * 0.16;
+    const key = fh + ':' + seatX + ':' + lipY + ':' + W;
+    if (ledge && ledgeKey === key) return ledge;
+    const midX = seatX + fh * 0.10;
+    ledgeKey = key;
+    ledge = VF.ground.curve([
+      [-12,               lipY - fh * 0.10],
+      [W * 0.07,          lipY - fh * 0.16],
+      [midX,              lipY - fh * 0.03],
+      [seatX + fh * 0.62, lipY + fh * 0.10],
+      [seatX + fh * 0.98, lipY + fh * 0.52]
+    ]);
+    return ledge;
   }
 
-  function groundY(x) {
-    const fh = L.figureH, seatX = L.seatX, lipY = L.seatY + fh * 0.16;
-    const midX = seatX + fh * 0.10;
-    if (x <= midX) {
-      const u = quadSolve(-12, W * 0.07, midX, U.clamp(x, -12, midX));
-      return quadY(lipY - fh * 0.10, lipY - fh * 0.16, lipY - fh * 0.03, u);
-    }
-    const endX = seatX + fh * 0.98;
-    const u = quadSolve(midX, seatX + fh * 0.62, endX, U.clamp(x, midX, endX));
-    return quadY(lipY - fh * 0.03, lipY + fh * 0.10, lipY + fh * 0.52, u);
-  }
+  function groundY(x) { return ledgeCurve().yAt(x); }
 
   /* Where the two of you end up standing. The angler steps off the seat and
      turns; the visitor comes in along the shore from the left. */

@@ -2754,6 +2754,11 @@
 
     function paintSide() {
       U.clear(side);
+      /* Home first. It is not on the chart because it is not water — the
+         chart is a survey of places you fish — but it is the place you go
+         back to, so it sits at the top of the rail as itself. */
+      const home = harbourCard();
+      if (home) side.appendChild(home);
       /* The day is the same everywhere and for everybody, so it sits above the
          one place you happen to be looking at rather than inside it. */
       side.appendChild(dailyCard());
@@ -2832,6 +2837,31 @@
 
   /* Everything worth knowing about one place, including — new here — what
      actually lives in it and how much of it you have on record. */
+  /* Vault Harbour, at the top of the chart's rail. Only when you are not
+     already standing in it — a "go home" button while you are at home is the
+     kind of thing that makes an interface feel like it was assembled rather
+     than designed. */
+  function harbourCard() {
+    if (!VF.placeData || (VF.place && VF.place.isOpen())) return null;
+    const card = U.el('div', 'spot spot-home');
+    const head = U.el('div', 'spot-head');
+    const mark = U.el('div', 'spot-mark');
+    mark.style.background = '#e8c88a';
+    mark.style.boxShadow = '0 0 12px rgba(232,200,138,0.65)';
+    head.appendChild(mark);
+    const ht = U.el('div');
+    ht.appendChild(U.el('div', 'spot-name', VF.placeData.location.name));
+    ht.appendChild(U.el('div', 'spot-tag', 'home port'));
+    head.appendChild(ht);
+    card.appendChild(head);
+    card.appendChild(U.el('p', 'spot-desc',
+      'The boards, the yard, the row, and a room above the water. Nothing bites here.'));
+    const btn = U.el('button', 'btn btn-primary spot-go', 'put in');
+    btn.addEventListener('click', function () { travel('harbour'); });
+    card.appendChild(btn);
+    return card;
+  }
+
   function spotCard(sel) {
     const d = VF.state.data;
     const loc = sel.loc;
@@ -2971,6 +3001,17 @@
   }
 
   function travel(id) {
+    /* The harbour is not water. It is not in the shelf, nothing bites there,
+       and going to it is arriving somewhere rather than changing fishing spot
+       — so it never touches d.location and never runs a crossing. */
+    if (id === 'harbour') {
+      close();
+      if (VF.place) VF.place.enter();
+      return;
+    }
+    /* And leaving it is putting out: step off the boards first, then the
+       ordinary travel happens exactly as it always did. */
+    if (VF.place && VF.place.isOpen()) VF.place.leave();
     if (VF.runs && !VF.runs.travelAllowed(id)) {
       VF.toast.plain(VF.runs.why('travel'), 'warn', 3000);
       return;
@@ -3580,5 +3621,8 @@
   }
 
   VF.panels = { init: init, open: open, close: close, isOpen: isOpen, refresh: refresh,
-                openCase: openCase };
+                openCase: openCase,
+                /* Where you go is decided here and always has been; the
+                   harbour and the tools both need to be able to say it. */
+                travel: travel };
 })(window.VF = window.VF || {});

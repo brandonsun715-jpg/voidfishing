@@ -364,3 +364,27 @@ body.cinema #voyage .vy-instr {
    not part of the interface. The edge glow goes, because it is a readability
    aid for the HUD rather than anything in the world. */
 body.cinema #edgeGlow { opacity: 0 !important; }
+
+/* ---------------------------------------------------------- the harbour
+
+   In the port there is no rod, no meter and nothing to cast at, so the
+   fishing interface goes away entirely and what is left is the place. The
+   labels, the exits and the line somebody is saying are drawn on the canvas
+   by js/render/portArt.js rather than laid over it in HTML — a place that
+   labels itself is a place, and a place with a bar of buttons across it is a
+   menu with a painting behind it.
+
+   Toasts and panels stay: a panel opened from a counter is the drawer under
+   the counter, which is the whole arrangement. */
+body.in-port #hud,
+body.in-port #prompt,
+body.in-port #caption,
+body.in-port #edgeGlow {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity 220ms ease;
+}
+
+/* The pointer says what it is over: something to walk up to, or the boards. */
+body.in-port #scene { cursor: default; }
+body.in-port.port-hot #scene { cursor: pointer; }
