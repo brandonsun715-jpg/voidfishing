@@ -625,7 +625,23 @@
        list never runs out and the old line repeats instead. */
     const nothingNew = stage < cur;
     let spent = false;
-    if ((!def || nothingNew) && !onQuest && npc.filler) {
+    let rumour = null;
+
+    /* Before falling back on small talk: has this person heard anything?
+
+       A rumour is not a stage and does not advance anybody's ladder — it is
+       one line, offered by somebody who has nothing else to tell you, and it
+       may not be true. That is why it sits here rather than in `stages`: the
+       ladders are things this character knows, and this is a thing they have
+       been told. */
+    if ((!def || nothingNew) && !onQuest && VF.rumours) {
+      rumour = VF.rumours.offer(id);
+      if (rumour) {
+        def = { lines: [rumour.line] };
+        spent = true;
+      }
+    }
+    if ((!def || nothingNew) && !onQuest && !rumour && npc.filler) {
       def = { lines: npc.filler };
       spent = true;
     }
@@ -634,6 +650,15 @@
     r.met++;
     let done = false;
     function commit() {
+      /* Hearing a rumour is not "first" in the ladder's sense — nothing
+         advances — but it does have to be recorded, or the same person offers
+         the same line every time you walk over. */
+      if (rumour && !done) {
+        done = true;
+        VF.rumours.hear(rumour.id, id);
+        VF.save.save();
+        return;
+      }
       if (done || !first) return;
       done = true;
       if (onQuest) {

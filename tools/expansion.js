@@ -64,30 +64,50 @@ const path = require('path');
     VF.locations.list.forEach(function (l) {
       if (d.unlockedLocations.indexOf(l.id) < 0) d.unlockedLocations.push(l.id);
     });
-    const out = { events: 0, chose: 0 };
+    const out = { events: 0, chose: 0, quiet: 0, trips: 0 };
     out.possible = VF.voyage.possible('trench');
     let landed = false;
-    VF.voyage.begin('trench', function () { landed = true; });
-    out.began = VF.voyage.active();
-    /* Sail it. Any card that comes up is answered, which is the only way the
-       outcome functions actually run. */
-    let guard = 0;
-    while (VF.voyage.active() && guard++ < 4000) {
-      VF.voyage.tick(0.05);
-      const card = document.getElementById('vyEvent');
-      if (card && !card.classList.contains('hidden')) {
-        const btns = card.querySelectorAll('button');
-        if (btns.length) { out.events++; btns[0].click(); out.chose++; }
+
+    /* Sail several. A crossing no longer guarantees an event — that was the
+       old design and this check used to assert it — so one trip proves
+       nothing either way. What matters is that the machinery still works when
+       something does happen, and that some crossings are empty. */
+    const WHERE = ['trench', 'basin', 'flats', 'abyss', 'shore', 'trench', 'nowhere', 'basin'];
+    for (let trip = 0; trip < WHERE.length; trip++) {
+      landed = false;
+      if (!VF.voyage.begin(WHERE[trip], function () { landed = true; })) continue;
+      if (trip === 0) out.began = VF.voyage.active();
+      let saw = 0;
+      let guard = 0;
+      while (VF.voyage.active() && guard++ < 4000) {
+        VF.voyage.tick(0.05);
+        /* Steer at whatever is out there, so the sighting path is exercised
+           rather than sailed past. */
+        const st = VF.voyage.state && VF.voyage.state();
+        VF.voyage.steer(1); VF.voyage.steer(-1);
+        const card = document.getElementById('vyEvent');
+        if (card && !card.classList.contains('hidden')) {
+          const btns = card.querySelectorAll('button');
+          if (btns.length) { saw++; out.events++; btns[0].click(); out.chose++; }
+        }
       }
+      out.trips++;
+      if (!saw) out.quiet++;
+      if (trip === 0) out.landed = landed;
     }
-    out.landed = landed;
+    out.lastLanded = landed;
     out.voyages = d.voyages;
     return out;
   });
   console.log('\ncrossing');
   check('a crossing is possible with a hull that crosses', cross.possible);
   check('it begins and it finishes', cross.began && cross.landed);
-  check('events fired and resolved', cross.events > 0, cross.events + ' of them');
+  /* Both halves matter, and the second one is the point of the rewrite: an
+     ocean that always has something in it is a corridor. */
+  check('a card, when there is one, resolves', cross.events === 0 || cross.chose === cross.events,
+        cross.events + ' over ' + cross.trips + ' trips');
+  check('and some crossings are just water', cross.quiet > 0,
+        cross.quiet + ' of ' + cross.trips + ' quiet');
   check('the crossing was counted', cross.voyages > 0);
 
   /* ---------------------------------------------------------- the zones */

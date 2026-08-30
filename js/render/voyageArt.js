@@ -168,6 +168,9 @@
       g.restore();
     }
 
+    /* --- something off the bow, and where the helm is pointed ---------- */
+    if (opts.sighting) drawSighting(g, w, h, hy, P, opts);
+
     /* --- a vignette, so the card reads over it ------------------------- */
     const vg = g.createRadialGradient(w * 0.5, h * 0.46, Math.min(w, h) * 0.24,
                                       w * 0.5, h * 0.5, Math.max(w, h) * 0.72);
@@ -175,6 +178,58 @@
     vg.addColorStop(1, 'rgba(0,0,0,0.62)');
     g.fillStyle = vg;
     g.fillRect(0, 0, w, h);
+  }
+
+  /* The thing you can see, and how far over the helm is.
+
+     Deliberately not a marker with a distance on it. It is a shape on the
+     water at a bearing, and the only feedback that you are closing it is that
+     it grows and the horizon slides — because the decision this is asking for
+     is "is that worth the detour", and a percentage would answer it for you.
+
+     The bar along the bottom is the helm, not a progress meter: it shows where
+     the boat is pointed against where the thing is, which is the one piece of
+     information a helmsman actually has. */
+  function drawSighting(g, w, h, hy, P, opts) {
+    const gt = opts.sighting;
+    const head = opts.heading || 0;
+    /* Bearing relative to the bow: closing on it walks it toward the middle
+       of the frame, which is what steering toward something looks like. */
+    const rel = gt.bearing - head;
+    const x = w * (0.5 + U.clamp(rel, -1.4, 1.4) * 0.42);
+    const grow = 1 + gt.close * 2.6;
+    const y = hy - h * 0.012 * grow;
+    const sz = Math.max(2, h * 0.014 * grow);
+
+    g.save();
+    // it sits in the haze at the horizon and comes out of it as you close
+    g.globalAlpha = U.clamp(0.32 + gt.close * 0.68, 0, 1);
+    g.fillStyle = U.rgbToCss(U.mixRgb(P.fog, [0, 0, 0], 0.55));
+    g.beginPath();
+    g.ellipse(x, y, sz * 1.9, sz, 0, 0, Math.PI * 2);
+    g.fill();
+    // and a mast or a light, so it is a thing rather than a smudge
+    g.fillRect(x - sz * 0.10, y - sz * 2.2, sz * 0.20, sz * 2.2);
+    if (gt.def && gt.def.kind === 'SIGNAL') {
+      g.globalAlpha = 0.5 + 0.5 * Math.sin(opts.t * 3.1);
+      g.fillStyle = U.rgbToCss(P.glow, 0.8);
+      g.beginPath(); g.arc(x, y - sz * 2.4, Math.max(1, sz * 0.28), 0, Math.PI * 2); g.fill();
+    }
+    g.restore();
+
+    /* The helm. A line for the bow, a mark for the bearing, and nothing else. */
+    const by = h - h * 0.055, bw = w * 0.30;
+    g.save();
+    g.strokeStyle = U.rgbToCss(P.glow, 0.20);
+    g.lineWidth = 1;
+    g.beginPath(); g.moveTo(w * 0.5 - bw, by); g.lineTo(w * 0.5 + bw, by); g.stroke();
+    g.fillStyle = U.rgbToCss(P.glow, 0.75);
+    g.fillRect(w * 0.5 + head * bw * 0.7 - 1, by - 5, 2, 10);
+    g.fillStyle = U.rgbToCss(P.glow, 0.35);
+    g.beginPath();
+    g.arc(w * 0.5 + gt.bearing * bw * 0.7, by, 3, 0, Math.PI * 2);
+    g.fill();
+    g.restore();
   }
 
   /* Whatever the two places have standing on their horizons, crossfaded.
