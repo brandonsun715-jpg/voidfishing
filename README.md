@@ -177,8 +177,10 @@ js/systems/           time, weather, progression, economy, loot, fishing,
                       catches, quests, merchant, cutscenes, achievements,
                       encounters, daily, bounties, wall, away, returning,
                       charter
+js/gl/                the WebGL2 layer: context and passes, sky and sea
 js/world/             world coordinates and the camera, the shapes a place is
-                      built from, and the landmark graph
+                      built from, the landmark graph, the event director and
+                      the rumour ledger
 js/render/            palette, particles, screen effects, fish art, the chart,
                       landmark art, scene
 js/audio/             procedural WebAudio engine
@@ -193,6 +195,58 @@ fishing loop does not know the UI exists and the renderer does not know about
 the economy.
 
 ## Notes on the design
+
+**The sea is on the GPU; the things in it are not.** Two canvases, stacked,
+and they never exchange pixels. WebGL2 draws the sky, the water, the light on
+it and the air between you and the horizon; the fourteen thousand lines of
+hand-tuned procedural art — creatures, rods, the angler, the boat, the
+landmarks — keep drawing in Canvas 2D on a transparent canvas above it. The
+reason they are kept apart is measured rather than assumed: pushing a
+full-screen 2D canvas into a GPU texture is four and a half megabytes across
+the bus and costs 30 ms here, which is more than the entire frame budget, so
+the compositor does the one job it is very good at and neither layer ever has
+to read the other. A 2D layer only becomes a texture when it is a bake that
+changed, and those change a handful of times an hour.
+
+The water was about fifty stacked translucent fills — a depth gradient, a
+horizon seam, eleven belled bands for the light path, a hundred and thirty
+specular flecks, three swell bands and thirty-two wave lines — and full-screen
+translucent fills are the dominant cost of a 2D canvas. It is one fragment
+shader now, and it can do things the stack could not: the light path is
+computed from the actual slope of the surface, so the glints lie along the
+crests and compress toward the horizon on their own, and the air is applied
+per pixel by distance instead of as a band drawn over the top.
+
+Everything degrades. No WebGL2, a lost context or a shader that will not
+compile and the renderer keeps its old 2D path — `node tools/gl.js` refuses
+the context outright and checks the game still draws water.
+
+**Most crossings are water going past.** The sea used to roll one to three
+events per trip, and the expression could not return zero, so in the whole
+life of the game there was never an uneventful one. Nothing asks for an event
+now: `js/world/director.js` is asked and usually says no. Notable things spend
+from a budget and quiet refills it, so a major encounter cannot follow a major
+encounter however the dice fall, and a candidate is a function of the world
+rather than a number, so one that does not apply is not in the draw at all.
+
+**Declining is steering, not a button.** A quarter of the options out there
+did nothing — "go round", "let her go", "note it and carry on" — and they are
+deleted rather than reworded, because the world is a better place to put that
+decision. Something off the bow is a shape at a bearing, and holding your
+course is how you decline; closing it costs time, which is what makes not
+going a real alternative. Only the answers that differ once you are already
+there stay on a card. `node tools/consequences.js` plays every branch from an
+identical save and diffs the world with the text excluded, because a different
+sentence is not a different outcome.
+
+**People tell you things, and they may be wrong.** A clue is always true, has
+no source, and always opens a lead — the right shape for evidence and the
+wrong shape for everything else. A rumour is somebody telling you: true,
+partial, outdated, exaggerated, or flatly false. Which it is never appears in
+the interface, because a rumour you can see through is a quest with extra
+steps. Two people can make different claims about the same thing and the game
+leaves them disagreeing until you go and look, and what settles it is always
+something you did.
 
 **The water has coordinates.** Everything used to be drawn in screen space
 against one horizon line, which is why the big light sat at 0.70 of the way
@@ -321,6 +375,11 @@ node tools/world.js       every zone with the interface off, two times of day
 node tools/zonecheck.js   the identity matrix, and the landmark graph's shape
 node tools/space.js       the projection's invariants: round-trip, parallax,
                           scale agreement, and that a cast lands where aimed
+node tools/trips.js       fifty crossings: how many of them ask you anything
+node tools/consequences.js every branch of every choice, diffed
+node tools/rumours.js     being told two things and finding out which was right
+node tools/gl.js          every shader builds, the water has light in it, and
+                          the game still draws with WebGL2 refused
 node tools/gallery.js      renders the whole catalogue to one sheet
 node tools/closeup.js      renders a few species large, to judge surface detail
 node tools/rods.js         renders every rod preview to one sheet

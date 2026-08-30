@@ -20,6 +20,10 @@
 </head>
 <body>
 <div id="app">
+  <!-- The world, on the GPU: sky, sea and light. Everything IN the world —
+       creatures, the rod, the angler, the boat — is drawn in 2D on the canvas
+       above this one, and is never uploaded to it. -->
+  <canvas id="glscene" aria-hidden="true"></canvas>
   <canvas id="scene" aria-label="Fishing scene"></canvas>
 
   <!-- ambient screen treatment -->
@@ -258,6 +262,8 @@
 <script src="js/systems/charter.js"></script>
 <script src="js/systems/cutscene.js"></script>
 <!-- world: coordinates, camera and the shapes a place is built from -->
+<script src="js/gl/core.js"></script>
+<script src="js/gl/world.js"></script>
 <script src="js/world/space.js"></script>
 <script src="js/world/camera.js"></script>
 <script src="js/world/grammar.js"></script>
