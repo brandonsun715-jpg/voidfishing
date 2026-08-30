@@ -1423,6 +1423,44 @@
 
   /* Leads, and the expeditions they open into. What the player is currently
      chasing, in the order they could act on it. */
+  /* What you have been told, and have not been out to check.
+
+     Deliberately not a quest list. There is no marker, no objective and no
+     tick box, because a rumour is not a task — it is a thing somebody said,
+     and the game's position on whether it is true is that it does not say.
+
+     Two accounts of the same thing are shown together, with who said each.
+     That pairing is the whole of the interface: nothing labels one of them
+     wrong, and the player is left holding a disagreement, which is the state
+     the system exists to produce. */
+  function saidView(b) {
+    if (!VF.rumours) return;
+    const heard = VF.rumours.all().filter(function (r) { return !r.settled; });
+    if (!heard.length) return;
+
+    b.appendChild(U.el('div', 'quest-sep', 'and what people say'));
+
+    const contested = {};
+    VF.rumours.contested().forEach(function (c) { contested[c.topic] = 1; });
+
+    const byTopic = {};
+    heard.forEach(function (r) { (byTopic[r.topic] = byTopic[r.topic] || []).push(r); });
+
+    Object.keys(byTopic).forEach(function (topic) {
+      const set = byTopic[topic];
+      const card = U.el('div', 'lead' + (contested[topic] ? ' said-split' : ''));
+      set.forEach(function (r) {
+        const who = r.from ? VF.npcs.name(r.from) : 'somebody';
+        card.appendChild(U.el('div', 'lead-name', who.toLowerCase()));
+        card.appendChild(U.el('div', 'lead-note', r.line));
+      });
+      if (contested[topic]) {
+        card.appendChild(U.el('div', 'lead-need', 'these do not agree'));
+      }
+      b.appendChild(card);
+    });
+  }
+
   function leadsView(b, leads) {
     const d = VF.state.data;
     const run = VF.expedition ? VF.expedition.current() : null;
@@ -1580,7 +1618,8 @@
          this a quest becomes available in silence and the only way to find out
          is to go round talking to everybody again on the off chance. */
       const soon = VF.quests.locked();
-      if (!open.length && !soon.length && !leads.length) {
+      const said = VF.rumours ? VF.rumours.all().filter(function (r) { return !r.settled; }) : [];
+      if (!open.length && !soon.length && !leads.length && !said.length) {
         b.appendChild(U.el('div', 'empty',
           'nothing is asking anything of you yet. keep fishing, and talk to people.'));
       } else {
@@ -1589,6 +1628,7 @@
           if (open.length) b.appendChild(U.el('div', 'quest-sep', 'and these'));
           leadsView(b, leads);
         }
+        saidView(b);
         if (soon.length) {
           const h = U.el('div', 'quest-sep',
                          (open.length || leads.length) ? 'not yet' : 'somebody has something to say');

@@ -1316,3 +1316,14 @@ button.rc-btn.is-buy:hover { border-color: var(--accent); background: rgba(127,1
   .rod-cards { grid-template-columns: repeat(auto-fill, minmax(178px, 1fr)); gap: 9px; }
   .rc-art { min-height: 200px; }
 }
+
+/* Two accounts of the same thing, shown together. The rule between them is
+   the only thing the interface says about the disagreement — there is no
+   label for which one is wrong, because the game does not know either until
+   the player goes and looks. */
+.lead.said-split .lead-name + .lead-note { margin-bottom: 0.55rem; }
+.lead.said-split .lead-note + .lead-name {
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--line);
+}
+.lead.said-split .lead-need { opacity: 0.55; font-style: italic; }

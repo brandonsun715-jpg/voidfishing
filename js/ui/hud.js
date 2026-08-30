@@ -95,7 +95,7 @@
 
   function pressStart(e, px, py) {
     // a crossing owns the whole screen, and its own card takes the press
-    if (VF.voyage && VF.voyage.active()) { VF.voyage.press(); return; }
+    if (VF.voyage && VF.voyage.active()) { VF.voyage.press(e ? e.clientX : undefined); return; }
     // a sequence owns the input while it is running
     if (VF.cutscene && VF.cutscene.active()) { VF.cutscene.skip(); return; }
     if (VF.state.rt.panelOpen) return;
@@ -135,6 +135,7 @@
   }
 
   function pressEnd() {
+    if (VF.voyage && VF.voyage.active()) VF.voyage.release();
     if (!pressed) return;
     pressed = false;
     if (VF.creature && VF.creature.holdsRod()) { VF.creature.release(); return; }
@@ -266,6 +267,14 @@
       /* The two development keys. They work with a panel open, because half
          the point of F8 is being able to take the interface away while it is
          in the way, and neither of them touches the save. */
+      /* The helm, while there is one. Held rather than tapped, and it has to
+         be read before the panel gate because a crossing sets panelOpen. */
+      if (VF.voyage && VF.voyage.active() &&
+          (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) {
+        e.preventDefault();
+        VF.voyage.steer(e.code === 'ArrowLeft' ? -1 : 1);
+        return;
+      }
       if (e.code === 'F8') { e.preventDefault(); if (!e.repeat) toggleCinema(); return; }
       if (e.code === 'F9') { e.preventDefault(); if (!e.repeat) VF.scene.debug(); return; }
 
@@ -291,6 +300,8 @@
     });
 
     window.addEventListener('keyup', function (e) {
+      if (VF.voyage && VF.voyage.active() &&
+          (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) VF.voyage.release();
       if (e.code === 'Space' || e.code === 'Enter') pressEnd();
     });
 

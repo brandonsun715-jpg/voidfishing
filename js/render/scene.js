@@ -10,6 +10,7 @@
   const TAU = U.TAU;
 
   let canvas = null, ctx = null;
+  let glOn = false;
   let W = 0, H = 0, DPR = 1;
   let t = 0;
 
@@ -471,7 +472,17 @@
 
   function init(cv) {
     canvas = cv;
-    ctx = cv.getContext('2d', { alpha: false });
+    /* The GPU takes the sky and the sea if it can have them, and this canvas
+       becomes the layer of things standing in that world rather than the world
+       itself — so it needs an alpha channel to let the one underneath through.
+
+       If WebGL2 is missing, or a shader will not compile, or the context is
+       lost mid-session, glOn goes false and every stage below draws exactly
+       what it always drew. The game runs on whatever somebody has. */
+    const glCanvas = document.getElementById('glscene');
+    glOn = !!(glCanvas && VF.gl && VF.gl.init(glCanvas));
+    ctx = cv.getContext('2d', { alpha: glOn });
+    VF.bus.on('gl:lost', function () { glOn = false; });
     buildGrain();
     resize();
     VF.bus.on('location:changed', function () {
@@ -490,6 +501,7 @@
     H = Math.max(240, r.height);
     canvas.width = Math.round(W * DPR);
     canvas.height = Math.round(H * DPR);
+    if (glOn && VF.gl) VF.gl.resize(W, H, DPR);
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     L.w = W; L.h = H;
     computeLayout();
@@ -953,7 +965,14 @@
     if (shakeOff) ctx.translate(shakeOff.x, shakeOff.y);
 
     buildBackdrop();
-    mark('sky', function () { drawSky(P); });
+
+    /* The world first, on the other canvas. It returns false if it could not
+       — no WebGL2, a dead context, a shader that would not build — and then
+       the 2D sky and water below draw exactly as they always did. */
+    const world = glOn && VF.glWorld ? VF.glWorld.draw(L, P) : false;
+    if (world) ctx.clearRect(0, 0, W, H);
+
+    mark('sky', function () { if (!world) drawSky(P); });
     mark('stars', function () { buildStars(); drawStars(P, q); });
     mark('clouds', function () { buildClouds(); drawClouds(P); });
     mark('horizon', function () { drawHorizonFeature(P); });
@@ -970,10 +989,17 @@
     mark('aurora', function () { drawAurora(P); });
     mark('lightning', function () { drawLightning(P); });
     mark('fog', function () { drawFog(P, q); });
-    mark('water', function () { drawWater(P, q); });
+    /* The body of the water, its light and its surface belong to the shader
+       when there is one. What stays here either way is what is reflected IN
+       the water — the land and the stars — because those are cached sprites
+       that already exist and blitting one costs less than sampling it. */
+    mark('water', function () { if (world) drawWaterOver(P, q); else drawWater(P, q); });
     mark('under', function () { if (P.void < 0.9) drawUnderwater(P); });
     mark('shoal', function () { seedShoal(); drawShoal(P, q); });
-    mark('surface', function () { seedGlints(); drawSurface(P, q); drawSurfaceMist(P, q); });
+    mark('surface', function () {
+      if (!world) { seedGlints(); drawSurface(P, q); }
+      drawSurfaceMist(P, q);
+    });
     mark('skyfall', function () { drawSkyfall(); });
     mark('ripples', function () { if (P.void < 0.9) VF.fx.drawRipples(ctx, 0.26); });
     /* An encounter draws under the line and over the surface: it is in the
@@ -1467,6 +1493,18 @@
   }
 
   /* ---------------------------------------------------------------- water */
+
+  /* What still belongs to this canvas once the shader owns the water.
+
+     The land's reflection and the stars' are baked sprites — the flipped
+     ridgeline strip and the star field — and blitting one is cheaper than
+     asking a shader to reproduce it, so they stay. Everything the shader does
+     better than a stack of translucent fills has gone into the shader. */
+  function drawWaterOver(P, q) {
+    if (q === 'low') return;
+    drawBackdropReflection(P);
+    drawReflection(P);
+  }
 
   function drawWater(P, q) {
     const hy = L.horizonY, wh = L.waterH;

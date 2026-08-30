@@ -371,3 +371,23 @@
   height: 1px; margin: 18px 0 4px;
   background: linear-gradient(90deg, var(--line), rgba(255,255,255,0));
 }
+
+/* One line along the bottom of a crossing, for something that happened rather
+   than something being asked. It fades in, sits there, and goes — there is
+   nothing to dismiss, because it is not a question. */
+.vy-note {
+  position: absolute;
+  left: 50%;
+  bottom: 9%;
+  transform: translateX(-50%);
+  max-width: min(62ch, 78vw);
+  text-align: center;
+  font-size: clamp(12px, 1.35vw, 15px);
+  line-height: 1.5;
+  color: var(--ink-2);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.8);
+  opacity: 0;
+  transition: opacity 900ms ease;
+  pointer-events: none;
+}
+.vy-note.on { opacity: 0.92; }

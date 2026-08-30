@@ -90,6 +90,19 @@ body {
 
 #app { position: fixed; inset: 0; overflow: hidden; }
 
+/* Two canvases, stacked, and they never exchange pixels.
+
+   #glscene is the medium — sky, sea, light — and #scene is everything in it.
+   Keeping them apart is not tidiness: pushing a full-screen 2D canvas into a
+   GPU texture is four and a half megabytes across the bus, and doing it every
+   frame costs more than the whole frame budget. So the compositor does the
+   one job it is very good at, and neither layer ever has to read the other. */
+#glscene {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  display: block;
+  pointer-events: none;
+}
 #scene {
   position: absolute; inset: 0;
   width: 100%; height: 100%;
