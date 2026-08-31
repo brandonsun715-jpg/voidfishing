@@ -362,6 +362,20 @@ than rotates, which is where the parallax comes from for free: a world unit is
 1.45 half-screens wide at the hull and 0.55 at the horizon, so sliding the
 frame slides near water further than it slides the sky.
 
+**The Quiet Shore, re-passed.** It declared a landmark graph with a headland
+in it AND `silhouette: 'rocks'`, the generic procedural ridgeline — two
+horizons competing, and the one that means something lost. What the screenshot
+showed with the interface off was a row of grey triangles, a smudge in the top
+corner where the headland was, and a lit dot floating beside it. The ridgeline
+is gone, and the headland has a top now: it used to run off the top of the
+frame at every distance, which is right for one you are sitting under and wrong
+for one across the bay, and a promontory with no sky above it is a curtain down
+one side of the picture. Its height falls off with distance like everything
+else, it is darker than the air it stands in rather than the same value as it,
+and the light stands on its actual ridge rather than on a fraction of the
+screen. The bay reads as a bay, and the question the zone declares — *why does
+nobody go past the lighthouse?* — is now a thing you can see.
+
 **A zone is a graph, not a list of positions.** One macro landmark you can
 know the place by, three to five meso landmarks placed *by sightline* — each
 where an earlier one can see it, so the set reads as a route — micro detail

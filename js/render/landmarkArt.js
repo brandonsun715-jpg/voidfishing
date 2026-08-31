@@ -39,14 +39,30 @@
 
   const ART = {};
 
-  /* A headland running up out of the top of the frame. The cliff face is a
-     spline with noise deformation rather than a polygon: the strata and the
-     erosion are what stop a large dark shape reading as a paper cut-out, and
-     they have to be part of the outline, not drawn on top of it. */
+  /* A headland. The cliff face is a spline with noise deformation rather than
+     a polygon: the strata and the erosion are what stop a large dark shape
+     reading as a paper cut-out, and they have to be part of the outline, not
+     drawn on top of it.
+
+     IT HAS A TOP NOW, and how high that is comes off the distance. It used to
+     run off the top of the frame at every range — "a headland running up out
+     of the top of the frame" — which is right for one you are sitting under
+     and wrong for one across the bay, and the Quiet Shore's is across the
+     bay. A promontory with no sky above it is not a promontory, it is a
+     curtain down one side of the picture, and that is exactly what it looked
+     like: a flat dark slab with a lit dot in the corner.
+
+     So: at the horizon it stands a fraction of the frame above it and you can
+     see the sky over the top of it, and as it comes toward you it grows until
+     it does run off the top, at which point the old drawing is the right
+     drawing again. */
   ART.headland = function (g, l, p, P, L) {
     const w = unit(p, L) * 0.62 * l.scale;
     const hy = L.horizonY;
-    const top = -L.h * 0.06;
+    /* p.scale falls off with distance on the same ramp everything else uses,
+       so this needs no distance term of its own. */
+    const rise = L.h * 1.05 * p.scale * l.scale * (l.tall ? 1 : 0.62);
+    const top = Math.max(-L.h * 0.06, hy - rise);
     const x = p.x;
     /* `u` is where the seaward face is. The rock is on the far side of it,
        running off the edge of the frame — a headland whose mass grows toward
@@ -67,22 +83,49 @@
       const lean = w * U.lerp(0, 0.52, Math.pow(k, 1.4));
       pts.push({ x: x + sea * (lean + bulge), y: y });
     }
+    /* When the top is in frame the ridge has to come DOWN to meet the land
+       behind it, or the shape ends in a straight cut across the sky. */
+    const capped = top > -L.h * 0.05;
+    const ridge = [];
+    if (capped) {
+      const back = 7;
+      for (let i = 0; i <= back; i++) {
+        const k = i / back;
+        const rx = U.lerp(pts[0].x, off, k);
+        const n2 = (G.fbm(k * 2.6 + l.u * 3, 7714, 4, 0.55) - 0.5);
+        ridge.push({ x: rx, y: top + Math.pow(k, 0.7) * rise * 0.22 + n2 * rise * 0.10 });
+      }
+    }
 
     g.save();
     g.beginPath();
-    g.moveTo(off, top - 20);
-    g.lineTo(pts[0].x, top - 20);
-    G.path(g, pts, false);
+    if (capped) {
+      /* over the top and back down inland */
+      g.moveTo(off, hy + 2);
+      for (let i = ridge.length - 1; i >= 0; i--) {
+        i === ridge.length - 1 ? g.lineTo(ridge[i].x, ridge[i].y) : g.lineTo(ridge[i].x, ridge[i].y);
+      }
+      G.path(g, pts, false);
+    } else {
+      g.moveTo(off, top - 20);
+      g.lineTo(pts[0].x, top - 20);
+      G.path(g, pts, false);
+    }
     g.lineTo(off, hy + 2);
     g.closePath();
 
     /* Not a flat fill. The base of a cliff sits in its own shadow and the top
        is in whatever air there is, so the value runs the other way to the sky
        behind it — which is the whole of why it separates from the sky at all. */
+    /* Darker than the air it stands in, at every distance. It used to take
+       the atmospheric mix like everything else and come out at almost exactly
+       the sky's value — so the fill vanished and all that was left was the
+       lit edge, which read as a wire running down the side of the picture.
+       Land at night is a hole in the sky first and a surface second. */
     const grad = g.createLinearGradient(0, top, 0, hy);
-    grad.addColorStop(0, tone(P, l, p, 0.58));
-    grad.addColorStop(0.62, tone(P, l, p, 0.78));
-    grad.addColorStop(1, tone(P, l, p, 0.90));
+    grad.addColorStop(0, tone(P, l, p, 0.80));
+    grad.addColorStop(0.62, tone(P, l, p, 0.90));
+    grad.addColorStop(1, tone(P, l, p, 0.96));
     g.fillStyle = grad;
     g.fill();
 
@@ -102,17 +145,29 @@
     }
     g.restore();
 
-    /* And the edge itself, lit only if the light is actually on that side. */
+    /* And the edge itself, lit only if the light is actually on that side —
+       a rim on a shape, so it is hairline. At `w * 0.014` on a headland this
+       size it was four pixels of bright grey and it read as cabling. */
     if (((L.glowX - x) > 0 ? 1 : -1) === sea) {
       g.save();
       g.beginPath();
       G.path(g, pts);
-      g.strokeStyle = lit(P, p, 0.26);
-      g.lineWidth = Math.max(1, w * 0.014);
+      g.strokeStyle = lit(P, p, 0.20);
+      g.lineWidth = Math.max(1, Math.min(2.2, w * 0.006));
       g.stroke();
       g.restore();
     }
   };
+
+  /* Where the top of a headland actually is, so anything standing on it can
+     ask rather than guess. The same expression the headland draws itself
+     with, in one place, because two copies of it drift. */
+  function macroTop(macro, L) {
+    if (!macro || macro.art !== 'headland' || !VF.space) return -L.h * 0.06;
+    const p = VF.space.project(macro.u, macro.d, VF.camera ? VF.camera.get() : null);
+    const rise = L.h * 1.05 * p.scale * (macro.scale || 1) * (macro.tall ? 1 : 0.62);
+    return Math.max(-L.h * 0.06, L.horizonY - rise);
+  }
 
   /* The lighthouse. Small on purpose: it is a scale reference, and a scale
      reference that is impressive on its own is not doing the job. */
@@ -125,7 +180,13 @@
        how far up the cliff, measured from the waterline. */
     const hy = L.horizonY;
     const perch = l.perch === undefined ? 0.86 : l.perch;
-    const baseY = macro ? U.lerp(hy, -L.h * 0.06, perch) : hy;
+    /* Up the cliff from the waterline, measured against the cliff's ACTUAL
+       top rather than against the top of the frame. The headland has a height
+       that falls off with distance now, so a perch expressed as a fraction of
+       the screen put the light in the sky above a far one and inside a near
+       one — it has to be a fraction of the rock. */
+    const rise = macro ? Math.max(L.h * 0.06, hy - macroTop(macro, L)) : L.h * 0.5;
+    const baseY = hy - rise * perch;
     const x = p.x;
 
     g.save();

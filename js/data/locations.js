@@ -36,7 +36,12 @@
       rarityBoost: 1.00, valueBoost: 1.00, xpBoost: 1.0, biteBoost: 1.00,
       sky: ['#17223c', '#2e4664'], water: ['#1f3244', '#0a1018'], glow: '#8fb8d8',
       fog: '#2a3a4e', fogAmt: 0.30, stars: 0.55, starTint: '#dce8f5',
-      horizon: 'moon', silhouette: 'rocks', depth: 0.42, void: 0.00,
+      /* `silhouette: 'none'` is not an omission. This zone has a landmark
+         graph with a headland in it, and the generic procedural ridgeline was
+         drawn on top of that — two horizons competing, and the one that means
+         something lost. The trench and the flats already dropped it for the
+         same reason. */
+      horizon: 'moon', silhouette: 'none', depth: 0.42, void: 0.00,
       weather: ['clear', 'overcast', 'rain', 'fog'],
       music: { root: 55, scale: [0, 3, 5, 7, 10], tempo: 0.16, pad: 0.5 } },
 
