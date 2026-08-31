@@ -2981,6 +2981,28 @@
 
     card.appendChild(U.el('p', 'spot-desc', loc.desc));
 
+    /* What it is like to get in, and whether the boat under you can — first,
+       under the description, because it is the first thing you want to know
+       about somewhere you are deciding to sail to. It used to sit at the
+       bottom of the card, where the pinned Travel row covered it: the reason
+       for a refusal is the one line that must never need scrolling to. */
+    const shoal = loc.shoal === undefined ? 99 : loc.shoal;
+    const wl = U.el('div', 'spot-line');
+    wl.appendChild(U.el('span', 'k', 'water '));
+    wl.appendChild(document.createTextNode(
+      (loc.depthM ? loc.depthM + ' m down' : 'no measured bottom') +
+      (shoal < 20 ? ', and ' + shoal.toFixed(1) + ' m to get in' : '')));
+    card.appendChild(wl);
+
+    const no = VF.boat && VF.boat.afloat() ? VF.boat.whyNot(sel.id) : null;
+    if (no) {
+      card.appendChild(U.el('p', 'fit-say warn', no.line));
+      const other = VF.boat.hullsFor(sel.id).filter(function (x) { return x.fits; })[0];
+      card.appendChild(U.el('p', 'fit-say',
+        other ? other.hull.name.toLowerCase() + ' would.'
+              : 'nothing in the yard will, yet.'));
+    }
+
     /* What lives here. The list printed three multipliers and nothing about
        the fish, which made it a teleport menu rather than a choice. */
     const pool = poolFor(loc.id);
@@ -3042,27 +3064,6 @@
       card.appendChild(wl);
     }
 
-    /* What it is like to get in, and whether the boat under you can. The mark
-       on the chart already carries a cross when it cannot; this is where you
-       read the reason and what to do about it, because a symbol you have to
-       learn is worse than a sentence you can read once. */
-    const shoal = loc.shoal === undefined ? 99 : loc.shoal;
-    const wl = U.el('div', 'spot-line');
-    wl.appendChild(U.el('span', 'k', 'water '));
-    wl.appendChild(document.createTextNode(
-      (loc.depthM ? loc.depthM + ' m down' : 'no measured bottom') +
-      (shoal < 20 ? ', and ' + shoal.toFixed(1) + ' m to get in' : '')));
-    card.appendChild(wl);
-
-    const no = VF.boat && VF.boat.afloat() ? VF.boat.whyNot(sel.id) : null;
-    if (no) {
-      card.appendChild(U.el('p', 'fit-say warn', no.line));
-      const other = VF.boat.hullsFor(sel.id).filter(function (x) { return x.fits; })[0];
-      card.appendChild(U.el('p', 'fit-say',
-        other ? other.hull.name.toLowerCase() + ' would.'
-              : 'nothing in the yard will, yet.'));
-    }
-
     const acts = U.el('div', 'spot-actions');
     if (sel.id === d.location) {
       acts.appendChild(U.el('div', 'spot-here', 'you are here'));
@@ -3071,7 +3072,11 @@
       ch.addEventListener('click', function () { VF.audio.click(); open('shop', 'charter'); });
       acts.appendChild(ch);
     } else {
-      const go = U.el('button', 'btn btn-primary' + (no ? '' : ''), 'Travel');
+      /* A greyed button that still says "Travel" reads as broken. One that
+         says what is wrong reads as an answer. */
+      const go = U.el('button', 'btn btn-primary',
+        no ? (no.kind === 'shoal' ? 'she draws too much' : 'she is not rated that deep')
+           : 'Travel');
       go.disabled = !!no;
       go.addEventListener('click', function () { travel(sel.id); });
       acts.appendChild(go);

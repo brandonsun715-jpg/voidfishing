@@ -1109,18 +1109,24 @@ input[type=range]::-moz-range-thumb {
    needs the height to mean anything. */
 
 .panel-map {
-  width: min(1120px, 96vw);
+  width: min(1240px, 96vw);
   /* the chart only means something with room behind it, so this panel is
      sized rather than left to fit its contents like the others */
-  height: min(760px, 90vh);
+  height: min(780px, 92vh);
 }
 .map-body { padding: 0; overflow: hidden; display: flex; }
 .map-wrap {
   display: grid;
   /* The chart is the subject and gets the room. It was the narrow column
      because it used to BE a column — one plumb line, which needs height and
-     no width at all. A plan view needs the opposite. */
-  grid-template-columns: 1fr minmax(300px, 360px);
+     no width at all. A plan view needs the opposite.
+
+     But not at the rail's expense. The first pass took the rail from six
+     hundred pixels to three hundred and sixty, which moved every word in it
+     a third of the screen to the right and squeezed the spot card until its
+     Travel button fell off the bottom of the panel. The panel is wider
+     instead, so the chart gains without the reading half losing. */
+  grid-template-columns: 1fr minmax(380px, 460px);
   width: 100%; height: 100%; min-height: 0;
 }
 .map-chart {
@@ -1166,7 +1172,9 @@ input[type=range]::-moz-range-thumb {
 }
 .spot-dot { width: 5px; height: 5px; border-radius: 50%; }
 
-.spot-meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+/* Four across is right in a six-hundred-pixel rail and squeezes to nothing in
+   a four-hundred one, which is what the rail is now. */
+.spot-meta { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
 .spot-stat {
   padding: 7px 9px;
   border: 1px solid var(--line); border-radius: var(--r-sm);
@@ -1178,7 +1186,17 @@ input[type=range]::-moz-range-thumb {
 .spot-line { font-size: 11.5px; color: var(--ink-3); line-height: 1.6; }
 .spot-line .k { font-size: 9px; letter-spacing: 0.14em; color: var(--ink-4); }
 
-.spot-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
+/* The primary action of this panel, and it must never be below the fold. The
+   rail scrolls — there is a lot to read about a place now — so the row that
+   travels sticks to the bottom of it, on its own ground so the text does not
+   run underneath. */
+.spot-actions {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  position: sticky; bottom: 0; z-index: 1;
+  margin: 6px -20px -22px; padding: 12px 20px 18px;
+  background: linear-gradient(180deg, rgba(12,16,24,0) 0%, var(--pane-2) 38%, var(--pane-2) 100%);
+}
+.spot-actions .btn-primary { flex: 1 1 auto; }
 .spot-here { font-family: var(--mono); font-size: 11px; color: var(--accent); letter-spacing: 0.06em; }
 
 /* ================================================================== charter */
