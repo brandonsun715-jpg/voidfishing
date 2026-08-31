@@ -74,10 +74,34 @@
   }
 
   /* opts: { facing, rim, walk, phase, talking } */
+  /* POSES.
+
+     Everybody in this cast stood, always, in one attitude, holding a prop
+     that implied a job. That was enough on the shore, where a person walks in
+     from off-frame, says four lines and leaves. It is not enough in a place
+     you go to, because a person at their station is characterised by the
+     station: the mechanic is under a hull, the child sits on the end of the
+     dock with her feet over, and a shopkeeper leans on their counter.
+
+     Three poses, and none of them is a new figure — they move the hips, the
+     lean and the legs of the one that is already here. `under` is the
+     exception and gets its own short path, because a person lying on their
+     back with their legs out is not a standing figure with different angles. */
+  const POSE = {
+    stand: { hip: 0, lean: 0, legs: 'stand' },
+    /* Sitting on an edge: hips down at the edge, legs hanging over it, so the
+       figure's origin is the edge rather than the ground. */
+    sit:   { hip: 0.34, lean: 0.06, legs: 'hang' },
+    /* Leaning on something at about waist height. */
+    lean:  { hip: 0.05, lean: 0.16, legs: 'stand' }
+  };
+
   function draw(ctx, npc, fh, t, opts) {
     opts = opts || {};
     const k = KIND[npc.id] || KIND.drifter;
     const face = opts.facing === undefined ? 1 : opts.facing;
+    if (opts.pose === 'under') return drawUnder(ctx, npc, fh, t, opts, k);
+    const pose = POSE[opts.pose] || POSE.stand;
     const rim = opts.rim || 'rgba(200,220,255,0.22)';
     const accent = U.hexToRgb(npc.color || '#8fa8c0');
     // the cloth is nearly black; the accent only tints it and lights the prop
@@ -93,9 +117,11 @@
     const gest = opts.talking ? Math.sin(t * 2.3) * 0.5 + 0.5 : 0;
 
     const bob = walk ? Math.abs(Math.sin(ph)) * H * 0.020 : 0;
-    const hipY = -H * 0.50 + bob + drift + breath;
-    const hipX = weight;
-    const stoop = k.stoop;
+    /* A seated figure's hips are two thirds of the way down from where a
+       standing one's are, and everything above them follows for free. */
+    const hipY = -H * (0.50 - pose.hip) + bob + drift + breath;
+    const hipX = weight + face * H * pose.lean * 0.5;
+    const stoop = k.stoop + pose.lean;
     const neckX = hipX + face * H * 0.045 * (1 + stoop * 2.2);
     const neckY = hipY - H * 0.40 * (1 - stoop * 0.16);
     const headR = H * 0.072;
@@ -113,13 +139,23 @@
     const sw = walk * H * 0.19;
     const a0 = Math.sin(ph), a1 = Math.sin(ph + Math.PI);
     const legW = H * 0.085 * k.build;
+    const hang = pose.legs === 'hang';
     for (let i = 0; i < 2; i++) {
       const s = i === 0 ? a0 : a1;
       const back = i === 0;
-      const footX = hipX + face * s * sw + (i ? face * H * 0.020 : -face * H * 0.012);
-      const footY = -Math.max(0, s * walk) * H * 0.045;
-      const kneeX = hipX + face * s * sw * 0.55 + (i ? face * H * 0.018 : -face * H * 0.010);
-      const kneeY = hipY * 0.48;
+      /* Hanging over an edge: the knee is forward of the hip and the foot is
+         BELOW the origin, because the origin is the edge and there is nothing
+         under it. */
+      const footX = hang
+        ? hipX + face * H * (0.10 + (i ? 0.05 : 0))
+        : hipX + face * s * sw + (i ? face * H * 0.020 : -face * H * 0.012);
+      const footY = hang
+        ? H * (0.16 + (i ? 0.02 : 0)) + Math.sin(t * 1.3 + i * 2.1) * H * 0.018
+        : -Math.max(0, s * walk) * H * 0.045;
+      const kneeX = hang
+        ? hipX + face * H * (0.16 + (i ? 0.04 : 0))
+        : hipX + face * s * sw * 0.55 + (i ? face * H * 0.018 : -face * H * 0.010);
+      const kneeY = hang ? hipY * 0.30 + H * 0.02 : hipY * 0.48;
       tube(ctx, cloth, back ? -0.72 : -0.55, back ? 0.04 : 0.20,
            hipX + (i ? face * H * 0.02 : -face * H * 0.015), hipY, kneeX, kneeY,
            legW * 1.25, legW);
@@ -160,6 +196,54 @@
 
     ctx.restore();
     return { headX: headX, headY: headY, headR: headR, top: headY - headR * 2.2 };
+  }
+
+  /* Under a hull. Legs and boots out from beneath it and nothing else, which
+     is exactly how you see somebody working under a boat and exactly how the
+     writing has always described him: "under a hull, mostly".
+
+     The caller draws the hull over the top; this only ever draws what is
+     sticking out, so it composes with whatever it is under. */
+  function drawUnder(ctx, npc, fh, t, opts, k) {
+    const face = opts.facing === undefined ? 1 : opts.facing;
+    const accent = U.hexToRgb(npc.color || '#8fa8c0');
+    const cloth = U.mixRgb([7, 9, 15], accent, 0.16);
+    const H = fh * k.h;
+    const legW = H * 0.085 * k.build;
+    /* he shifts, occasionally, the way somebody working on their back does */
+    const sh = Math.sin(t * 0.42) * H * 0.012;
+    const kick = Math.max(0, Math.sin(t * 0.31)) * H * 0.02;
+
+    ctx.save();
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    for (let i = 0; i < 2; i++) {
+      const off = (i ? 1 : -1) * H * 0.055;
+      const hipX = -face * H * 0.02, hipY = -H * 0.055 + off * 0.35;
+      const kneeX = hipX + face * H * (0.20 + i * 0.03);
+      const kneeY = hipY - H * (0.11 + i * 0.02) - (i ? kick : 0);
+      const footX = kneeX + face * H * (0.20 + i * 0.02) + sh;
+      const footY = -H * 0.035 + off * 0.5;
+      /* Lit harder than a standing figure. He is lying in the one pool of
+         light in the yard with a lamp a foot from his knee, and at the
+         standing figure's tones he was a black shape on a black floor. */
+      tube(ctx, cloth, -0.30, i ? 0.52 : 0.34, hipX, hipY, kneeX, kneeY, legW * 1.2, legW);
+      tube(ctx, cloth, -0.30, i ? 0.52 : 0.34, kneeX, kneeY, footX, footY, legW, legW * 0.78);
+      ctx.fillStyle = tone(cloth, i ? 0.10 : -0.14);
+      ctx.beginPath();
+      ctx.ellipse(footX + face * H * 0.02, footY, H * 0.048, H * 0.030,
+                  face * 0.5, 0, TAU);
+      ctx.fill();
+    }
+    /* the rim along the top of the near leg, so he reads against the dark
+       under the hull rather than disappearing into it */
+    ctx.strokeStyle = 'rgba(255,206,142,0.42)';
+    ctx.lineWidth = Math.max(1.2, H * 0.014);
+    ctx.beginPath();
+    ctx.moveTo(-face * H * 0.02, -H * 0.10);
+    ctx.quadraticCurveTo(face * H * 0.22, -H * 0.23, face * H * 0.44, -H * 0.10);
+    ctx.stroke();
+    ctx.restore();
+    return { headX: 0, headY: -H * 0.1, headR: H * 0.07, top: -H * 0.24 };
   }
 
   function drawArm(ctx, cloth, lo, hi, sh, k, H, face, ph, walk, gest, wmul, isFar) {

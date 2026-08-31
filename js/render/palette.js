@@ -62,7 +62,12 @@
   }
 
   function update() {
-    const loc = VF.locations.current();
+    /* While the harbour is up it is the only thing on the screen, so one
+       global palette is still one place's palette — and the port gets time of
+       day and weather for nothing rather than authoring them a second time.
+       See js/systems/place.js. */
+    const loc = (VF.place && VF.place.isOpen() && VF.place.palette()) ||
+                VF.locations.current();
     const day = dayKey(VF.time.cycle());
     const wx = VF.weather.tint();
     const light = VF.weather.light();

@@ -101,8 +101,15 @@
     const c = context();
     const pool = VF.rumourData.list.filter(function (def) { return ready(def, npcId, c); });
     if (!pool.length) return null;
-    /* The oldest available one first, so a thread is told in the order it was
-       written rather than shuffled into nonsense. */
+    /* Spawned first, then the oldest.
+
+       Authored rumours are background — they were true before the player
+       arrived and they will keep. A spawned one is about something that has
+       just happened, to them or because of them, and if it queues behind six
+       pieces of local history it surfaces four conversations after it stopped
+       being news. Within each group the order stays as written, so a thread is
+       still told in the order it was authored rather than shuffled. */
+    pool.sort(function (a, b) { return (b.spawned ? 1 : 0) - (a.spawned ? 1 : 0); });
     return pool[0];
   }
 
@@ -176,6 +183,11 @@
     VF.bus.on('clue:found', settle);
     VF.bus.on('secret:found', settle);
     VF.bus.on('location:changed', settle);
+    /* Noticing a thing is finding out about it. Without this a rumour that
+       settles on having SEEN something waits until the next time the player
+       changes water, which reads as the game catching up rather than as the
+       player having proved it. */
+    VF.bus.on('landmark:seen', settle);
   }
 
   function reset() {

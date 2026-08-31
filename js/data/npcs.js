@@ -16,6 +16,22 @@
     { id: 'keeper', name: 'The Keeper', role: 'shop', color: '#c8a870',
       where: 'behind the counter, always',
       blurb: 'Sells what you need. Buys what you would rather not carry.',
+      /* Reactions. Not a ladder — see js/world/react.js. These are things she
+         says because of how the world is at this moment, and they advance
+         nothing. She is behind a counter all day; what she has is gossip and
+         a view of everybody's boots. */
+      reacts: [
+        { id: 'two_stories', weight: 2.0,
+          when: function (c) { return c.contested().length >= 1; },
+          lines: ['you have got that look. somebody has told you two different things.',
+                  'whichever one you went with, it was the wrong one. that is not pessimism. that is the counter.'] },
+
+        { id: 'he_is_not_charging', weight: 1.8, once: true,
+          when: function (c) { return !!c.fact('repair_owed'); },
+          lines: ['he is not charging you for that hull.',
+                  'he does that about once a decade. i would not read anything into it.',
+                  'i have read something into it.'] }
+      ],
       stages: [
         { at: function () { return true; },
           lines: ['rods on the left. bait on the right. do not ask about the third shelf.',
@@ -49,6 +65,17 @@
     { id: 'archivist', name: 'The Archivist', role: 'lore', color: '#8fb8e8',
       where: 'a room of shelves nobody remembers building',
       blurb: 'Catalogues everything. Has never once been surprised.',
+      reacts: [
+        { id: 'settled_one', weight: 2.0,
+          when: function (c) { return c.times('rumour_settled') >= 1; },
+          lines: ['you have settled something. i can hear it in how you are standing.',
+                  'write it down. write down who told you the wrong one as well — that is the half everybody leaves out, and it is the half that is useful.'] },
+
+        { id: 'not_the_size', weight: 2.6, once: true,
+          when: function (c) { return !!c.fact('deep_corrected'); },
+          lines: ['so it is not the length of the harbour wall.',
+                  'no. i am not pleased. i would very much rather it were large than that it were patient.'] }
+      ],
       stages: [
         { at: function (d) { return d.stats.catches >= 5; },
           lines: ['you are the one filling in the record. good. it has been mostly blank for a long time.',
@@ -99,6 +126,21 @@
     { id: 'fisherman', name: 'The Old Fisherman', role: 'clue', color: '#a8c890',
       where: 'the far end of the shore, facing away',
       blurb: 'Has been here longer than the shore has.',
+      reacts: [
+        { id: 'you_went', weight: 2.4, once: true,
+          when: function (c) {
+            return c.heard('wreck_went') &&
+                   VF.landmarks && VF.landmarks.seenAnywhere('consequence:wreck_at_signal');
+          },
+          lines: ['you went and looked, then.',
+                  'good.',
+                  'i have been the only one who has for a long time and it was starting to make me sound like a liar.'] },
+
+        { id: 'counted', weight: 1.2,
+          when: function (c) { return c.did('first_voyage') && c.since('first_voyage') >= 6; },
+          lines: ['you have been out a good few times now.',
+                  'i counted. i count everything. it is the only thing i am still any good at.'] }
+      ],
       stages: [
         { at: function (d) { return d.stats.catches >= 12; },
           lines: ['keep it in the bar. that is all of it. everything else is decoration.',
@@ -170,6 +212,19 @@
     { id: 'drifter', name: 'The Drifter', role: 'wander', color: '#b8a8e8',
       where: 'wherever you were not looking a moment ago',
       blurb: 'Turns up. Does not arrive.',
+      reacts: [
+        { id: 'all_right_then', weight: 3.0, once: true,
+          when: function (c) { return !!c.fact('deep_corrected'); },
+          lines: ['yes. all right. it was not longer than the harbour wall.',
+                  'it was long enough.',
+                  'and do not look at me like that. you were never going to go out and check until i said it.'] },
+
+        { id: 'one_got_away', weight: 1.5,
+          when: function (c) { return c.times('creature_lost') >= 1; },
+          lines: ['one got off you.',
+                  'they do not forget that. i am not saying it to frighten you.',
+                  'i am saying it because nobody said it to me.'] }
+      ],
 
       /* Nine weather types, ten conditions, a day and a night and now a moon,
          and every species with its own opinion about all of them — and no way
@@ -259,6 +314,17 @@
     { id: 'astronomer', name: 'The Astronomer', role: 'quest', color: '#ffd88a',
       where: 'up where the ground runs out, under a roof that opens',
       blurb: 'Watches the one part of the sky nothing is supposed to come out of.',
+      reacts: [
+        { id: 'one_of_three', weight: 2.0, once: true,
+          when: function (c) { return c.did('first_perfect'); },
+          lines: ['you landed one without ever letting it out of the bar.',
+                  'that is one of the three. i am not going to congratulate you. i am going to tell you the other two are harder.'] },
+
+        { id: 'at_night', weight: 1.2,
+          when: function (c) { return c.phase === 'night' && c.did('first_night'); },
+          lines: ['you fish at night now.',
+                  'everybody starts fishing at night eventually. it is not the fish.'] }
+      ],
       stages: [],
       quest: [
         { at: function () { return VF.quests.reached('heavens', 3); },
@@ -307,6 +373,13 @@
     { id: 'collector', name: 'The Collector', role: 'cosmetic', color: '#e8a0c8',
       where: 'a stall of things that do nothing',
       blurb: 'Deals only in the useless. Very serious about it.',
+      reacts: [
+        { id: 'they_are_saying', weight: 1.6, once: true,
+          when: function (c) { return c.did('first_rare'); },
+          lines: ['they are saying things about you at the counter.',
+                  'no, i shall not repeat them.',
+                  'i shall simply raise my prices.'] }
+      ],
       stages: [
         { at: function (d) { return d.level >= 4; },
           lines: ['none of this helps you fish. that is the entire appeal.',
@@ -347,6 +420,17 @@
     { id: 'cartographer', name: 'The Cartographer', role: 'lore', color: '#c0b088',
       where: 'a table by the window, covered edge to edge',
       blurb: 'Has drawn all of it. Twice.',
+      reacts: [
+        { id: 'that_is_a_survey', weight: 2.2,
+          when: function (c) { return c.contested().length >= 1; },
+          lines: ['two accounts of the same thing.',
+                  'good. that is a survey. one account of a thing is a rumour with a table under it.'] },
+
+        { id: 'new_on_the_chart', weight: 2.6,
+          when: function (c) { return c.did('first_place') && c.since('first_place') <= 1; },
+          lines: ['you have put something on this chart that was not on it.',
+                  'do not tell me it was always there. nothing is always there. that is what a chart is FOR.'] }
+      ],
       stages: [
         { at: function (d) { return (d.voyages | 0) >= 1; },
           lines: ['do not lean on it. the ink is forty years old and it has opinions.',
@@ -389,6 +473,26 @@
     { id: 'mechanic', name: 'The Boat Mechanic', role: 'boat', color: '#a89078',
       where: 'under a hull, mostly',
       blurb: 'Fixes them. Writes down what did it.',
+      reacts: [
+        { id: 'not_saying', weight: 3.0,
+          when: function (c) { return c.afloat && c.hull < 0.55; },
+          lines: ['you have brought her back like that.',
+                  'i am not going to say anything.',
+                  'i am writing it down. but i am not going to say anything.'] },
+
+        { id: 'twice_now', weight: 4.0, once: true,
+          when: function (c) { return !!c.fact('mechanic_worried'); },
+          lines: ['twice now.',
+                  'no. do not pay me. i would rather see what you do with the money.',
+                  'bring her back a third time and i will charge you double, and i will still fix her.'] },
+
+        { id: 'not_a_mark', weight: 1.4,
+          when: function (c) {
+            return c.afloat && c.hull > 0.995 && c.times('came_back_damaged') >= 1;
+          },
+          lines: ['look at that. not a mark on her.',
+                  'i preferred you when you were interesting.'] }
+      ],
       stages: [
         { at: function () { return VF.boat && VF.boat.hull().id !== 'skiff'; },
           lines: ['it floats. that is not a compliment, that is the whole specification.',
@@ -428,6 +532,24 @@
     { id: 'child', name: 'The Child', role: 'strange', color: '#9fd0d8',
       where: 'the end of the dock, feet over',
       blurb: 'Nobody knows whose.',
+      reacts: [
+        { id: 'your_boots', weight: 2.0,
+          when: function (c) { return c.heard('you_east') || c.did('first_secret'); },
+          lines: ['you have been somewhere.',
+                  'your boots are the wrong colour for here.',
+                  'i am not going to say where.'] },
+
+        { id: 'felt_it', weight: 3.0,
+          when: function (c) { return c.times('void_catch') >= 1; },
+          lines: ['you brought one of the purple ones up.',
+                  'i felt it from here.',
+                  'it is fine. it is not fine. but it is fine.'] },
+
+        { id: 'another_light', weight: 2.5, once: true,
+          when: function (c) { return !!c.fact('wreck_at_signal'); },
+          lines: ['there is another light on down there now.',
+                  'i told you i know which ones are still on.'] }
+      ],
       stages: [
         { at: function (d) { return (d.stats.casts | 0) >= 30; },
           lines: ['you are the one with the rod.',
@@ -571,12 +693,26 @@
     r.qstage[qid] = Math.max(0, n | 0);
   }
 
-  function hasNew(id) {
+  /* Has this person a line on a TRACK that the player has not had — a stage,
+     or the next step of a thread. This is the one worth interrupting somebody
+     for, because it is the only kind that can be missed. */
+  function hasStage(id) {
     const npc = BY_ID[id];
     if (!npc) return false;
     const r = peek(id);
     if (questTurn(npc, r)) return true;
     return availableStage(npc) > r.stage - 1;
+  }
+
+  /* Has this person ANYTHING — a stage, or a remark about how the world is.
+     Used to put a light on somebody in the harbour and a mark beside their
+     name in the list. Deliberately NOT used to raise a toast: a remark is
+     worth having if you happen to walk over, and is not worth a card sliding
+     across the screen telling you to open a menu. */
+  function hasNew(id) {
+    if (hasStage(id)) return true;
+    /* `has` is read-only — asking must not create a record for them. */
+    return !!(VF.react && VF.react.has(id));
   }
 
   /* Some people are introduced before they are named. */
@@ -589,6 +725,10 @@
 
   function anyNew() {
     for (let i = 0; i < LIST.length; i++) if (hasNew(LIST[i].id)) return true;
+    return false;
+  }
+  function anyStage() {
+    for (let i = 0; i < LIST.length; i++) if (hasStage(LIST[i].id)) return true;
     return false;
   }
 
@@ -626,6 +766,22 @@
     const nothingNew = stage < cur;
     let spent = false;
     let rumour = null;
+    let reaction = null;
+
+    /* Before either of those: has this person NOTICED anything?
+
+       A reaction is about how the world is now — the state of your hull, where
+       you have been, what has turned out not to be true. It sits ahead of the
+       rumour because a remark about the person standing in front of you beats
+       a thing somebody else said, and behind the ladder because a story
+       somebody is in the middle of telling beats both. See js/world/react.js. */
+    if ((!def || nothingNew) && !onQuest && VF.react) {
+      reaction = VF.react.offer(id);
+      if (reaction) {
+        def = { lines: reaction.lines };
+        spent = true;
+      }
+    }
 
     /* Before falling back on small talk: has this person heard anything?
 
@@ -634,14 +790,14 @@
        may not be true. That is why it sits here rather than in `stages`: the
        ladders are things this character knows, and this is a thing they have
        been told. */
-    if ((!def || nothingNew) && !onQuest && VF.rumours) {
+    if ((!def || nothingNew) && !onQuest && !reaction && VF.rumours) {
       rumour = VF.rumours.offer(id);
       if (rumour) {
         def = { lines: [rumour.line] };
         spent = true;
       }
     }
-    if ((!def || nothingNew) && !onQuest && !rumour && npc.filler) {
+    if ((!def || nothingNew) && !onQuest && !rumour && !reaction && npc.filler) {
       def = { lines: npc.filler };
       spent = true;
     }
@@ -650,6 +806,15 @@
     r.met++;
     let done = false;
     function commit() {
+      /* A remark is not "first" in the ladder's sense either, and is recorded
+         for the same reason: without it the cooldown never starts and the
+         mechanic tells you about your hull every single time. */
+      if (reaction && !done) {
+        done = true;
+        VF.react.said(id, reaction.id);
+        VF.save.save();
+        return;
+      }
       /* Hearing a rumour is not "first" in the ladder's sense — nothing
          advances — but it does have to be recorded, or the same person offers
          the same line every time you walk over. */
@@ -692,6 +857,7 @@
     list: LIST,
     get: function (id) { return BY_ID[id] || null; },
     rec: rec, peek: peek, talk: talk, hasNew: hasNew, anyNew: anyNew,
+    hasStage: hasStage, anyStage: anyStage,
     met: function (id) { return peek(id).met > 0; },
     name: nameOf,
     unlocked: unlocked, availableStage: availableStage, availableQuest: availableQuest,

@@ -187,8 +187,20 @@
   function damage(k) {
     const b = shape();
     const m = mod('engine');
-    const soak = h().integrity / 100 * (m.wear === undefined ? 1 : m.wear);
-    b.wear = U.clamp((b.wear || 0) + k / Math.max(0.2, soak), 0, 1);
+    /* How much punishment the hull itself absorbs. */
+    const soak = h().integrity / 100;
+    /* And the engine's share of it. A better engine is EASIER on the hull —
+       the module's own description says so — so its `wear` is a multiplier on
+       the damage taken. It used to multiply the soak instead, which inverted
+       the whole thing: a rank-5 engine has wear 0.5, which halved the soak,
+       which doubled every knock the hull took. Upgrading the engine made the
+       boat twice as fragile and nothing in the interface said a word. */
+    const mul = (m.wear === undefined ? 1 : Math.max(0.1, m.wear));
+    const was = b.wear || 0;
+    b.wear = U.clamp(was + k * mul / Math.max(0.2, soak), 0, 1);
+    /* Any damage at all is a fact the world can react to; `boat:worn` is only
+       the alarm at the top end and fires far too late to be a memory. */
+    if (b.wear > was) VF.bus.emit('boat:damaged', { wear: b.wear, was: was, by: k });
     if (b.wear > 0.85) VF.bus.emit('boat:worn', b.wear);
     return b.wear;
   }
@@ -196,6 +208,10 @@
 
   function repairCost() {
     const b = shape();
+    /* The mechanic has seen you bring it back like this twice now and has
+       decided not to charge you for it. Nothing announced this and nothing
+       will — the bill is simply not there, once. See js/data/chains.js. */
+    if (VF.chains && VF.chains.fact('repair_owed')) return 0;
     return Math.round(hull().cost * 0.04 * (b.wear || 0)) + Math.round(300 * (b.wear || 0) * 10);
   }
   function repair() {
@@ -203,6 +219,9 @@
     if ((b.wear || 0) <= 0.001) return false;
     const cost = repairCost();
     if (cost > 0 && !VF.economy.spend(cost, 'boat')) return false;
+    /* Once. He is not running a charity and the second free one would turn a
+       gesture into a mechanic. */
+    if (VF.chains) VF.chains.clearFact('repair_owed');
     b.wear = 0;
     VF.audio.stinger('soft', 2);
     VF.bus.emit('boat:changed');

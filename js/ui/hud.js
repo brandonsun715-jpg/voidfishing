@@ -96,6 +96,12 @@
   function pressStart(e, px, py) {
     // a crossing owns the whole screen, and its own card takes the press
     if (VF.voyage && VF.voyage.active()) { VF.voyage.press(e ? e.clientX : undefined); return; }
+    /* And so does the harbour — including a press that came from the space bar
+       or the action button, which is how a conversation there is advanced. */
+    if (VF.place && VF.place.isOpen()) {
+      if (px === undefined) VF.place.advanceTalk();
+      return;
+    }
     // a sequence owns the input while it is running
     if (VF.cutscene && VF.cutscene.active()) { VF.cutscene.skip(); return; }
     if (VF.state.rt.panelOpen) return;
@@ -170,12 +176,25 @@
 
     canvas.addEventListener('pointerdown', function (e) {
       e.preventDefault();
+      /* In the harbour this canvas is not water and a press on it is not a
+         cast: it is a press on a counter, a boat, a person or the way out of
+         the frame. See js/systems/place.js. */
+      if (VF.place && VF.place.isOpen()) {
+        const q = scenePoint(e, canvas);
+        if (q) VF.place.press(q.x, q.y);
+        return;
+      }
       // the wanderer gets the press before the water does
       if (merchantPress(e, canvas)) return;
       const p = scenePoint(e, canvas);
       pressStart(e, p ? p.x : undefined, p ? p.y : undefined);
     });
     canvas.addEventListener('pointermove', function (e) {
+      if (VF.place && VF.place.isOpen()) {
+        const q = scenePoint(e, canvas);
+        if (q) VF.place.move(q.x, q.y);
+        return;
+      }
       if (!VF.fishing.S.charging) return;
       const p = scenePoint(e, canvas);
       if (p) aimFrom(p.x, p.y);
@@ -619,8 +638,18 @@
     });
 
     VF.bus.on('ui:toast', function (o) { VF.toast.plain(o.text, o.kind); });
-    VF.bus.on('ui:whisper', function () {
-      showPrompt(VF.rng.g.pick(['listen', 'something moved', 'not alone', 'hello?']), '#b9a8e8', 1.6);
+    /* The quiet channel. A prompt in the frame, gone in a second and a half,
+       with no card, no shake and no sound — which is what noticing something
+       feels like, as opposed to being told about it.
+
+       Anything that does not change what the player can DO belongs here
+       rather than in a toast: finding a small thing, hearing something move,
+       the world remarking on you. A toast is for "that failed", "this is now
+       possible", "you cannot do that yet". */
+    VF.bus.on('ui:whisper', function (o) {
+      const txt = (o && o.text) ||
+        VF.rng.g.pick(['listen', 'something moved', 'not alone', 'hello?']);
+      showPrompt(txt, (o && o.color) || '#b9a8e8', (o && o.hold) || 1.6);
     });
 
     VF.bus.on('encounter:start', function () {
@@ -808,7 +837,11 @@
     newCheck -= dt;
     if (newCheck > 0) return;
     newCheck = 1.1;
-    const now = VF.npcs.anyNew();
+    /* Only a line on a TRACK is worth interrupting for. A remark about the
+       state of your hull is worth having when you walk over and is not worth
+       a card telling you to go and open a menu — which is what this did the
+       moment people started noticing things. */
+    const now = VF.npcs.anyStage();
     if (now && !hadNew && !VF.visit.active()) {
       VF.toast.show('somebody on the shore has something to say &mdash; ' +
                     '<strong>journal &middot; people</strong>', null, 5600);

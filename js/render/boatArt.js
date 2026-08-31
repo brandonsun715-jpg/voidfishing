@@ -171,6 +171,12 @@
       ctx.stroke();
     }
 
+    /* --- what is fitted to her ----------------------------------------- */
+    if (opts.modules) drawModules(ctx, opts.modules, L, g, hull, trim, t);
+
+    /* --- and what has happened to her ---------------------------------- */
+    if (opts.wear > 0.02) drawWear(ctx, opts.wear, L, g, top, bot, hull, trim);
+
     /* --- fitted trim --------------------------------------------------- */
     if (opts.trim) drawTrim(ctx, opts.trim, L, g, spec, t);
 
@@ -209,6 +215,158 @@
       ctx.restore();
     }
 
+    ctx.restore();
+  }
+
+  /* WHAT IS BOLTED TO HER.
+
+     Until the harbour existed, the only way to know what a boat was carrying
+     was to open a panel and read a list — and the winch and gantry this file
+     already drew are TRIM, a cosmetic you buy for the look of it, not the
+     survey module you paid twenty-six thousand for. So a fitted boat and a
+     bare one were the same picture.
+
+     Each of these is small and unmistakable at the size a boat is actually
+     drawn: a dome, a davit, a hatch, a rack. Nothing is labelled. If you have
+     never bought sonar you will not know what the dome is, and the first time
+     you buy it you will notice it appear. */
+  function drawModules(ctx, m, L, g, hull, trim, t) {
+    if (!m) return;
+    const lit = U.mixRgb(hull, [255, 255, 255], 0.24);
+    const rail0 = -rail(g, 0);
+
+    /* Sonar: a dome, and it sweeps. Aft of the house rather than amidships,
+       because amidships is exactly where the house is on every hull that has
+       one and the most load-bearing purchase in the game was invisible. */
+    if (m.sonar > 0) {
+      const x = L * 0.19, y = rail0 - L * 0.012;
+      ctx.fillStyle = U.rgbToCss(U.shade(trim, 0.20));
+      ctx.beginPath();
+      ctx.ellipse(x, y, L * 0.030, L * 0.024, 0, Math.PI, 0);
+      ctx.fill();
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const a = 0.18 + 0.16 * Math.max(0, Math.sin(t * 1.1));
+      ctx.fillStyle = 'rgba(120,220,255,' + a.toFixed(3) + ')';
+      ctx.beginPath();
+      ctx.ellipse(x, y - L * 0.006, L * 0.016, L * 0.012, 0, Math.PI, 0);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    /* survey: a davit over the side with a line down from it */
+    if (m.survey > 0) {
+      const x = L * 0.26, y = -rail(g, 0.52);
+      ctx.strokeStyle = U.rgbToCss(U.shade(trim, -0.10));
+      ctx.lineWidth = Math.max(0.8, L * 0.012);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.quadraticCurveTo(x + L * 0.02, y - L * 0.10, x + L * 0.10, y - L * 0.085);
+      ctx.stroke();
+      ctx.strokeStyle = U.rgbToCss(U.shade(hull, -0.4), 0.85);
+      ctx.lineWidth = Math.max(0.5, L * 0.005);
+      ctx.beginPath();
+      ctx.moveTo(x + L * 0.10, y - L * 0.082);
+      ctx.lineTo(x + L * 0.10 + Math.sin(t * 0.8) * L * 0.004, y + L * 0.010);
+      ctx.stroke();
+    }
+
+    /* hold: a hatch in the deck, raised, with a coaming round it */
+    if (m.hold > 0) {
+      const x = -L * 0.24, y = -rail(g, -0.48) + L * 0.004;
+      ctx.fillStyle = U.rgbToCss(U.shade(hull, -0.30));
+      ctx.fillRect(x - L * 0.045, y - L * 0.020, L * 0.090, L * 0.022);
+      ctx.strokeStyle = U.rgbToCss(lit, 0.7);
+      ctx.lineWidth = Math.max(0.5, L * 0.005);
+      ctx.strokeRect(x - L * 0.045, y - L * 0.020, L * 0.090, L * 0.022);
+    }
+
+    /* tackle: a rack of rods along the far rail */
+    if (m.tackle > 0) {
+      const n = Math.min(4, m.tackle + 1);
+      ctx.strokeStyle = U.rgbToCss(U.shade(trim, 0.30), 0.9);
+      ctx.lineWidth = Math.max(0.5, L * 0.005);
+      for (let i = 0; i < n; i++) {
+        const u = -0.14 + i * 0.09;
+        const y = -rail(g, u);
+        ctx.beginPath();
+        ctx.moveTo(u * (L * 0.5) - L * 0.020, y - L * 0.004);
+        ctx.lineTo(u * (L * 0.5) + L * 0.055, y - L * 0.052);
+        ctx.stroke();
+      }
+    }
+
+    /* engine: a stack aft, and it is smoking if it is a big one */
+    if (m.engine > 0) {
+      const x = L * 0.34, y = -rail(g, 0.68);
+      ctx.fillStyle = U.rgbToCss(U.shade(trim, -0.05));
+      ctx.fillRect(x - L * 0.011, y - L * 0.055, L * 0.022, L * 0.058);
+      ctx.fillStyle = U.rgbToCss(U.shade(trim, 0.25));
+      ctx.fillRect(x - L * 0.014, y - L * 0.062, L * 0.028, L * 0.010);
+    }
+  }
+
+  /* WHAT HAS HAPPENED TO HER.
+
+     The game has always tracked hull integrity and has always spent it: a
+     worn hull fights worse, bites worse and sails slower. It has never once
+     LOOKED worn. Everything below reads at a glance and none of it is a
+     number: a stain along the waterline, plates riveted over the damage, and
+     at the bad end a rail that no longer runs fair.
+
+     `w` is 0 to 1 of wear, so a boat you have not hurt draws exactly as it
+     always did and nothing here costs anything until it has to. */
+  function drawWear(ctx, w, L, g, top, bot, hull, trim) {
+    const N = top.length - 1;
+    ctx.save();
+    /* the boot-top: growth and oil along the waterline, first and always */
+    ctx.strokeStyle = U.rgbToCss(U.shade(hull, -0.62), 0.30 + w * 0.45);
+    ctx.lineWidth = Math.max(1, L * 0.016 * (0.5 + w));
+    ctx.beginPath();
+    for (let i = 0; i <= N; i++) {
+      const y = U.lerp(top[i][1], bot[i][1], 0.72);
+      i ? ctx.lineTo(top[i][0], y) : ctx.moveTo(top[i][0], y);
+    }
+    ctx.stroke();
+
+    /* plates. One at a third of the way gone, four when she is finished, and
+       they are riveted rectangles because that is what he actually does —
+       "i can plate it. i can plate it as many times as you like." */
+    const plates = Math.floor(w * 5);
+    for (let i = 0; i < plates; i++) {
+      const u = -0.62 + ((i * 0.37) % 1.24);
+      const idx = Math.round((u + 1) / 2 * N);
+      const px = top[idx][0];
+      const py = U.lerp(top[idx][1], bot[idx][1], 0.34 + (i % 3) * 0.14);
+      const pw = L * (0.045 + (i % 2) * 0.020), ph = L * 0.030;
+      ctx.fillStyle = U.rgbToCss(U.shade(hull, -0.30 - (i % 3) * 0.08), 0.95);
+      ctx.fillRect(px - pw / 2, py - ph / 2, pw, ph);
+      ctx.strokeStyle = U.rgbToCss(U.mixRgb(hull, [255, 255, 255], 0.18), 0.5);
+      ctx.lineWidth = Math.max(0.4, L * 0.003);
+      ctx.strokeRect(px - pw / 2, py - ph / 2, pw, ph);
+      for (let r = 0; r < 4; r++) {
+        ctx.fillStyle = U.rgbToCss(U.shade(hull, 0.25), 0.6);
+        ctx.beginPath();
+        ctx.arc(px - pw / 2 + pw * (r % 2 ? 0.85 : 0.15),
+                py - ph / 2 + ph * (r < 2 ? 0.2 : 0.8),
+                Math.max(0.5, L * 0.0035), 0, U.TAU);
+        ctx.fill();
+      }
+    }
+
+    /* and past two thirds, the rail itself has stopped running fair */
+    if (w > 0.62) {
+      const k = (w - 0.62) / 0.38;
+      ctx.strokeStyle = U.rgbToCss(U.shade(trim, -0.45), 0.9);
+      ctx.lineWidth = Math.max(0.8, L * 0.014);
+      ctx.beginPath();
+      for (let i = 0; i <= N; i++) {
+        const dent = Math.sin(i * 2.3) * Math.sin(i * 0.7) * L * 0.012 * k;
+        i ? ctx.lineTo(top[i][0], top[i][1] + dent) : ctx.moveTo(top[i][0], top[i][1] + dent);
+      }
+      ctx.stroke();
+    }
     ctx.restore();
   }
 
@@ -346,10 +504,16 @@
     };
   }
 
+  /* The player's own boat, wherever it is drawn — on the water, in the
+     harbour, on the hard in the yard. Wear and fitted modules come from the
+     save by default rather than from the call site, so every place that draws
+     her draws the boat you actually own in the state you actually left her.
+     A caller can still override, which is what the shop preview does. */
   function drawMine(ctx, L, opts) {
     const b = VF.boat.shape();
     draw(ctx, spec(), L, Object.assign({
-      trim: b.trim, trophies: b.trophies, paint: VF.boat.paint()
+      trim: b.trim, trophies: b.trophies, paint: VF.boat.paint(),
+      wear: b.wear || 0, modules: b.modules
     }, opts || {}));
   }
 

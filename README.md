@@ -34,6 +34,11 @@ them since about 2015.
 | **Esc** | Close a menu |
 | **F8 F9** | Hide the interface; show the world's working (development keys) |
 
+In the harbour there is no rod and nothing bites: click what you want to walk
+up to, the arrows at the corners to move between views, and your boat to put
+out again. You get there from the Chart — Vault Harbour sits at the top of the
+rail, above the water, because it is not somewhere you fish.
+
 Catches can be sold for Jias, kept for the collection, or released for
 reputation — which quietly raises your luck, and occasionally earns you
 something back.
@@ -176,13 +181,15 @@ js/data/              fish, rods, merchant rods, bait, locations, weather,
 js/systems/           time, weather, progression, economy, loot, fishing,
                       catches, quests, merchant, cutscenes, achievements,
                       encounters, daily, bounties, wall, away, returning,
-                      charter
+                      charter, the harbour
 js/gl/                the WebGL2 layer: context and passes, sky and sea
 js/world/             world coordinates and the camera, the shapes a place is
-                      built from, the landmark graph, the event director and
-                      the rumour ledger
+                      built from, the landmark graph, the event director, the
+                      rumour ledger, the player's history, delayed
+                      consequences, and what people notice about you
 js/render/            palette, particles, screen effects, fish art, the chart,
-                      landmark art, scene
+                      landmark art, the ground people stand on, the harbour,
+                      scene
 js/audio/             procedural WebAudio engine
 js/ui/                toast, HUD and input, panels, catch card, tutorial,
                       console (owner build only)
@@ -239,6 +246,30 @@ there stay on a card. `node tools/consequences.js` plays every branch from an
 identical save and diffs the world with the text excluded, because a different
 sentence is not a different outcome.
 
+**Some things come back later.** A consequence you meet in the same breath as
+the choice is a result, not a consequence. `js/world/chains.js` is the other
+kind: a condition arms it, a distance measured in things the player DID —
+crossings, casts, trips, conversations — has to pass, and then the world is
+different and nothing says so. Sail past something calling on a crossing and
+the game does not scold you; three crossings later there is a hull on the
+shelf above the trench, a man on the shore who will tell you about it, and
+somebody at the counter who says he makes it up. The delay is never in
+seconds: a consequence on a wall clock would go off while the game sat on a
+title screen, and `node tools/chains.js` asserts that six minutes of game time
+fires nothing. A chain may set a fact, arm a rumour or write one journal line.
+It may not raise a toast, open a panel or start a quest, and that is checked
+too.
+
+**People notice.** The dialogue is a ladder, and a ladder can only ever say
+the next thing — which is right for a story somebody is telling you and wrong
+for everything else, because a ladder cannot say "you look terrible". So
+`js/world/react.js` sits between the ladder and the rumours: lines scored
+against the state of the world rather than ordered, so the mechanic remarks on
+the hull you keep breaking, the child on where your boots have been, the
+cartographer on a number you have now settled. Nothing there advances
+anything, so it cannot be missed and cannot be farmed. It is recorded, so
+nobody says the same thing twice running.
+
 **People tell you things, and they may be wrong.** A clue is always true, has
 no source, and always opens a lead — the right shape for evidence and the
 wrong shape for everything else. A rumour is somebody telling you: true,
@@ -247,6 +278,35 @@ the interface, because a rumour you can see through is a quest with extra
 steps. Two people can make different claims about the same thing and the game
 leaves them disagreeing until you go and look, and what settles it is always
 something you did.
+
+**Somewhere that is not water.** The shop was a panel, the boatyard was a
+panel, the chart was a panel, and the mechanic — whose written station is
+"under a hull, mostly" — had no hull to be under. Vault Harbour is four framed
+viewpoints you move between: the dock with your boat moored at the quay and
+the child sitting on the end of it, the yard with somebody else's hull up on
+blocks and him underneath it, the market row, and one room above the water.
+You do not walk; a character controller would be a different game. It draws
+into the same two canvases the sea uses — the GL sky and water at the
+harbour's own horizon, the boards and the people above — so the sea in the
+window of the room is not a picture of the sea, it is a hole in the wall with
+the shader behind it. The panels still open, because 3,500 lines of working
+shop are not thrown away to make a point; what changed is that you reach them
+by standing at a counter. `node tools/port.js` shoots all four with the
+interface off and refuses a hotspot that is off the frame, cannot be clicked,
+or opens nothing.
+
+**Your boat looks like your boat.** Hull integrity has always been tracked and
+always been spent — a worn hull fights worse, bites worse and sails slower —
+and it has never once been visible. Now it is planking: a stain along the
+waterline, plates riveted over the damage, and past two thirds a rail that no
+longer runs fair. The fitted modules are on deck too — a sonar dome that
+sweeps, a survey davit, a hold hatch, a rack of rods — none of them labelled,
+so the first time you buy sonar you notice a dome appear. And a bug the yard
+made obvious: `damage()` multiplied the soak by the engine's `wear` figure,
+which goes DOWN as the engine gets better, so a rank-5 engine halved the soak
+and exactly doubled every knock the hull took. The best engine in the game
+made the boat twice as fragile and nothing said so. `node tools/boatmath.js`
+asserts the direction of every hull and module relationship.
 
 **The water has coordinates.** Everything used to be drawn in screen space
 against one horizon line, which is why the big light sat at 0.70 of the way
@@ -378,6 +438,13 @@ node tools/space.js       the projection's invariants: round-trip, parallax,
 node tools/trips.js       fifty crossings: how many of them ask you anything
 node tools/consequences.js every branch of every choice, diffed
 node tools/rumours.js     being told two things and finding out which was right
+node tools/chains.js      a consequence arms, waits, fires once, and announces
+                          nothing — and time passing alone fires nothing at all
+node tools/react.js       ten states of the world, and what the same nine people
+                          say in each of them
+node tools/boatmath.js    a better engine takes LESS hull damage, on every hull
+node tools/port.js        all four harbour viewpoints with the interface off, and
+                          every hotspot in frame, clickable, and not a dead click
 node tools/gl.js          every shader builds, the water has light in it, and
                           the game still draws with WebGL2 refused
 node tools/gallery.js      renders the whole catalogue to one sheet

@@ -326,6 +326,26 @@
       }
     }
 
+    /* --- consequences. Things that are in this water because of something
+       the player did, rather than because of the zone's grammar.
+
+       They are placed by hand rather than by the scatter, because the whole
+       point of one is that it is where it is for a reason. They get a stable
+       id off the fact that put them there, so "have you seen it yet" is one
+       lookup rather than a search of the seen-set. --- */
+    if (gr.consequences && VF.chains) {
+      gr.consequences.forEach(function (c) {
+        if (!VF.chains.fact(c.fact)) return;
+        const l = make(c.kind || 'meso', c.art, toU(c.s, c.d), c.d, {
+          id: 'consequence:' + c.fact,
+          scale: c.scale || 1,
+          consequence: c.fact
+        });
+        all.push(l);
+        if ((c.kind || 'meso') === 'meso') meso.push(l);
+      });
+    }
+
     /* --- the edges. Typed, and computed once: which of these can see which
        other, which is what the composition and the discovery both read. --- */
     for (let i = 0; i < all.length; i++) {
@@ -555,6 +575,19 @@
     influenceAt: influenceAt, radiusOf: radiusOf, footprintOf: footprintOf,
     debugDraw: debugDraw,
     markSeen: markSeen,
+    /* Has this exact landmark been noticed, in any water? Only consequence
+       landmarks have ids stable enough for this to be worth asking, which is
+       exactly who asks — a rumour settles when you have SEEN the thing, and
+       the seen-set is where that already lives. */
+    seenAnywhere: function (lid) {
+      const d = VF.state.data;
+      if (!d.world) return false;
+      for (const z in d.world) {
+        const s = d.world[z];
+        if (s && s.seen && s.seen[lid]) return true;
+      }
+      return false;
+    },
     /* the tools rebuild without a page reload */
     invalidate: function () { buildKey = ''; built = null; },
     emptyFraction: emptyFraction, build: build

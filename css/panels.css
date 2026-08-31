@@ -1327,3 +1327,9 @@ button.rc-btn.is-buy:hover { border-color: var(--accent); background: rgba(127,1
   border-top: 1px solid var(--line);
 }
 .lead.said-split .lead-need { opacity: 0.55; font-style: italic; }
+
+/* Home, at the top of the chart's rail. Warmer than the water cards, because
+   it is the one place on this list that is not somewhere to fish. */
+.spot-home { border-color: rgba(232, 200, 138, 0.28); }
+.spot-home .spot-desc { opacity: 0.8; }
+.spot-go { width: 100%; margin-top: 10px; }
