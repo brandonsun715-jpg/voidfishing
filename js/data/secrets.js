@@ -10,6 +10,8 @@
   const LIST = [
     { id: 'lantern_isle', name: 'Lantern Isle', level: 0, chance: 0.09,
       loc: { id: 'lantern_isle', name: 'Lantern Isle', level: 0, near: 'trench',
+        /* a rock barely above the water, so nothing that draws more than a dory bare will ever tie up to it */
+        at: [7.1, 1.0], shoal: 0.9, depthM: 80,
         tag: 'somebody left a light on',
         desc: 'A rock barely above the water with a lamp on it, still burning. Whoever lit it has not been back, and the fish here have got used to the light.',
         hint: 'a light out on the water',
@@ -26,6 +28,7 @@
 
     { id: 'sunken_arch', name: 'The Sunken Arch', level: 0, chance: 0.075,
       loc: { id: 'sunken_arch', name: 'The Sunken Arch', level: 0, near: 'cradle',
+        at: [8.2, -5.6], shoal: 8.0, depthM: 2200,
         tag: 'a doorway, underwater, to nowhere',
         desc: 'The top of an arch breaks the surface. The rest of it goes down further than the light does, and there is a room on the other side.',
         hint: 'something built, under the water',
@@ -42,6 +45,8 @@
 
     { id: 'glass_shallows', name: 'The Glass Shallows', level: 0, chance: 0.085,
       loc: { id: 'glass_shallows', name: 'The Glass Shallows', level: 0, near: 'abyss',
+        /* ankle deep, and bottomless. The skiff, and only the skiff */
+        at: [-4.6, 5.4], shoal: 0.6, depthM: 20,
         tag: 'ankle deep, and bottomless',
         desc: 'Water so clear and so shallow you could wade it, over a floor that is not there. Things swim past your feet at a depth of several kilometres.',
         hint: 'shallow water with nothing under it',
@@ -58,6 +63,7 @@
 
     { id: 'drowned_hall', name: 'The Drowned Hall', level: 0, chance: 0.055,
       loc: { id: 'drowned_hall', name: 'The Drowned Hall', level: 0, near: 'cradle',
+        at: [11.0, -2.2], shoal: 8.0, depthM: 2400,
         tag: 'somebody used to live here',
         desc: 'A long room with the roof gone and the furniture still where it was left. The water fills it exactly to the height of a person standing.',
         hint: 'a room, filled precisely to the brim',
@@ -76,6 +82,8 @@
        when the rod arrives, and `test` exists only so tryFind ignores it. */
     { id: 'the_heavens', name: 'THE HEAVENS', level: 0, chance: 0, journal: 'theheavens',
       loc: { id: 'the_heavens', name: 'THE HEAVENS', level: 0, near: 'nowhere',
+        /* above the cloud rather than under the water, and the rating that gets you there is the same one that gets you down */
+        at: [-7.0, 4.4], shoal: 8.0, depthM: 6000,
         tag: 'above the weather, and there is water up here',
         desc: 'A flat calm sheet of light lying on top of the cloud, going out further than the sea does. ' +
               'The rod knows the way. You did not, and it did not need you to.',
@@ -92,6 +100,8 @@
     /* The end of the game. Not a level unlock — you have to have been told. */
     { id: 'the_last_water', name: 'THE LAST WATER', level: 0, chance: 1,
       loc: { id: 'the_last_water', name: 'THE LAST WATER', level: 0, near: 'beneath',
+        /* the descent. THE UNDERSIDE and nothing else */
+        at: [2.2, 15.5], shoal: 8.0, depthM: 12000,
         tag: 'there is nothing under this one',
         desc: 'Not a place so much as the underside of the idea of one. The rod feels correct here for the first time. Everything you have caught was practice.',
         hint: 'one more, under everything',

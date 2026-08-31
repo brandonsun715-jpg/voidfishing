@@ -308,6 +308,48 @@ and exactly doubled every knock the hull took. The best engine in the game
 made the boat twice as fragile and nothing said so. `node tools/boatmath.js`
 asserts the direction of every hull and module relationship.
 
+**There is no best boat.** Every hull used to be the last one with bigger
+numbers: more speed, more integrity, more of every slot, and nothing given up.
+So there was never a decision, only a queue. Now each hull has two ratings that
+pull against each other — a DRAUGHT, how much water she needs under her, and a
+PRESSURE rating, how deep she can work — and both go up with size. The skiff
+draws forty centimetres and is rated for two hundred metres; THE UNDERSIDE
+draws three and a half metres and is rated for anything. Each of them reaches
+water the other never will, and every hull between owns a band.
+
+Fitting her out is a build rather than a shopping list: the five modules spend
+BERTH, a budget the hull has, and THE UNDERSIDE has five slots of everything
+and can afford eighteen of twenty-five levels. And what you bolt on puts weight
+in her, so displacement adds draught — a fully instrumented survey vessel draws
+more than a bare one and loses the shallow water for it. Owning a module and
+having it aboard are separate, and moving it either way is free, so stripping
+her down to get into the Glass Flats is a thing you do in the yard in thirty
+seconds rather than a purchase you regret. `node tools/reach.js` prints the
+grid and asserts the three things that make it a tradeoff instead of a ladder:
+no water unreachable, no hull that reaches everything, and the smallest and the
+largest each reaching water the other cannot.
+
+**The chart is geography now.** It was a plumb line — one vertical spine with
+every place hung off it by depth — because there were no coordinates anywhere
+in the build. That was a true thing to say about the progression and the only
+thing the map could say: two places adjacent on the ladder were adjacent on the
+chart whether they were an hour apart or a week, and a man had been telling the
+player about the EASTERN markers since level four in a world with no east in
+it. Every place carries `at` now, leagues east and south with the harbour at
+the origin, and the chart draws the sea that implies: a coastline generated
+from eleven control points and a noise field, isobaths round the deep places,
+the shoal patches and the deep marked because the boat has a draught, routes
+with their real length — and unsurveyed water, blank and hatched, which is the
+whole point of having a chart and the one thing a column could never show.
+
+A crossing's duration comes off that distance rather than off progression rank,
+so the harbour is genuinely a hop from the shore and the trench to the cradle
+is genuinely a haul. And with survey gear aboard you can take a sounding in the
+blank: what comes back is one line about what might be out there, never a
+marker. `node tools/chart.js` checks the positions are distinct, that hidden
+water sits beside the place its data has always said it was near, that every
+crossing lands in a sane band, and that east is east.
+
 **The water has coordinates.** Everything used to be drawn in screen space
 against one horizon line, which is why the big light sat at 0.70 of the way
 across the frame in all nine zones, why the pylons on the Glass Flats were a
@@ -319,6 +361,20 @@ water renderer is drawing rather than near it. The camera translates rather
 than rotates, which is where the parallax comes from for free: a world unit is
 1.45 half-screens wide at the hull and 0.55 at the horizon, so sliding the
 frame slides near water further than it slides the sky.
+
+**The Quiet Shore, re-passed.** It declared a landmark graph with a headland
+in it AND `silhouette: 'rocks'`, the generic procedural ridgeline — two
+horizons competing, and the one that means something lost. What the screenshot
+showed with the interface off was a row of grey triangles, a smudge in the top
+corner where the headland was, and a lit dot floating beside it. The ridgeline
+is gone, and the headland has a top now: it used to run off the top of the
+frame at every distance, which is right for one you are sitting under and wrong
+for one across the bay, and a promontory with no sky above it is a curtain down
+one side of the picture. Its height falls off with distance like everything
+else, it is darker than the air it stands in rather than the same value as it,
+and the light stands on its actual ridge rather than on a fraction of the
+screen. The bay reads as a bay, and the question the zone declares — *why does
+nobody go past the lighthouse?* — is now a thing you can see.
 
 **A zone is a graph, not a list of positions.** One macro landmark you can
 know the place by, three to five meso landmarks placed *by sightline* — each
@@ -442,7 +498,12 @@ node tools/chains.js      a consequence arms, waits, fires once, and announces
                           nothing — and time passing alone fires nothing at all
 node tools/react.js       ten states of the world, and what the same nine people
                           say in each of them
-node tools/boatmath.js    a better engine takes LESS hull damage, on every hull
+node tools/boatmath.js    a better engine takes LESS hull damage, on every hull,
+                          the berth budget holds, and the hold does its job
+node tools/reach.js       which boat can work which water, as a grid — and the
+                          three assertions that make it a tradeoff not a ladder
+node tools/chart.js       the world has a shape, distance means something, and
+                          the chart drags, zooms and holds up at every size
 node tools/port.js        all four harbour viewpoints with the interface off, and
                           every hotspot in frame, clickable, and not a dead click
 node tools/gl.js          every shader builds, the water has light in it, and

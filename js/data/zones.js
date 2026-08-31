@@ -59,9 +59,16 @@
       landmarks: {
         seed: 11,
         /* `s` is lateral in frames from centre, so -0.8 is most of the way
-           to the left edge whatever the depth. */
-        macro: { art: 'headland', side: -1, sMin: 0.46, sMax: 0.66,
-                 dMin: 1.45, dMax: 1.95, tall: 1, scale: 1 },
+           to the left edge whatever the depth.
+
+           THE HEADLAND CAME IN. It used to sit at d 1.45–1.95 — well past the
+           horizon — which drew it small, high and half out of the top of the
+           frame, and the generic ridgeline behind it won every time. It is
+           the thing you are supposed to know this place by, so it is at the
+           horizon now rather than beyond it, and further round to the left so
+           the middle of the frame is water. */
+        macro: { art: 'headland', side: -1, sMin: 0.72, sMax: 0.92,
+                 dMin: 1.02, dMax: 1.18, tall: 1, scale: 1.25 },
         meso: [
           /* On the headland, not beside it: it is there to say how big the
              headland is, which is a job only something small can do. `du` is

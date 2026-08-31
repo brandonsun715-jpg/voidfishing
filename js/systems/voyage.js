@@ -95,11 +95,16 @@
     S.contact = 0; S.contactT = VF.rng.g.range(3, 7);
     S.rolledFollow = 0;
 
-    /* How long, and what happens in it. Distance is how far apart the two
-       places are in the progression — the shore to the basin is a morning and
-       the Nowhere Sea to Beneath is not. */
-    const dist = Math.abs(VF.locations.rank(to.id) - VF.locations.rank(from.id)) || 1;
-    S.dur = U.clamp(9 + dist * 3.4, 10, 26) / Math.max(0.5, VF.boat.speed());
+    /* How long, and what happens in it.
+
+       Distance used to be the difference in PROGRESSION RANK, which made the
+       harbour exactly as far from the shore as the shore is from the basin,
+       and made crossing the entire surveyed water from the trench to the
+       cradle one rung. It is leagues now, off the chart — so a short hop is
+       short, a haul is a haul, and holding a course east actually means going
+       east. See js/data/locations.js. */
+    const dist = VF.locations.distance(from.id, to.id) || 1;
+    S.dur = U.clamp(7 + dist * 1.15, 9, 30) / Math.max(0.5, VF.boat.speed());
 
     /* One question, asked once, and the usual answer is nothing.
 
