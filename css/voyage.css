@@ -264,6 +264,47 @@
 .mod-buy:hover:not(:disabled) { background: rgba(255,255,255,0.10); }
 .mod-buy:disabled { opacity: 0.4; cursor: default; }
 
+/* ---------------------------------------------------------------- berth
+
+   The budget the five modules spend, and the reason the fitting is a build
+   rather than a shopping list. It is at the top of the tab and it is live,
+   because a limit you meet by being refused is not a limit anybody designed
+   for you — it is one you found. */
+.berth-row { display: flex; align-items: center; gap: 10px; margin: 4px 0 10px; }
+.berth-k { font-size: 10px; letter-spacing: 0.14em; color: var(--ink-3); min-width: 38px; }
+.berth-v { font-size: 11px; color: var(--ink-2); min-width: 46px; text-align: right;
+           font-family: ui-monospace, Menlo, monospace; }
+.berth {
+  position: relative; flex: 1; height: 7px; border-radius: 4px;
+  background: rgba(255,255,255,0.07); overflow: hidden;
+}
+.berth-fill {
+  position: absolute; inset: 0 auto 0 0; border-radius: 4px;
+  background: linear-gradient(90deg, var(--accent), rgba(150,200,240,0.55));
+  transition: width 0.22s ease;
+}
+.berth-tick { position: absolute; top: 0; bottom: 0; width: 1px;
+              background: rgba(0,0,0,0.45); }
+.berth-tools { display: flex; gap: 8px; margin: 8px 0 12px; }
+
+/* A module you own but have left ashore: paid for, not aboard. */
+.mod-seg.owned { background: rgba(150,200,240,0.28); }
+.mod-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.mod-row .mod-buy { margin-top: 0; flex: 1 1 auto; }
+.mod-buy.ghost { background: transparent; border-color: rgba(150,190,230,0.14);
+                 color: var(--ink-3); }
+.mod-desc.dim { font-size: 10.5px; opacity: 0.6; }
+/* A sentence rather than a label. `.panel-note` is a section heading — small,
+   letter-spaced, UPPERCASE — which is right for "hulls" and wrong for a line
+   of prose telling you which water your boat will not get into. */
+.fit-say {
+  font-size: 12px; line-height: 1.55; color: var(--ink-2);
+  margin: 6px 0 2px; text-transform: none; letter-spacing: 0;
+}
+.fit-say.warn { color: #ffc08a; }
+.exp-obj.warn { color: #ffb08a; }
+.exp-obj.good { color: #9fe0b8; }
+
 .paint-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .paint {
   width: 30px; height: 30px; border-radius: 8px; cursor: pointer;

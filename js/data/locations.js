@@ -5,6 +5,20 @@
    their own in js/render/zoneArt.js, and the generic ridgeline behind a
    colossal trench wall is the thing that made every zone look like every
    other zone.
+   EVERY PLACE HAS A POSITION NOW. `at` is [east, south] in leagues, with the
+   harbour at the origin, and it is the real thing: how long a crossing takes
+   comes off the distance between two marks rather than off how far apart they
+   are in the progression, which is what made the harbour as far from the
+   shore as the shore is from the basin. There is an east now, which matters
+   because somebody has been telling you about the eastern markers since level
+   four.
+
+   `shoal` is the deepest draught that can work here and `depthM` is the
+   sounding. Together they are the water half of the boat's two ratings in
+   js/data/boats.js: a hull that draws more than `shoal` cannot get in, and
+   one rated below `depthM` cannot go down. The Glass Flats are ankle deep and
+   the last water is not, and no boat does both.
+
    `void` is how far out of the world this water is, 0 at the shore and 1 at
    the bottom. It is not a colour: the renderer reads it directly and takes the
    place apart with it — the far shore goes, then the horizon, then the surface
@@ -14,6 +28,8 @@
 
   const LIST = [
     { id: 'shore', name: 'The Quiet Shore', level: 1,
+      /* along the coast from home, and shallow enough that the two big hulls will never see it again */
+      at: [-1.2, 0.8], shoal: 1.4, depthM: 40,
       tag: 'where everyone starts',
       desc: 'A short stretch of pale stone at the edge of the water. Behind you there is nothing worth turning around for.',
       hint: 'Somewhere to sit.',
@@ -25,6 +41,8 @@
       music: { root: 55, scale: [0, 3, 5, 7, 10], tempo: 0.16, pad: 0.5 } },
 
     { id: 'basin', name: 'Moonlit Basin', level: 5,
+      /* a bowl in the lee of the northern land */
+      at: [2.6, -1.4], shoal: 3.0, depthM: 150,
       tag: 'the water remembers a moon',
       desc: 'A wide still bowl of water beneath a moon that has never once moved. Its reflection is a half-second late.',
       hint: 'The light out there is coming from something.',
@@ -36,6 +54,8 @@
       music: { root: 53, scale: [0, 2, 3, 7, 9], tempo: 0.14, pad: 0.6 } },
 
     { id: 'flats', name: 'The Glass Flats', level: 10,
+      /* ankle deep for miles; a bare dory just clears it and a fitted one does not */
+      at: [-4.2, -2.2], shoal: 1.0, depthM: 30,
       tag: 'perfectly, unnervingly flat',
       desc: 'Water without a single ripple, stretching further than it should. Everything above is doubled below.',
       hint: 'Reported to be extremely flat.',
@@ -47,6 +67,8 @@
       music: { root: 57, scale: [0, 2, 4, 7, 11], tempo: 0.12, pad: 0.7 } },
 
     { id: 'trench', name: 'Deepwater Trench', level: 16,
+      /* east and out, past the markers */
+      at: [5.8, 2.4], shoal: 8.0, depthM: 600,
       tag: 'no measured bottom',
       desc: 'A seam in the water where the dark starts immediately. The line goes out and keeps going.',
       hint: 'Something opened, further out.',
@@ -58,6 +80,8 @@
       music: { root: 48, scale: [0, 1, 5, 7, 8], tempo: 0.10, pad: 0.8 } },
 
     { id: 'abyss', name: 'Crystal Abyss', level: 24,
+      /* south, where the shelf gives out */
+      at: [-2.8, 6.5], shoal: 8.0, depthM: 1500,
       tag: 'it grows down there',
       desc: 'Enormous slow-growing structures rise out of the deep and stop just below the surface. They are warm.',
       hint: 'A light under the water, and it has edges.',
@@ -69,6 +93,8 @@
       music: { root: 50, scale: [0, 3, 5, 6, 10], tempo: 0.11, pad: 0.85 } },
 
     { id: 'cradle', name: 'The Cradle', level: 33,
+      /* the far north-east corner of anything surveyed */
+      at: [9.4, -3.8], shoal: 8.0, depthM: 1900,
       tag: 'a broken ring, and a sea inside it',
       desc: 'The remains of something vast and circular hang overhead. Water pools in the wreck of it. You fish in the pool.',
       hint: 'There is a ring up there. Most of one.',
@@ -80,6 +106,8 @@
       music: { root: 52, scale: [0, 2, 5, 7, 9], tempo: 0.13, pad: 0.75 } },
 
     { id: 'nowhere', name: 'The Nowhere Sea', level: 45,
+      /* off the chart's south-west, where the soundings stop agreeing */
+      at: [-8.5, 8.2], shoal: 8.0, depthM: 3200,
       tag: 'no coordinates were recorded',
       desc: 'You arrived here. You cannot describe the journey. The water is fine and the fishing is excellent.',
       hint: 'The charts stop. The water does not.',
@@ -91,6 +119,8 @@
       music: { root: 46, scale: [0, 1, 3, 7, 8], tempo: 0.08, pad: 0.95 } },
 
     { id: 'beneath', name: 'BENEATH', level: 58,
+      /* straight down past everything. Deep, but the hunter clears it — the descent that needs THE UNDERSIDE is the last water, not this one */
+      at: [1.5, 12.0], shoal: 8.0, depthM: 3400,
       tag: 'you are the one being fished',
       desc: 'There is no shore. There is no surface. There is a place to sit and a line going down and something on the other end of it that has been waiting.',
       hint: 'Below the Nowhere Sea there is one more thing.',
@@ -160,6 +190,47 @@
       for (let i = 0; i < LIST.length; i++) if (LIST[i].id === id) return i;
       return 0;
     },
-    isSecret: function (id) { return !!(BY_ID[id] && BY_ID[id].secret); }
+    isSecret: function (id) { return !!(BY_ID[id] && BY_ID[id].secret); },
+
+    /* ------------------------------------------------------------ geography
+
+       Where a place is, and how far it is from another one. `at` is [east,
+       south] in leagues; the harbour is the origin and is not a fishing spot,
+       so it is answered here rather than living in the shelf.
+
+       This is what a crossing's length comes off now. It used to be the
+       difference in progression rank, which meant the harbour was as far from
+       the shore as the shore is from the basin, and going from the trench to
+       the cradle — right across the surveyed water — was one rung. */
+    at: function (id) {
+      /* The harbour is not in the shelf — it is not water — but it is on the
+         chart and every crossing starts or ends there, so it answers here. */
+      if (id === 'harbour') {
+        return (VF.placeData && VF.placeData.location.at) || [0, 0];
+      }
+      const l = BY_ID[id];
+      return (l && l.at) || [0, 0];
+    },
+    distance: function (a, b) {
+      const p = VF.locations.at(a), q = VF.locations.at(b);
+      return Math.hypot(q[0] - p[0], q[1] - p[1]);
+    },
+    /* Bearing from one to another, in the compass sense — 0 is north and it
+       runs clockwise. What lets somebody say "east" and mean it. */
+    bearing: function (a, b) {
+      const p = VF.locations.at(a), q = VF.locations.at(b);
+      const deg = Math.atan2(q[0] - p[0], -(q[1] - p[1])) * 180 / Math.PI;
+      return (deg + 360) % 360;
+    },
+    compass: function (a, b) {
+      const N = ['north', 'north-east', 'east', 'south-east',
+                 'south', 'south-west', 'west', 'north-west'];
+      return N[Math.round(VF.locations.bearing(a, b) / 45) % 8];
+    },
+    /* How deep it is, and the shallowest a hull may draw to get in. Answered
+       here so that a place with neither reads as open water rather than as a
+       crash. */
+    sounding: function (id) { const l = BY_ID[id]; return (l && l.depthM) || 0; },
+    shoal: function (id) { const l = BY_ID[id]; return l && l.shoal !== undefined ? l.shoal : 99; }
   };
 })(window.VF = window.VF || {});

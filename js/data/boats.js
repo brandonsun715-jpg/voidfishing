@@ -11,10 +11,31 @@
      hunter      you can go looking for the things that were finding you.
      voidship    water that is not water. Beneath, and above.
 
+   AND THE RULE THE NUMBERS ARE WRITTEN AGAINST NOW: no hull is better than
+   the last one at everything. Every hull has two ratings that pull in
+   opposite directions —
+
+     draught   how much water she needs under her. It goes UP with size, and
+               water shallower than her draught is water she cannot work.
+     pressure  how deep she can work. It goes UP with size too.
+
+   So the skiff and THE UNDERSIDE each reach water the other cannot, and every
+   hull in between owns a band. The Glass Flats are ankle deep and the last
+   water is not, and there is no boat that does both. Which one is under you is
+   a decision you make in the yard before a trip, and switching is free: you
+   own them all once you have bought them.
+
    MODULES are five slots that every hull has and that better hulls give more
    levels of. A module is not a stat line: sonar is the only way to see
    anything in the trench, research is the only way to identify what you did
    not land, and the hold is the only reason to be out for more than one cast.
+
+   And they are not free. Every level spends BERTH, a budget the hull has, so
+   a loadout is a build rather than a shopping list — THE UNDERSIDE has five
+   slots of everything and cannot afford two thirds of it. Fitting also puts
+   weight in her: displacement adds draught, so a fully instrumented survey
+   vessel draws more than a bare one and loses shoal water for it. Stripping a
+   boat down to get into somewhere shallow is a real thing you will do.
 
    PAINT and TRIM are cosmetic and are meant to be. The boat is on screen
    under the angler in every single frame of the game, so it is the one place
@@ -35,6 +56,10 @@
       hull: '#6a5a44', trim: '#3a3024',
       /* how much of a crossing this hull can take before it starts costing */
       integrity: 60, speed: 1.00,
+      /* She draws almost nothing and is rated for almost nothing, which is
+         the whole of her: there is water she can get into that nothing else
+         in this list will ever reach. */
+      draught: 0.40, pressure: 200, berth: 3,
       unlocks: [] },
 
     { id: 'dory', name: 'The Long Dory', rank: 1, cost: 48000, level: 8,
@@ -46,6 +71,9 @@
       slots: { engine: 2, sonar: 1, hold: 2, survey: 0, tackle: 2 },
       hull: '#7a6448', trim: '#2e3a46',
       integrity: 100, speed: 1.35,
+      /* Bare, she just clears the Glass Flats. Fitted, she does not — which
+         is the first time the game asks you to take something off. */
+      draught: 0.90, pressure: 700, berth: 6,
       unlocks: ['crossings'] },
 
     { id: 'survey', name: 'Survey Vessel Wren', rank: 2, cost: 420000, level: 22,
@@ -54,9 +82,13 @@
             'afterdeck. It is not fast and it is not pretty and it is the first thing ' +
             'you have owned that can be sent somewhere with a question.',
       len: 1.44, beam: 1.06, sheer: 0.30, prow: 0.52, cabin: 0.62, mast: 0.7,
-      slots: { engine: 3, sonar: 3, hold: 3, survey: 3, tackle: 2 },
+      /* tackle 3, not 2: the dory already had 2, and a hull that costs eight
+         times as much and gives you nothing in a column is a plateau nobody
+         can see and everybody feels. */
+      slots: { engine: 3, sonar: 3, hold: 3, survey: 3, tackle: 3 },
       hull: '#8a8478', trim: '#1f3a4a',
       integrity: 170, speed: 1.60,
+      draught: 1.80, pressure: 2000, berth: 11,
       unlocks: ['crossings', 'expeditions'] },
 
     { id: 'hunter', name: 'The Long Hunter', rank: 3, cost: 2600000, level: 40,
@@ -65,10 +97,17 @@
             'of line on a drum that is not for fish. Everything on it is for holding on to ' +
             'something much larger than the boat while it decides what to do.',
       len: 1.58, beam: 1.14, sheer: 0.26, prow: 0.46, cabin: 0.52, mast: 0.9,
-      slots: { engine: 4, sonar: 4, hold: 4, survey: 3, tackle: 4 },
+      /* survey 4, not 3, for the same reason. */
+      slots: { engine: 4, sonar: 4, hold: 4, survey: 4, tackle: 4 },
       hull: '#4a4e52', trim: '#7a2e28',
       integrity: 300, speed: 1.85,
-      unlocks: ['crossings', 'expeditions', 'hunt'] },
+      draught: 2.60, pressure: 3500, berth: 16,
+      /* `hunt` is gone. There is no hunt system and there never was one —
+         nothing in the game ever asked whether this hull could do it, so it
+         was a line of fiction sitting in a capability list. What she is
+         actually for is the deep water, and `pressure` says that in a number
+         something reads. */
+      unlocks: ['crossings', 'expeditions'] },
 
     { id: 'voidship', name: 'THE UNDERSIDE', rank: 4, cost: 40000000, level: 60,
       tag: 'not a boat for water',
@@ -80,26 +119,38 @@
       hull: '#241a3c', trim: '#b48aff',
       integrity: 520, speed: 2.20,
       glow: '#b48aff',
-      unlocks: ['crossings', 'expeditions', 'hunt', 'descent'] }
+      /* Five slots of everything and twenty-two berth to fit thirty-five
+         levels into, so she is the one hull where the fitting is genuinely a
+         choice. And she draws more than anything else afloat: there is a
+         quiet shore she will never get into again. */
+      draught: 3.40, pressure: 99999, berth: 22,
+      unlocks: ['crossings', 'expeditions'] }
   ];
 
   /* ------------------------------------------------------------ modules
 
      `at(n)` is what level n of the module does, as a plain object the rest of
      the game reads. Levels are bought one at a time and cost more each time,
-     which is what stops a new hull being an instant full refit. */
+     which is what stops a new hull being an instant full refit.
+
+     `berth` is what one level of it costs out of the hull's budget, and it is
+     not the same for all five: sonar and survey gear are a bench of
+     instruments and a winch, and a rod holder is a rod holder. That is the
+     whole of what makes a loadout a build — the two expensive ones are also
+     the two that open the most, so fitting both properly means going without
+     something else. */
 
   const MODULES = [
     { id: 'engine', name: 'Engine', icon: '~',
       desc: 'How fast a crossing goes, and how much of the weather it shrugs off.',
-      base: 9000, step: 2.1,
+      berth: 1, base: 9000, step: 2.1,
       at: function (n) { return { speed: 1 + n * 0.30, wear: 1 - n * 0.10 }; },
       line: function (n) { return n ? 'crossings ' + (1 + n * 0.30).toFixed(2) + '× faster' : 'oars'; } },
 
     { id: 'sonar', name: 'Sonar', icon: '((',
       desc: 'Sees what the water will not show you: contacts in the dark, anomalies, and ' +
             'the shape of a thing before it surfaces.',
-      base: 26000, step: 2.4,
+      berth: 2, base: 26000, step: 2.4,
       at: function (n) { return { range: n, contacts: n > 0, ident: n >= 3 }; },
       line: function (n) {
         if (!n) return 'nothing but the naked eye';
@@ -110,7 +161,7 @@
     { id: 'hold', name: 'The Hold', icon: '[]',
       desc: 'Somewhere to put things. Every level is five more kept catches and one more ' +
             'thing you can carry out of an expedition.',
-      base: 14000, step: 1.9,
+      berth: 1, base: 14000, step: 1.9,
       at: function (n) { return { keep: n * 5, carry: n }; },
       line: function (n) { return n ? '+' + (n * 5) + ' kept · ' + n + ' recovered per expedition'
                                     : 'a bucket'; } },
@@ -118,7 +169,7 @@
     { id: 'survey', name: 'Survey Gear', icon: '+',
       desc: 'Winch, sample jars, a camera that works below the light. It identifies what ' +
             'you did not manage to land, which is most of what is out there.',
-      base: 55000, step: 2.6,
+      berth: 2, base: 55000, step: 2.6,
       at: function (n) { return { identify: n > 0, clues: n * 0.22, legs: n }; },
       line: function (n) {
         if (!n) return 'no instruments';
@@ -128,7 +179,7 @@
     { id: 'tackle', name: 'Deck Tackle', icon: 'T',
       desc: 'Rod holders, a gimbal and a fighting chair. It does not make the fish smaller. ' +
             'It makes holding on to one a job you can do sitting down.',
-      base: 18000, step: 2.0,
+      berth: 1, base: 18000, step: 2.0,
       at: function (n) { return { bar: 1 + n * 0.07, line: 1 + n * 0.09 }; },
       line: function (n) { return n ? 'bar +' + (n * 7) + '% · line +' + (n * 9) + '%'
                                     : 'the rod, in your hands'; } }

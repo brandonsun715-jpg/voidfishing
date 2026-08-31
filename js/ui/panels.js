@@ -2691,6 +2691,11 @@
      draws and hit-tests; this decides what is on it. */
 
   let mapNodes = [];
+  /* Where the chart is looking. Kept across opens, because a chart you have
+     dragged somewhere and then have to drag again every time is a chart
+     nobody drags. Null means "fit everything", which is what the first open
+     and the recentre button both do. */
+  let mapView = null;
   let mapSel = null;
   let mapRaf = 0;
   let mapGen = 0;   // the chart a running loop belongs to
@@ -2736,6 +2741,9 @@
     const chart = U.el('div', 'map-chart');
     const cv = U.el('canvas', 'map-canvas');
     chart.appendChild(cv);
+    const home = U.el('button', 'map-home', 'the whole chart');
+    home.addEventListener('click', function () { mapView = null; VF.audio.click(); });
+    chart.appendChild(home);
     wrap.appendChild(chart);
 
     const side = U.el('div', 'map-side scroll');
@@ -2783,9 +2791,17 @@
       }
       const g = cv.getContext('2d');
       g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (!mapView) mapView = VF.mapArt.fit(mapNodes, w, h);
       VF.mapArt.draw(g, w, h, mapNodes, {
         time: (performance.now() - t0) / 1000,
-        selected: mapSel, current: d.location
+        selected: mapSel, current: d.location,
+        view: mapView,
+        /* the boat's two ratings, so the water it cannot work is marked on
+           the chart rather than explained in a menu */
+        boat: VF.boat && VF.boat.afloat()
+          ? { draught: VF.boat.draught(), pressure: VF.boat.pressure(),
+              name: VF.boat.hull().name }
+          : null
       });
     }
 
@@ -2798,22 +2814,107 @@
     function pickAt(e) {
       const r = cv.getBoundingClientRect();
       if (!r.width || !r.height) return null;
-      return VF.mapArt.hit(mapNodes, e.clientX - r.left, e.clientY - r.top, r.width, r.height);
+      return VF.mapArt.hit(mapNodes, e.clientX - r.left, e.clientY - r.top);
     }
-    cv.addEventListener('click', function (e) {
+    /* Dragging the chart, and the distinction that matters: a press that
+       moved is a drag and a press that did not is a click on a mark. Without
+       it, every drag also selects whatever you happened to start on. */
+    let drag = null;
+    cv.addEventListener('pointerdown', function (e) {
+      cv.setPointerCapture(e.pointerId);
+      drag = { x: e.clientX, y: e.clientY, cx: mapView.cx, cy: mapView.cy, moved: 0 };
+    });
+    cv.addEventListener('pointerup', function (e) {
+      const was = drag;
+      drag = null;
+      try { cv.releasePointerCapture(e.pointerId); } catch (err) { /* already gone */ }
+      if (was && was.moved > 5) return;
       const nd = pickAt(e);
-      if (!nd || nd.p.id === mapSel) return;
-      mapSel = nd.p.id;
-      VF.audio.click();
-      paintSide();
+      if (nd) {
+        if (nd.p.id === mapSel) return;
+        mapSel = nd.p.id;
+        VF.audio.click();
+        paintSide();
+        return;
+      }
+      /* Home is a mark too, and clicking it should do what clicking a mark
+         does — the card is already pinned at the top of the rail. */
+      const r2 = cv.getBoundingClientRect();
+      const at = (VF.placeData && VF.placeData.location.at) || [0, 0];
+      const hs = VF.mapArt.toScreen(mapView, at[0], at[1], r2.width, r2.height);
+      if (Math.hypot(e.clientX - r2.left - hs.x, e.clientY - r2.top - hs.y) < 22) {
+        VF.audio.click();
+        return;
+      }
+      sound(e, r2);
     });
     cv.addEventListener('pointermove', function (e) {
-      cv.style.cursor = pickAt(e) ? 'pointer' : 'default';
+      if (drag) {
+        drag.moved += Math.abs(e.movementX) + Math.abs(e.movementY);
+        mapView.cx = drag.cx - (e.clientX - drag.x) / mapView.scale;
+        mapView.cy = drag.cy - (e.clientY - drag.y) / mapView.scale;
+        cv.style.cursor = 'grabbing';
+        return;
+      }
+      cv.style.cursor = pickAt(e) ? 'pointer' : 'grab';
     });
+    /* Zoom about the pointer rather than the centre, so the thing you are
+       looking at stays where you are looking. */
+    cv.addEventListener('wheel', function (e) {
+      e.preventDefault();
+      const r = cv.getBoundingClientRect();
+      const px = e.clientX - r.left, py = e.clientY - r.top;
+      const before = VF.mapArt.toWorld(mapView, px, py, r.width, r.height);
+      mapView.scale = U.clamp(mapView.scale * (e.deltaY < 0 ? 1.14 : 1 / 1.14), 6, 190);
+      const after = VF.mapArt.toWorld(mapView, px, py, r.width, r.height);
+      mapView.cx += before.x - after.x;
+      mapView.cy += before.y - after.y;
+    }, { passive: false });
+    /* ----------------------------------------------------- taking a sounding
+
+       Pressing empty, unsurveyed water with survey gear aboard. What comes
+       back is one line — the same `hint` the discovery system already holds —
+       and never a marker. It is information, which is the position the rumour
+       system takes about everything, and the reason to have it is that a
+       chart with blank on it should be a chart you can DO something at.
+
+       Without the gear it is what it looks like: nothing out there but water,
+       as far as you can tell from here. */
+    function sound(e, r2) {
+      const p2 = VF.mapArt.toWorld(mapView, e.clientX - r2.left, e.clientY - r2.top,
+                                   r2.width, r2.height);
+      if (VF.mapArt.surveyed(VF.mapArt.coverage(mapNodes), p2.x, p2.y)) return;
+      const lvl = VF.boat ? VF.boat.level('survey') : 0;
+      if (!lvl) {
+        VF.audio.error();
+        VF.toast.plain('no soundings out there, and nothing aboard to take one with.',
+                       null, 3200);
+        return;
+      }
+      /* How far the gear reaches. Every level is another league of it. */
+      const reach = 1.6 + lvl * 1.1;
+      let best = null, bd = reach;
+      VF.secrets.list.forEach(function (sc) {
+        if (!sc.loc || !sc.loc.at) return;
+        if (VF.locations.isRegistered(sc.loc.id)) return;   // already found
+        const dx = sc.loc.at[0] - p2.x, dy = sc.loc.at[1] - p2.y;
+        const dd = Math.hypot(dx, dy);
+        if (dd < bd) { bd = dd; best = sc; }
+      });
+      VF.audio.click();
+      if (!best) {
+        VF.toast.plain('sounded. water, and more water.', null, 3000);
+        return;
+      }
+      VF.toast.show('<strong>' + Math.round(bd * 10) / 10 + ' leagues, or thereabouts</strong>' +
+                    '<br><span style="color:var(--ink-3)">' + U.esc(best.loc.hint) + '</span>',
+                    null, 6000);
+    }
+
     // the chart is a control, so it answers the keyboard too
     cv.tabIndex = 0;
     cv.setAttribute('role', 'listbox');
-    cv.setAttribute('aria-label', 'Fishing spots, by depth');
+    cv.setAttribute('aria-label', 'The chart. Fishing spots by position.');
     cv.addEventListener('keydown', function (e) {
       const open = mapNodes.filter(function (nd) { return nd.p.unlocked; });
       if (!open.length) return;
@@ -2941,6 +3042,27 @@
       card.appendChild(wl);
     }
 
+    /* What it is like to get in, and whether the boat under you can. The mark
+       on the chart already carries a cross when it cannot; this is where you
+       read the reason and what to do about it, because a symbol you have to
+       learn is worse than a sentence you can read once. */
+    const shoal = loc.shoal === undefined ? 99 : loc.shoal;
+    const wl = U.el('div', 'spot-line');
+    wl.appendChild(U.el('span', 'k', 'water '));
+    wl.appendChild(document.createTextNode(
+      (loc.depthM ? loc.depthM + ' m down' : 'no measured bottom') +
+      (shoal < 20 ? ', and ' + shoal.toFixed(1) + ' m to get in' : '')));
+    card.appendChild(wl);
+
+    const no = VF.boat && VF.boat.afloat() ? VF.boat.whyNot(sel.id) : null;
+    if (no) {
+      card.appendChild(U.el('p', 'fit-say warn', no.line));
+      const other = VF.boat.hullsFor(sel.id).filter(function (x) { return x.fits; })[0];
+      card.appendChild(U.el('p', 'fit-say',
+        other ? other.hull.name.toLowerCase() + ' would.'
+              : 'nothing in the yard will, yet.'));
+    }
+
     const acts = U.el('div', 'spot-actions');
     if (sel.id === d.location) {
       acts.appendChild(U.el('div', 'spot-here', 'you are here'));
@@ -2949,7 +3071,8 @@
       ch.addEventListener('click', function () { VF.audio.click(); open('shop', 'charter'); });
       acts.appendChild(ch);
     } else {
-      const go = U.el('button', 'btn btn-primary', 'Travel');
+      const go = U.el('button', 'btn btn-primary' + (no ? '' : ''), 'Travel');
+      go.disabled = !!no;
       go.addEventListener('click', function () { travel(sel.id); });
       acts.appendChild(go);
     }
@@ -3008,6 +3131,20 @@
       close();
       if (VF.place) VF.place.enter();
       return;
+    }
+    /* Can the boat you are in actually work that water? A hull that draws too
+       much or is not rated deep enough is turned back HERE, with the reason,
+       rather than at the far end — and the reason names another hull you own
+       that could, because a refusal without an answer is a locked door. */
+    if (VF.boat && VF.boat.afloat()) {
+      const no = VF.boat.whyNot(id);
+      if (no) {
+        VF.audio.error();
+        const other = VF.boat.hullsFor(id).filter(function (x) { return x.fits; })[0];
+        VF.toast.plain(no.line + (other ? ' take ' + other.hull.name.toLowerCase() + '.'
+                                        : ' nothing you own will.'), 'warn', 5200);
+        return;
+      }
     }
     /* And leaving it is putting out: step off the boards first, then the
        ordinary travel happens exactly as it always did. */

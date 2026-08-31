@@ -197,6 +197,10 @@
      game and that is the point of it. */
   const LOCATION = {
     id: 'harbour', name: 'Vault Harbour', level: 0, port: 1,
+    /* The origin of the chart, and it is the origin because this is where you
+       come back to. Everything else in js/data/locations.js is measured from
+       here in leagues east and south. */
+    at: [0, 0], shoal: 99, depthM: 0,
     sky: ['#141d33', '#33486a'], water: ['#1d2f42', '#0a1119'], glow: '#e8c88a',
     fog: '#2b3c52', fogAmt: 0.26, stars: 0.5, starTint: '#dce8f5',
     depth: 0.45, void: 0.00

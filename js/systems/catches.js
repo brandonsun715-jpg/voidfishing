@@ -3,7 +3,21 @@
 (function (VF) {
   'use strict';
 
-  const KEEP_LIMIT = 200;
+  /* HOW MANY YOU CAN KEEP.
+
+     This was a hardcoded 200, and the hold module — fourteen thousand Jia,
+     with "every level is five more kept catches" written on the tin — added
+     nothing to it, because nobody ever put the two numbers together. Two
+     hundred is also not a ceiling anybody reaches, so the module's entire
+     selling point was invisible twice over.
+
+     Sixty is a ceiling a mid-game player meets. A save already over it keeps
+     everything it has and simply cannot add — every caller tests `>=`, so
+     that falls out for free and nothing is ever thrown away. */
+  const KEEP_BASE = 60;
+  function keepLimit() {
+    return KEEP_BASE + (VF.boat ? VF.boat.keepBonus() : 0);
+  }
 
   function last() { return VF.fishing.S.lastResult; }
 
@@ -43,7 +57,7 @@
          none of it and the aquarium says "unrecorded" rather than guessing. */
       weather: c.weather, time: c.time, bait: c.bait, rod: c.rod
     });
-    if (d.kept.length > KEEP_LIMIT) d.kept.shift();
+    if (d.kept.length > keepLimit()) d.kept.shift();
     VF.audio.click();
     VF.bus.emit('catch:kept', c);
     VF.fishing.resolveCatch();
@@ -112,5 +126,9 @@
     return total;
   }
 
-  VF.catches = { sell: sell, keep: keep, release: release, sellKept: sellKept, sellAllKept: sellAllKept, KEEP_LIMIT: KEEP_LIMIT };
+  VF.catches = { sell: sell, keep: keep, release: release, sellKept: sellKept,
+                 sellAllKept: sellAllKept, keepLimit: keepLimit, KEEP_BASE: KEEP_BASE,
+                 /* kept as an accessor so the two existing call sites read the
+                    live number rather than a frozen one */
+                 get KEEP_LIMIT() { return keepLimit(); } };
 })(window.VF = window.VF || {});

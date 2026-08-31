@@ -1109,15 +1109,18 @@ input[type=range]::-moz-range-thumb {
    needs the height to mean anything. */
 
 .panel-map {
-  width: min(940px, 95vw);
-  /* the column only means something with height behind it, so this panel is
+  width: min(1120px, 96vw);
+  /* the chart only means something with room behind it, so this panel is
      sized rather than left to fit its contents like the others */
-  height: min(720px, 88vh);
+  height: min(760px, 90vh);
 }
 .map-body { padding: 0; overflow: hidden; display: flex; }
 .map-wrap {
   display: grid;
-  grid-template-columns: minmax(240px, 320px) 1fr;
+  /* The chart is the subject and gets the room. It was the narrow column
+     because it used to BE a column — one plumb line, which needs height and
+     no width at all. A plan view needs the opposite. */
+  grid-template-columns: 1fr minmax(300px, 360px);
   width: 100%; height: 100%; min-height: 0;
 }
 .map-chart {
@@ -1125,7 +1128,17 @@ input[type=range]::-moz-range-thumb {
   border-right: 1px solid var(--line);
   background: #05070c;
   min-height: 380px;
+  touch-action: none;            /* it is dragged and pinched */
 }
+/* Recentre, because a chart you can drag is a chart you can lose. */
+.map-home {
+  position: absolute; left: 12px; top: 12px; z-index: 2;
+  padding: 5px 10px; border-radius: 8px;
+  background: rgba(10,14,20,0.72);
+  border: 1px solid rgba(150,190,230,0.20);
+  color: var(--ink-2); font: inherit; font-size: 10.5px; cursor: pointer;
+}
+.map-home:hover { background: rgba(255,255,255,0.10); color: var(--ink); }
 .map-canvas { display: block; width: 100%; height: 100%; }
 .map-canvas:focus-visible { outline: 1px solid var(--accent); outline-offset: -2px; }
 .map-side { padding: 18px 20px 22px; min-width: 0; overflow-y: auto; }

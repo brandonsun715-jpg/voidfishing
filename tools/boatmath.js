@@ -106,6 +106,46 @@ const path = require('path');
     VF.boat.repair();
     step('repair returns it to whole', VF.boat.integrity() === 1);
 
+    /* --- 6. the berth budget cannot be overspent ---
+
+       The fitting is a build rather than a shopping list, and the only way
+       that is true is if the budget is enforced in `fit` rather than drawn in
+       the interface and hoped for. */
+    const b2 = VF.boat.shape();
+    setup('voidship', 0);
+    for (const k in b2.bought) b2.bought[k] = 5;
+    for (const k in b2.modules) b2.modules[k] = 0;
+    VF.boat.refit();
+    step('refitting stays inside the budget', VF.boat.spent() <= VF.boat.berth(),
+         VF.boat.spent() + '/' + VF.boat.berth());
+    const over = VF.boatData.modules.map(m => VF.boat.fit(m.id, 5)).filter(Boolean).length;
+    step('and nothing can be forced past it', VF.boat.spent() <= VF.boat.berth(),
+         VF.boat.spent() + '/' + VF.boat.berth() + ' after ' + over + ' forced fits');
+
+    /* --- 7. taking things off is free and puts the water back --- */
+    const fittedDraught = VF.boat.draught();
+    VF.boat.strip();
+    step('stripping her costs nothing and lightens her',
+         VF.boat.draught() < fittedDraught,
+         fittedDraught.toFixed(2) + ' → ' + VF.boat.draught().toFixed(2));
+    step('and she still owns everything she bought',
+         VF.boatData.modules.every(m => VF.boat.owned(m.id) === 5));
+    VF.boat.refit();
+    step('and putting it back is one button', VF.boat.spent() > 0,
+         VF.boat.spent() + ' berth back aboard');
+
+    /* --- 8. the hold does what the tin says --- */
+    setup('voidship', 0);
+    for (const k in b2.modules) b2.modules[k] = 0;
+    const bare = VF.catches.keepLimit();
+    b2.bought.hold = 5; VF.boat.fit('hold', 5);
+    step('the hold raises how many you can keep',
+         VF.catches.keepLimit() > bare,
+         bare + ' → ' + VF.catches.keepLimit());
+    step('by exactly what it advertises',
+         VF.catches.keepLimit() - bare === VF.boat.keepBonus(),
+         '+' + VF.boat.keepBonus());
+
     return out;
   });
 

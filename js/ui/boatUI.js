@@ -105,20 +105,38 @@
     row.appendChild(head);
     row.appendChild(U.el('div', 'exp-obj', x.tag));
 
-    /* What it unlocks, not what it multiplies. A hull that reads as a speed
-       bonus is a hull nobody has a reason to want. */
-    if (x.unlocks.length) {
-      const f = U.el('div', 'exp-found');
-      const WORDS = {
-        crossings: 'crossings become gameplay',
-        expeditions: 'expeditions',
-        hunt: 'hunting the big ones',
-        descent: 'water that is not water'
-      };
-      x.unlocks.forEach(function (u) {
-        f.appendChild(U.el('span', 'exp-chip', WORDS[u] || u));
+    /* What it opens and what it closes. A hull that reads as a speed bonus is
+       a hull nobody has a reason to want — and one that reads as strictly
+       better than the last one is a ladder, which is the thing this table
+       stopped being. Both ratings are on every row, because the interesting
+       fact about the biggest boat in the game is the water it cannot enter. */
+    const f = U.el('div', 'exp-found');
+    const WORDS = { crossings: 'crossings become gameplay', expeditions: 'expeditions' };
+    x.unlocks.forEach(function (u) {
+      f.appendChild(U.el('span', 'exp-chip', WORDS[u] || u));
+    });
+    f.appendChild(U.el('span', 'exp-chip', 'draws ' + (x.draught || 0).toFixed(2) + ' m'));
+    f.appendChild(U.el('span', 'exp-chip',
+      x.pressure >= 99999 ? 'rated for anything' : 'down to ' + x.pressure + ' m'));
+    f.appendChild(U.el('span', 'exp-chip', (x.berth || 0) + ' berth'));
+    row.appendChild(f);
+
+    /* And, once you own her, the water she would open and the water she would
+       shut — the actual question the yard is here to answer. */
+    if (owned && !here && VF.locations) {
+      const now = [], then = [];
+      VF.locations.list.forEach(function (loc) {
+        if (!VF.locations.isUnlocked(loc.id)) return;
+        const fits = (x.draught || 0) <= VF.locations.shoal(loc.id) &&
+                     (x.pressure || 0) >= VF.locations.sounding(loc.id);
+        (fits ? then : now).push({ id: loc.id, name: loc.name.toLowerCase() });
       });
-      row.appendChild(f);
+      const gain = then.filter(function (l) { return !!VF.boat.whyNot(l.id); });
+      const lose = now.filter(function (l) { return !VF.boat.whyNot(l.id); });
+      if (gain.length) row.appendChild(U.el('div', 'exp-obj good',
+        'she would open ' + list(gain.map(function (l) { return l.name; })) + '.'));
+      if (lose.length) row.appendChild(U.el('div', 'exp-obj warn',
+        'and shut ' + list(lose.map(function (l) { return l.name; })) + '.'));
     }
 
     if (!owned) {
@@ -142,13 +160,80 @@
   function fitting(body, ui) {
     const d = VF.state.data;
     const h = VF.boat.hull();
-    body.appendChild(U.el('p', 'panel-note',
-      'five slots. what is in them is most of what you can do out there.'));
+    body.appendChild(U.el('p', 'fit-say',
+      'five slots, and she will not carry all of them. what is aboard is most of ' +
+      'what you can do out there — and how much water she needs under her.'));
+
+    /* --- the budget, and what it costs her --------------------------------
+
+       Both numbers up top and both of them live, because the whole design is
+       that fitting her out is a decision with a price, and a price you only
+       meet at the chart when you are refused is a bug report. */
+    const spent = VF.boat.spent(), berth = VF.boat.berth();
+    const bar = U.el('div', 'berth');
+    const fill = U.el('div', 'berth-fill');
+    fill.style.width = Math.round(spent / Math.max(1, berth) * 100) + '%';
+    bar.appendChild(fill);
+    for (let i = 1; i < berth; i++) {
+      const tick = U.el('div', 'berth-tick');
+      tick.style.left = (i / berth * 100) + '%';
+      bar.appendChild(tick);
+    }
+    const berthRow = U.el('div', 'berth-row');
+    berthRow.appendChild(U.el('div', 'berth-k', 'berth'));
+    berthRow.appendChild(bar);
+    berthRow.appendChild(U.el('div', 'berth-v', spent + ' / ' + berth));
+    body.appendChild(berthRow);
+
+    const meta = U.el('div', 'spot-meta');
+    [['draught', VF.boat.draught().toFixed(2) + ' m'],
+     ['bare', (h.draught || 0).toFixed(2) + ' m'],
+     ['rated to', h.pressure >= 99999 ? 'anything' : h.pressure + ' m']
+    ].forEach(function (kv) {
+      const c = U.el('div', 'spot-stat');
+      c.appendChild(U.el('span', 'k', kv[0]));
+      c.appendChild(U.el('span', 'v', kv[1]));
+      meta.appendChild(c);
+    });
+    body.appendChild(meta);
+
+    /* --- and the water it costs her --------------------------------------
+
+       Every place she can no longer get into as she is fitted right now, and
+       every place nothing on this hull will ever reach. Not a warning: a list
+       of names, so the tradeoff is a thing you read rather than a thing you
+       discover. */
+    const shut = [], deep = [];
+    VF.locations.list.forEach(function (loc) {
+      if (!VF.locations.isUnlocked(loc.id)) return;
+      const no = VF.boat.whyNot(loc.id);
+      if (!no) return;
+      (no.kind === 'shoal' ? shut : deep).push(loc.name.toLowerCase());
+    });
+    if (shut.length) {
+      body.appendChild(U.el('p', 'fit-say warn',
+        'as she sits she will not get into ' + list(shut) +
+        '. take something off and she will.'));
+    }
+    if (deep.length) {
+      body.appendChild(U.el('p', 'fit-say',
+        'and she is not rated deep enough for ' + list(deep) + '. that is the hull, not the load.'));
+    }
+
+    const tools = U.el('div', 'berth-tools');
+    const off = U.el('button', 'btn btn-sm', 'strip her');
+    off.disabled = !spent;
+    off.addEventListener('click', function () { VF.boat.strip(); ui.refresh('fit'); });
+    const on = U.el('button', 'btn btn-sm', 'load her up');
+    on.addEventListener('click', function () { VF.boat.refit(); ui.refresh('fit'); });
+    tools.appendChild(off); tools.appendChild(on);
+    body.appendChild(tools);
 
     const grid = U.el('div', 'mod-grid');
     VF.boatData.modules.forEach(function (m) {
-      const cap = (h.slots || {})[m.id] || 0;
+      const cap = VF.boat.slotCap(m.id);
       const have = VF.boat.level(m.id);
+      const own = VF.boat.owned(m.id);
       const card = U.el('div', 'mod' + (have ? ' on' : '') + (cap ? '' : ' locked'));
 
       const head = U.el('div', 'mod-head');
@@ -157,28 +242,57 @@
       card.appendChild(head);
       card.appendChild(U.el('div', 'mod-desc', m.desc));
 
-      const bar = U.el('div', 'mod-bar');
+      const segs = U.el('div', 'mod-bar');
       for (let i = 0; i < Math.max(1, cap); i++) {
-        bar.appendChild(U.el('div', 'mod-seg' + (i < have ? ' on' : '')));
+        /* three states, because owning it and carrying it are different: on,
+           owned but ashore, and not bought. */
+        segs.appendChild(U.el('div', 'mod-seg' +
+          (i < have ? ' on' : i < own ? ' owned' : '')));
       }
-      card.appendChild(bar);
+      card.appendChild(segs);
       card.appendChild(U.el('div', 'mod-desc', m.line(have)));
+      card.appendChild(U.el('div', 'mod-desc dim',
+        (m.berth || 1) + ' berth a level' + (own > have ? ' · ' + (own - have) + ' ashore' : '')));
 
       if (cap) {
-        const cost = VF.boatData.modCost(m.id, have);
-        const btn = U.el('button', 'mod-buy',
-          have >= cap ? 'fitted' : 'fit — ◈ ' + U.money(cost));
-        btn.disabled = have >= cap || cost > d.money;
-        btn.addEventListener('click', function () {
-          if (VF.boat.buyModule(m.id)) ui.refresh();
-        });
-        card.appendChild(btn);
+        const row = U.el('div', 'mod-row');
+        /* aboard / ashore, when you own more than she is carrying */
+        if (have < Math.min(own, cap)) {
+          const up = U.el('button', 'mod-buy',
+            VF.boat.berthLeft() >= (m.berth || 1) ? 'put it aboard' : 'no berth for it');
+          up.disabled = VF.boat.berthLeft() < (m.berth || 1);
+          up.addEventListener('click', function () { VF.boat.fit(m.id, have + 1); ui.refresh('fit'); });
+          row.appendChild(up);
+        }
+        if (have > 0) {
+          const dn = U.el('button', 'mod-buy ghost', 'take it off');
+          dn.addEventListener('click', function () { VF.boat.fit(m.id, have - 1); ui.refresh('fit'); });
+          row.appendChild(dn);
+        }
+        if (own < 5) {
+          const cost = VF.boatData.modCost(m.id, own);
+          const buy = U.el('button', 'mod-buy', 'buy — ◈ ' + U.money(cost));
+          buy.disabled = cost > d.money;
+          buy.addEventListener('click', function () {
+            if (VF.boat.buyModule(m.id)) ui.refresh('fit');
+          });
+          row.appendChild(buy);
+        }
+        card.appendChild(row);
       } else {
-        card.appendChild(U.el('div', 'mod-desc', 'a bigger hull carries this.'));
+        card.appendChild(U.el('div', 'mod-desc',
+          own ? 'you own ' + own + ' of these. a bigger hull carries them.'
+              : 'a bigger hull carries this.'));
       }
       grid.appendChild(card);
     });
     body.appendChild(grid);
+  }
+
+  /* "a, b and c" — a list a person would say out loud. */
+  function list(a) {
+    if (a.length === 1) return a[0];
+    return a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
   }
 
   /* --------------------------------------------------------------- paint */

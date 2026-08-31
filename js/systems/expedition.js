@@ -47,6 +47,14 @@
   function begin(id) {
     const def = VF.expeditionData.get(id);
     if (!def || started(id)) return false;
+    /* The Survey Vessel Wren is described as "the first thing you have owned
+       that can be sent somewhere with a question", and until now nothing
+       asked. `can('expeditions')` was a string in a list that no line of code
+       had ever read. */
+    if (VF.boat && !VF.boat.can('expeditions')) {
+      VF.toast.plain('you need a boat with a bench of instruments on it.', 'warn', 3600);
+      return false;
+    }
     if (current()) {
       VF.toast.plain('one at a time. finish what you are on.', 'warn', 3600);
       return false;

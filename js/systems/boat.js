@@ -38,6 +38,22 @@
     }
     const b = d.boat;
     if (!b.modules || typeof b.modules !== 'object') b.modules = { engine: 0, sonar: 0, hold: 0, survey: 0, tackle: 0 };
+    /* OWNING A MODULE AND HAVING IT ABOARD ARE DIFFERENT THINGS.
+
+       They used to be the same, and that made the draught rule a punishment:
+       buy the sonar, gain a foot of draught, lose the Glass Flats forever.
+       `bought` is what you paid for and never lose; `modules` is what is
+       bolted on today. Taking something off costs nothing and putting it back
+       costs nothing, so stripping her down to get into somewhere shallow is a
+       thing you do in thirty seconds in the yard rather than a thing you
+       regret at the chart.
+
+       A save from before this existed owns exactly what it has fitted, which
+       is the only reading of it that loses nobody anything. */
+    if (!b.bought || typeof b.bought !== 'object') {
+      b.bought = { engine: 0, sonar: 0, hold: 0, survey: 0, tackle: 0 };
+      for (const k in b.modules) b.bought[k] = b.modules[k] | 0;
+    }
     if (!Array.isArray(b.owned) || !b.owned.length) b.owned = ['skiff'];
     if (!Array.isArray(b.paints) || !b.paints.length) b.paints = ['work'];
     if (!Array.isArray(b.trims)) b.trims = [];
@@ -50,6 +66,68 @@
   function hull() { return VF.boatData.hull(shape().hull); }
   function tierRank() { return hull().rank; }
   function can(what) { return hull().unlocks.indexOf(what) >= 0; }
+
+  /* ---------------------------------------------------- what she can work
+
+     Two ratings pulling in opposite directions, and between them every hull
+     owns a band of water rather than a place on a ladder. See the header of
+     js/data/boats.js for the argument; this is the arithmetic.
+
+     DRAUGHT is how much water she needs under her, and it goes up with what
+     you have bolted to her, because a bench of instruments and a winch weigh
+     something. That is the one number in this game that gets WORSE as you
+     spend money on it, and it is deliberate: it is why you will one day take
+     the sonar off to get into the Glass Flats. */
+
+  function spent() {
+    let n = 0;
+    /* `level` rather than the raw record, so a module the current hull is too
+       small to carry is not charged for — moving down a hull already stops
+       those counting, and it must stop costing berth as well. */
+    VF.boatData.modules.forEach(function (m) { n += level(m.id) * (m.berth || 1); });
+    return n;
+  }
+  function berth() { return hull().berth || 0; }
+  function berthLeft() { return berth() - spent(); }
+
+  function draught() { return (hull().draught || 0) + spent() * 0.05; }
+  function pressure() { return hull().pressure || 0; }
+
+  /* Can this boat, as she is fitted right now, work that water? Returns null
+     when she can, and the reason when she cannot — the caller wants to say
+     WHY, because "you cannot go there" with no reason is a locked door and
+     "she draws too much for it" is a fact about a boat. */
+  function whyNot(id) {
+    if (!VF.locations) return null;
+    const name = VF.locations.get(id).name;
+    const d = draught(), sh = VF.locations.shoal(id);
+    if (d > sh) {
+      return { kind: 'shoal', need: sh, has: d,
+               line: name.toLowerCase() + ' is ' + sh.toFixed(1) + ' m of water and she draws ' +
+                     d.toFixed(2) + '. she will not get in.' };
+    }
+    const p = pressure(), so = VF.locations.sounding(id);
+    if (p < so) {
+      return { kind: 'deep', need: so, has: p,
+               line: 'the sounding at ' + name.toLowerCase() + ' is ' + so +
+                     ' m and she is rated for ' + p + '. she will not get down.' };
+    }
+    return null;
+  }
+  function canWork(id) { return !whyNot(id); }
+
+  /* Every hull you own, and whether it could work that water — what the yard
+     and the chart both show, so a refusal always comes with the answer. */
+  function hullsFor(id) {
+    const b = shape();
+    return VF.boatData.hulls.filter(function (h) { return b.owned.indexOf(h.id) >= 0; })
+      .map(function (h) {
+        /* as she would be BARE, because taking things off is always possible */
+        const bare = h.draught || 0;
+        return { hull: h, fits: bare <= VF.locations.shoal(id) &&
+                                (h.pressure || 0) >= VF.locations.sounding(id) };
+      });
+  }
 
   /* Level of a module, 0 if not fitted. Clamped by the hull, so moving DOWN a
      hull does not delete the levels — it just stops them counting until the
@@ -98,15 +176,76 @@
     return true;
   }
 
+  function owned(id) { return shape().bought[id] | 0; }
+
+  /* The most of this a hull will physically take, whatever the budget. */
+  function slotCap(id) { return (hull().slots || {})[id] || 0; }
+
+  /* Buying it, and having it aboard, are two actions. Buying fits it too when
+     there is room, because nobody wants to buy a thing and then be told to go
+     and switch it on. */
   function buyModule(id) {
     const b = shape();
-    const cap = (hull().slots || {})[id] || 0;
-    const have = b.modules[id] | 0;
-    if (have >= cap) return false;
+    const have = owned(id);
+    if (have >= 5) return false;                  // there is no level six of anything
     const cost = VF.boatData.modCost(id, have);
     if (!VF.economy.spend(cost, 'boat')) return false;
-    b.modules[id] = have + 1;
+    b.bought[id] = have + 1;
+    const m = VF.boatData.module(id);
+    if (level(id) < slotCap(id) && berthLeft() >= (m.berth || 1)) b.modules[id] = level(id) + 1;
     VF.audio.stinger('bright', 3);
+    VF.bus.emit('boat:changed');
+    VF.bus.emit('gear:changed');
+    VF.save.save();
+    return true;
+  }
+
+  /* Put n levels of it aboard. Refused rather than clamped when there is not
+     the berth for it, so the fitting screen can say why. */
+  function fit(id, n) {
+    const b = shape();
+    const m = VF.boatData.module(id);
+    n = Math.max(0, Math.min(n | 0, owned(id), slotCap(id)));
+    const was = level(id);
+    if (n === was) return false;
+    const delta = (n - was) * (m.berth || 1);
+    if (delta > berthLeft()) return false;
+    b.modules[id] = n;
+    VF.audio.click();
+    VF.bus.emit('boat:changed');
+    VF.bus.emit('gear:changed');
+    VF.save.save();
+    return true;
+  }
+
+  /* Everything off. One button, because the reason you are here is that
+     something shallow will not let you in with all this on her. */
+  function strip() {
+    const b = shape();
+    let any = false;
+    for (const k in b.modules) { if (b.modules[k]) { b.modules[k] = 0; any = true; } }
+    if (!any) return false;
+    VF.audio.back();
+    VF.bus.emit('boat:changed');
+    VF.bus.emit('gear:changed');
+    VF.save.save();
+    return true;
+  }
+
+  /* And as much back on as she will carry, cheapest berth first, so putting
+     her back together is also one button. */
+  function refit() {
+    const b = shape();
+    const order = VF.boatData.modules.slice().sort(function (x, y) {
+      return (x.berth || 1) - (y.berth || 1);
+    });
+    for (const k in b.modules) b.modules[k] = 0;
+    order.forEach(function (m) {
+      const want = Math.min(owned(m.id), slotCap(m.id));
+      let n = 0;
+      while (n < want && berthLeft() >= (m.berth || 1)) { b.modules[m.id] = ++n; }
+    });
+    VF.audio.click();
     VF.bus.emit('boat:changed');
     VF.bus.emit('gear:changed');
     VF.save.save();
@@ -255,6 +394,9 @@
 
   VF.boat = {
     shape: shape, hull: hull, tierRank: tierRank, can: can,
+    draught: draught, pressure: pressure, berth: berth, spent: spent,
+    berthLeft: berthLeft, canWork: canWork, whyNot: whyNot, hullsFor: hullsFor,
+    owned: owned, slotCap: slotCap, fit: fit, strip: strip, refit: refit,
     level: level, has: has, mod: mod,
     ownHull: ownHull, buyHull: buyHull, setHull: setHull,
     buyModule: buyModule,
