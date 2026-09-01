@@ -57,7 +57,7 @@ const OUT = path.join(__dirname, 'sc-gl');
     if (!out.ok) { out.fail.push('the path renderer did not build'); return out; }
 
     const SS = 2;                       // supersample for the comparison
-    const W = 320, H = 220, HY = 92;
+    const W = 360, H = 250, HY = 104;
     const MIN_INK = 150;                // px at 1×, out of 70400 — a real shape
 
     /* --- the two renders ------------------------------------------------- */
@@ -186,29 +186,26 @@ const OUT = path.join(__dirname, 'sc-gl');
 
     /* --- what to test -----------------------------------------------------
 
-       Every landmark art the game can generate, from every zone, drawn at its
-       own projection — not a synthetic shape.
+       Every art function the scene can reach, one at a time. A stage-level
+       mean can hide one wrong fin in eighty thousand pixels of water; this is
+       where a single shape has nowhere to hide.
 
-       THE PROJECTION HAS TO AGREE WITH THE FRAME. VF.space.project reads the
-       layout VF.space.sync was last given, which is the real 1000×700 canvas;
-       projecting into that and then drawing into a 320×220 probe put most of
-       these shapes below the bottom edge, which is how fourteen of them came
-       to be compared as two empty pictures. So the probe frame is synced
-       first, and every case is then walked out to a distance where it draws. */
+       Landmarks are driven from the worlds the zones actually generate, at
+       their own projection. THE PROJECTION HAS TO AGREE WITH THE FRAME —
+       VF.space.project reads the layout VF.space.sync was last given, which is
+       the real canvas, so the probe frame is synced first or most of these
+       land below its bottom edge. Everything else is called directly at a size
+       that fills the frame, because a fish has no projection of its own. */
     const d = VF.state.data;
     const home = d.location;
-    /* Distance, then size. A buoy at its own range is eight pixels of frame
-       and eight pixels prove nothing, so the probe walks it in and then, if it
-       is still small, simply makes it bigger — which is the same shape through
-       the same code, drawn where it can be looked at. */
     const PROBES = [[null, 1], [0.45, 1], [0.30, 1], [0.18, 1], [0.10, 1],
                     [0.06, 1], [0.10, 2], [0.06, 3], [0.06, 6], [0.06, 14],
                     [0.06, 30]];
     /* Some of this art breathes: the far lights fade in and out on the world
        clock, and at the bottom of that breath one of them is genuinely
-       invisible. The clock is therefore pinned — the same value for both
-       renders, so nothing can tick between them — and walked forward if the
-       shape happens to be pinned at its own low ebb. */
+       invisible. The clock is pinned — the same value for both renders, so
+       nothing can tick between them — and walked forward if a shape happens to
+       be pinned at its own low ebb. */
     const CLOCKS = [0, 5, 11, 17, 23];
     const cases = [], tested = {};
 
@@ -228,7 +225,8 @@ const OUT = path.join(__dirname, 'sc-gl');
       world.all.forEach(function (l) {
         if (seen[l.art] || tested[l.art]) return;
         seen[l.art] = 1;
-        if (!VF.landmarkArt.ART[l.art]) return;
+        const art = VF.landmarkArt.ART[l.art];
+        if (!art) return;
         /* Walk it out until it puts ink down, and keep the first range that
            does. A shape culled at its own distance is not a shape that
            matches — it is a shape nobody looked at. */
@@ -239,17 +237,18 @@ const OUT = path.join(__dirname, 'sc-gl');
           const li = Object.assign({}, l);
           if (PROBES[k][0] !== null) li.d = PROBES[k][0];
           li.scale = (l.scale === undefined ? 1 : l.scale) * PROBES[k][1];
-          const p = VF.space.project(li.u, li.d, cam);
-          if (!p) continue;
-          const q = Object.assign({}, p, { x: W * 0.5 });
-          const c = { zone: zone.id, art: l.art, l: li, p: q, P: P, L: L,
-                      t: CLOCKS[ci],
+          const pr = VF.space.project(li.u, li.d, cam);
+          if (!pr) continue;
+          const q2 = Object.assign({}, pr, { x: W * 0.5 });
+          const c = { group: zone.id, name: l.art, zone: zone.id, t: CLOCKS[ci],
+                      P: P, L: L,
+                      call: function (g) { art(g, li, q2, P, L); },
+                      before: function () { d.location = zone.id; VF.space.sync(L, P); },
                       at: (PROBES[k][0] === null ? 'own' : String(PROBES[k][0])) +
-                          (PROBES[k][1] === 1 ? '' : '×' + PROBES[k][1]) };
+                          (PROBES[k][1] === 1 ? '' : '\u00d7' + PROBES[k][1]) };
           let threw = null;
           const img = draw2d(function (g) {
-            try { VF.landmarkArt.ART[l.art](g, c.l, c.p, c.P, c.L); }
-            catch (e) { threw = e && e.message || String(e); }
+            try { c.call(g); } catch (e) { threw = e && e.message || String(e); }
           });
           c.threw = threw;
           c.ref = shrink(img);
@@ -263,9 +262,96 @@ const OUT = path.join(__dirname, 'sc-gl');
       });
     });
 
+    d.location = home;
+    VF.landmarks.invalidate();
+
     Object.keys(VF.landmarkArt.ART).forEach(function (k) {
       if (!tested[k]) out.missing.push(k);
     });
+
+    /* --- and everything that is not a landmark ---------------------------
+
+       The two biggest modules in the game are fishArt at 3,324 lines and
+       rodArt at 5,007, and between them they hold every feature the renderer
+       was missing: the dashed strokes, the knocked-out holes, the one piece of
+       text, the multi-subpath fills. They are also the shapes a player looks
+       at longest. So every species and every rod goes through, not a sample. */
+    const P0 = VF.palette.update();
+    const L0 = Object.assign({}, VF.scene.L);
+    L0.w = W; L0.h = H; L0.horizonY = HY; L0.waterH = H - HY; L0.glowX = W * 0.5;
+    VF.space.sync(L0, P0);
+    const CX = W * 0.5, CY = H * 0.5;
+
+    function add(group, name, call) {
+      cases.push({ group: group, name: name, zone: group, t: 7, at: '-',
+                   P: P0, L: L0, call: call,
+                   before: function () { VF.space.sync(L0, P0); } });
+    }
+
+    if (VF.fish && VF.fishArt) {
+      VF.fish.list.forEach(function (f) {
+        add('fish', f.id, function (g) {
+          g.save(); g.translate(CX, CY);
+          VF.fishArt.draw(g, f, VF.fishArt.fitSize(f, 150), { time: 0.4, traits: [] });
+          g.restore();
+        });
+      });
+      /* and the silhouette, which is a different code path and the one the
+         shoal and the departing fish are drawn with */
+      VF.fish.list.slice(0, 12).forEach(function (f) {
+        add('silhouette', f.id, function (g) {
+          g.save(); g.translate(CX, CY);
+          VF.fishArt.drawSilhouette(g, f, VF.fishArt.fitSize(f, 140), 0.95, 0.7);
+          g.restore();
+        });
+      });
+    }
+
+    if (VF.rods && VF.rodArt) {
+      VF.rods.list.forEach(function (r) {
+        add('rod', r.id, function (g) { VF.rodArt.preview(g, r, W, H, 0.6); });
+      });
+    }
+
+    if (VF.anglerArt && VF.cosmetics) {
+      const outfits = (VF.cosmetics.all ? VF.cosmetics.all('outfit') : null) ||
+                      [VF.cosmetics.cfg('outfit')];
+      outfits.forEach(function (o, i) {
+        add('angler', (o && o.id) || ('outfit' + i), function (g) {
+          g.save(); g.translate(CX, H * 0.92);
+          VF.anglerArt.draw(g, o, H * 0.62, 1.3, { mode: 'sit', face: 1 });
+          g.restore();
+        });
+      });
+    }
+
+    if (VF.npcArt) {
+      /* the shape the scene passes: an identity, not the build table */
+      Object.keys(VF.npcArt.kinds || {}).forEach(function (k) {
+        add('npc', k, function (g) {
+          g.save(); g.translate(CX, H * 0.92);
+          VF.npcArt.draw(g, { id: k, name: k, color: '#e8c88a' }, H * 0.58, 1.1,
+                         { facing: 1, rim: 0.4, walk: 0, phase: 0, talking: false });
+          g.restore();
+        });
+      });
+    }
+
+    if (VF.boatArt && VF.boat && VF.boatData) {
+      /* drawMine reads the player's own boat, so the hull is switched under it
+         rather than a spec being built by hand — which is also the only way to
+         be sure the shape being compared is the one the game draws */
+      const hullWas = VF.state.data.boat && VF.state.data.boat.hull;
+      (VF.boatData.hulls || []).forEach(function (h) {
+        add('boat', h.id, function (g) {
+          if (VF.state.data.boat) VF.state.data.boat.hull = h.id;
+          g.save(); g.translate(CX, CY);
+          VF.boatArt.drawMine(g, Math.min(W, H) * 0.62, { time: 0.5, light: 0.6 });
+          g.restore();
+          if (VF.state.data.boat) VF.state.data.boat.hull = hullWas;
+        });
+      });
+    }
 
     /* --- run them ----------------------------------------------------------
 
@@ -278,46 +364,42 @@ const OUT = path.join(__dirname, 'sc-gl');
        regression looks like, and cost an afternoon. */
     for (let i = 0; i < cases.length; i++) {
       const c = cases[i];
-      const fn = VF.landmarkArt.ART[c.art];
-      d.location = c.zone;
-      VF.space.sync(c.L, c.P);
+      if (c.before) c.before();
       VF.state.rt.t = c.t;
 
-      let threwRef = c.threw, threwGl = null;
+      let threwRef = null, threwGl = null;
       const ref2d = draw2d(function (g) {
-        try { fn(g, c.l, c.p, c.P, c.L); }
-        catch (e) { threwRef = e && e.message || String(e); }
+        try { c.call(g); } catch (e) { threwRef = e && e.message || String(e); }
       });
       const call = function (g) {
-        try { fn(g, c.l, c.p, c.P, c.L); }
-        catch (e) { threwGl = e && e.message || String(e); }
+        try { c.call(g); } catch (e) { threwGl = e && e.message || String(e); }
       };
       const b = drawGl(call);
       c.ref = shrink(ref2d);
       c.ink = ink(c.ref);
-      const row = { zone: c.zone, art: c.art, at: c.at, ink: c.ink,
+      const row = { zone: c.group, art: c.name, at: c.at, ink: c.ink,
                     mean: 0, blob: 0, atPx: [0, 0], missed: [], bad: false };
 
-      if (threwRef) { c.threw = threwRef; }
+      c.threw = threwRef;
       if (c.threw) {
         row.bad = true;
-        out.fail.push(c.art + ': the Canvas 2D reference threw — ' + c.threw);
+        out.fail.push(c.group + '/' + c.name + ': the Canvas 2D reference threw — ' + c.threw);
         out.rows.push(row); continue;
       }
       if (c.ink < MIN_INK) {
         row.bad = true;
-        out.fail.push(c.art + ': puts no ink on the frame at any range (' +
+        out.fail.push(c.group + '/' + c.name + ': puts no ink on the frame at any range (' +
                       c.ink + ' px) — nothing was actually compared');
         out.rows.push(row); continue;
       }
       if (!b) {
         row.bad = true;
-        out.fail.push(c.art + ': the GL render did not happen');
+        out.fail.push(c.group + '/' + c.name + ': the GL render did not happen');
         out.rows.push(row); continue;
       }
       if (threwGl) {
         row.bad = true;
-        out.fail.push(c.art + ': the GL render threw — ' + threwGl);
+        out.fail.push(c.group + '/' + c.name + ': the GL render threw — ' + threwGl);
         out.rows.push(row); continue;
       }
 
@@ -359,9 +441,9 @@ const OUT = path.join(__dirname, 'sc-gl');
       }
 
       out.rows.push(row);
-      if (row.missed.length) out.fail.push(c.art + ': fell back — ' + row.missed.join(', '));
-      else if (cmp.mean > 1.5) out.fail.push(c.art + ': mean difference ' + cmp.mean + '/255');
-      else if (cmp.blob > 12) out.fail.push(c.art + ': a ' + cmp.blob +
+      if (row.missed.length) out.fail.push(c.group + '/' + c.name + ': fell back — ' + row.missed.join(', '));
+      else if (cmp.mean > 1.5) out.fail.push(c.group + '/' + c.name + ': mean difference ' + cmp.mean + '/255');
+      else if (cmp.blob > 12) out.fail.push(c.group + '/' + c.name + ': a ' + cmp.blob +
         '-pixel region differs at ' + cmp.at.join(','));
     }
 

@@ -156,6 +156,11 @@
      Paint the real CanvasGradient into a 256×1 strip and upload it. The stops
      interpolate exactly as Canvas interpolates them because Canvas did the
      interpolating. */
+  /* What the last frame cost, in the only units that mean anything here:
+     draw calls and triangles. Headless fps is SwiftShader and is twenty to
+     fifty times pessimistic, so it is not the number to tune against. */
+  const stats = { batch: 0, stencil: 0, tris: 0 };
+
   let lut = null, lutCtx = null;
 
   /* The art builds its gradients fresh inside the draw call — `const grad =
@@ -186,6 +191,15 @@
       slot = lutNext; lutNext = (lutNext + 1) % LUTS;
       if (lutKey[slot] !== undefined) delete lutSlot[lutKey[slot]];
       lutKey[slot] = sig; lutSlot[sig] = slot;
+    }
+    g._slot = slot;
+    /* Paint whenever the texture is not already there at this version — not
+       merely when the SLOT is new. One strip canvas is shared by every ramp,
+       so if the upload is going to happen the strip has to be holding the
+       right ramp when it does; skipping the paint on a slot hit and trusting
+       the texture to still be uploaded is a bet on another module's cache, and
+       it lost. */
+    if (!VF.gl.hasTexture('grad' + slot, sig)) {
       if (!lut) {
         lut = document.createElement('canvas');
         lut.width = 256; lut.height = 1;
@@ -199,9 +213,6 @@
       lutCtx.fillStyle = strip;
       lutCtx.fillRect(0, 0, 256, 1);
     }
-    g._slot = slot;
-    /* On a hit VF.gl.texture matches the version and returns without reading
-       the canvas, so the stale `lut` above is never sampled. */
     return VF.gl.texture('grad' + slot, lut, sig);
   }
 
@@ -219,15 +230,29 @@
   /* How finely to flatten a curve. Canvas picks a tolerance in device pixels;
      so does this, off the current transform's scale, so a shape drawn small
      costs few segments and the same shape drawn large stays smooth. */
-  function steps(len) { return U.clamp(Math.ceil(Math.sqrt(len * 1.4)), 3, 96); }
+  /* How many segments a curve of this length needs. A quadratic's worst-case
+     sag over a chord goes as length squared over the segment count squared, so
+     the count goes as the square root of the length over the tolerance — and
+     the tolerance has to be about a fifth of a pixel, which is where Canvas
+     puts it. At a quarter of that count a rod's line guides came out as visible
+     pentagons and every small ring in the game was a difference. */
+  function steps(len) { return U.clamp(Math.ceil(Math.sqrt(len * 12)), 3, 220); }
 
   /* Ear clipping. Correct for any simple polygon — concave, any winding — and
      that is 96% of the paths in this game. It is not correct for one that
      crosses itself, and neither is anything else this cheap; the harness
      compares against Canvas and would show it. */
+  /* Returns true if it ever had to force its way past a corner. That is the
+     signal that this ring is not something ear clipping should be trusted
+     with — the fills that came out as a spray of wedges radiating from the
+     middle of a fish all took that path, and none of them looked degenerate
+     enough to notice from the code. Anything that stalls goes to the stencil
+     instead, which does not care. */
   function triangulate(pts, out) {
+    let stalled = false;
+    const base = out.length;
     const n = pts.length / 2;
-    if (n < 3) return;
+    if (n < 3) return false;
     /* Drop vertices that sit on top of the one before them, and the closing
        vertex when it repeats the opening one — which every `moveTo(a) … lineTo(a)
        closePath()` in this game produces, and that is most of them. A repeated
@@ -250,7 +275,7 @@
           Math.abs(pts[a * 2 + 1] - pts[b * 2 + 1]) < 1e-6) idx.pop();
       else break;
     }
-    if (idx.length < 3) return;
+    if (idx.length < 3) return false;
     /* Orientation, so the ear test knows which side is inside. The ear test
        below wants a positive cross product at a convex corner, which in these
        y-down screen coordinates is the winding the shoelace sum calls
@@ -289,13 +314,12 @@
         break;
       }
       /* No ear anywhere means the ring is degenerate here — three collinear
-         points, or an outline that crosses itself. Abandoning it leaves a
-         PARTLY filled shape, which is the one failure that reads as art gone
-         wrong rather than as art missing, so instead the flattest corner is
-         removed and the clip carries on. A corner flat enough to be rounding
-         goes quietly; anything with real area in it says so, because that is a
-         path this cannot be trusted with. */
+         points, or an outline that crosses itself. The flattest corner comes
+         out and the clip carries on so this terminates, but the caller is told
+         it stalled and throws the result away in favour of the stencil, which
+         does not care what shape the ring is. */
       if (!clipped) {
+        stalled = true;
         let flat = 0, least = Infinity;
         for (let i = 0; i < idx.length; i++) {
           const a = idx[(i + idx.length - 1) % idx.length];
@@ -305,13 +329,41 @@
                              (pts[b * 2 + 1] - pts[a * 2 + 1]) * (pts[c * 2] - pts[a * 2]));
           if (k < least) { least = k; flat = i; }
         }
-        if (least > 0.5) note('fill:self-intersecting');
         idx.splice(flat, 1);
       }
     }
     if (idx.length === 3) {
       for (let i = 0; i < 3; i++) out.push(pts[idx[i] * 2], pts[idx[i] * 2 + 1]);
     }
+    if (stalled) return true;
+
+    /* AND THEN CHECK ITS WORK.
+
+       A ring that crosses itself has no ear decomposition, but ear clipping
+       does not notice: it finds corners that pass every local test and emits
+       triangles that spill outside the outline. That is what a fish drawn as a
+       spray of pale wedges radiating from its own middle actually is, and no
+       amount of care in the ear test would have caught it, because each ear
+       was locally fine.
+
+       The area does catch it, in one pass: triangles that tile a polygon sum
+       to its area, and triangles that escape it sum to more. Anything that
+       does not add up goes to the stencil, which needs no decomposition. */
+    let ring = 0;
+    for (let i = 0, j = n - 1; i < n; j = i++) {
+      ring += pts[j * 2] * pts[i * 2 + 1] - pts[i * 2] * pts[j * 2 + 1];
+    }
+    ring = Math.abs(ring) * 0.5;
+    let sum = 0;
+    for (let i = base; i < out.length; i += 6) {
+      sum += Math.abs((out[i + 2] - out[i]) * (out[i + 5] - out[i + 1]) -
+                      (out[i + 3] - out[i + 1]) * (out[i + 4] - out[i])) * 0.5;
+    }
+    if (Math.abs(sum - ring) > 0.01 * Math.max(1, ring)) {
+      out.length = base;
+      return true;
+    }
+    return false;
   }
 
   /* Strictly inside. A point exactly ON an edge is NOT blocking — a shared
@@ -419,6 +471,7 @@
 
   function flush() {
     if (!count || !prog) { verts.length = 0; count = 0; return; }
+    stats.batch++; stats.tris += count / 3;
     const gl = VF.gl.ctx();
     VF.gl.blend(blendMode);
     const b = VF.gl.upload('path', new Float32Array(verts),
@@ -462,6 +515,8 @@
     this.strokeStyle = '#000';
     this.lineWidth = 1;
     this.lineCap = 'butt';
+    this._dash = null;
+    this.lineDashOffset = 0;
     this.lineJoin = 'miter';
     this.miterLimit = 10;
     this.globalAlpha = 1;
@@ -485,6 +540,7 @@
       lw: this.lineWidth, cap: this.lineCap, join: this.lineJoin,
       ga: this.globalAlpha, gco: this.globalCompositeOperation,
       font: this.font, ta: this.textAlign, tb: this.textBaseline,
+      dash: this._dash, doff: this.lineDashOffset,
       clips: this._clips ? this._clips.length : 0
     });
   };
@@ -495,6 +551,7 @@
     this.lineWidth = s.lw; this.lineCap = s.cap; this.lineJoin = s.join;
     this.globalAlpha = s.ga; this.globalCompositeOperation = s.gco;
     this.font = s.font; this.textAlign = s.ta; this.textBaseline = s.tb;
+    this._dash = s.dash; this.lineDashOffset = s.doff;
     if (this._clips && this._clips.length !== s.clips) {
       this._clips.length = s.clips;
       applyClips(this._clips);
@@ -566,11 +623,27 @@
     if (!ccw && d < 0) d = (d % TAU) + TAU;
     if (ccw && d > 0) d = (d % TAU) - TAU;
     if (Math.abs(d) > TAU) d = d > 0 ? TAU : -TAU;
-    const n = U.clamp(Math.ceil(Math.abs(d) / TAU * steps(Math.max(rx, ry) * this._scale() * 7)), 4, 128);
+    /* An arc's sag is r(1 - cos(half the step)), so the step angle goes as the
+       square root of the tolerance over the radius and the count as the square
+       root of the radius. A two-pixel ring wants seven sides and a hundred-pixel
+       one wants fifty; a single formula for both is why this is not `steps`. */
+    const rr = Math.max(0.01, Math.max(rx, ry) * this._scale());
+    const n = U.clamp(Math.ceil(Math.abs(d) / TAU * 5.0 * Math.sqrt(rr)), 4, 256);
+    /* A polygon through points ON the circle is entirely INSIDE it, so every
+       ring comes out systematically small — which on a head reads as a thin
+       crescent down one side and was the last shape in the game that differed.
+       A closed ring is pushed out by half the sag instead, so it straddles the
+       true curve rather than sitting under it; an open arc is left alone,
+       because its ends have to meet whatever they are joined to. */
+    const closed = Math.abs(d) >= TAU - 1e-6;
+    const k = 1 / Math.cos(Math.abs(d) / n / 2);
     const cr = Math.cos(rot || 0), sr = Math.sin(rot || 0);
     for (let i = 0; i <= n; i++) {
       const a = a0 + d * (i / n);
-      const px = Math.cos(a) * rx, py = Math.sin(a) * ry;
+      /* an open arc's ends stay exactly where they were asked for, because
+         something else is joined to them */
+      const ki = closed || (i > 0 && i < n) ? k : 1;
+      const px = Math.cos(a) * rx * ki, py = Math.sin(a) * ry * ki;
       const ux = x + px * cr - py * sr, uy = y + px * sr + py * cr;
       if (i === 0 && !this._cur) this.moveTo(ux, uy);
       else this.lineTo(ux, uy);
@@ -597,26 +670,40 @@
   P.arcTo = function (x1, y1, x2, y2) { this.lineTo(x1, y1); this.lineTo(x2, y2); };
 
   /* --- paint --- */
+  /* IN USER SPACE, NOT DEVICE SPACE.
+
+     A gradient is painted through the transform standing when it is USED, not
+     the one standing when it was made — which matters because the art makes
+     one ramp for a whole figure and then draws the head inside its own
+     translate and rotate. Baking the coordinates at creation left the head lit
+     from the wrong end of its own body: the neck matched and the skull did
+     not, which is a very small clue for a very clear rule. */
   P.createLinearGradient = function (x0, y0, x1, y1) {
-    const a = this._pt(x0, y0), b = this._pt(x1, y1);
-    return new Gradient('linear', [a[0], a[1], b[0], b[1]]);
+    return new Gradient('linear', [x0, y0, x1, y1]);
   };
   P.createRadialGradient = function (x0, y0, r0, x1, y1, r1) {
-    const a = this._pt(x0, y0), b = this._pt(x1, y1), s = this._scale();
-    return new Gradient('radial', [a[0], a[1], r0 * s, b[0], b[1], r1 * s]);
+    return new Gradient('radial', [x0, y0, r0, x1, y1, r1]);
   };
   P.createPattern = function () { note('createPattern'); return '#000'; };
   P.createConicGradient = function () { note('createConicGradient'); return '#000'; };
 
-  function paintOf(style) {
+  function paintOf(ctx, style) {
     if (style instanceof Gradient) {
       const tex = gradientTexture(style);
-      /* The batch key is the ramp AND where it is put, because both are
+      const u = style._a;
+      let a;
+      if (style._kind === 'linear') {
+        const p0 = ctx._pt(u[0], u[1]), p1 = ctx._pt(u[2], u[3]);
+        a = [p0[0], p0[1], p1[0], p1[1]];
+      } else {
+        const p0 = ctx._pt(u[0], u[1]), p1 = ctx._pt(u[3], u[4]), sc = ctx._scale();
+        a = [p0[0], p0[1], u[2] * sc, p1[0], p1[1], u[5] * sc];
+      }
+      /* The batch key is the ramp AND where it lands, because both are
          uniforms. Two fills asking for the same gradient in the same place —
          which the art does constantly, drawing a shape and then its shadow —
          then land in one draw instead of three. */
-      return { kind: style._kind, id: style._slot + '@' + style._a.join(','),
-               a: style._a, tex: tex };
+      return { kind: style._kind, id: style._slot + '@' + a.join(','), a: a, tex: tex };
     }
     return null;
   }
@@ -624,13 +711,14 @@
   P._blend = function () {
     const g = this.globalCompositeOperation;
     if (g === 'lighter') return 'lighter';
+    if (g === 'destination-out') return 'destination-out';
     if (g && g !== 'source-over') note('blend:' + g);
     return 'source-over';
   };
 
   P._emit = function (tris, style) {
     if (!tris.length) return;
-    const pnt = paintOf(style);
+    const pnt = paintOf(this, style);
     want(pnt, this._blend(), this.globalAlpha);
     if (pnt) {
       push(tris, 1, 1, 1, 1);
@@ -640,20 +728,69 @@
     }
   };
 
-  P.fill = function (rule) {
-    if (rule === 'evenodd') { note('fill:evenodd'); return; }
-    if (this._sub.length > 1) { note('fill:multi-subpath'); return; }
-    const tris = [];
-    for (let i = 0; i < this._sub.length; i++) triangulate(this._sub[i].pts, tris);
-    this._emit(tris, this.fillStyle);
+  /* Replay a recorded Path2D into this context's path builder, so everything
+     downstream — flattening, triangulation, the stencil — sees an ordinary
+     path. Returns false when the recording is not there to replay. */
+  P._replay = function (p) {
+    const ops = p && p.__ops;
+    if (!ops) { note('Path2D:opaque'); return false; }
+    this.beginPath();
+    for (let i = 0; i < ops.length; i++) {
+      const op = ops[i];
+      this[op[0]].apply(this, op.slice(1));
+    }
+    return true;
   };
-  P.stroke = function () {
+
+  P.fill = function (rule) {
+    if (rule && typeof rule === 'object') {
+      if (!this._replay(rule)) return;
+      rule = arguments[1];
+    }
+    const evenodd = rule === 'evenodd';
+    const subs = [];
+    for (let i = 0; i < this._sub.length; i++) {
+      if (this._sub[i].pts.length >= 6) subs.push(this._sub[i].pts);
+    }
+    if (!subs.length) return;
+    /* One well-behaved ring is triangulated and batched with everything else,
+       because that is most fills and batching is most of the speed. Anything
+       else — more than one ring, an even-odd rule, or a ring the clipper had
+       to force — goes to the stencil, which is slower and always right. */
+    if (!evenodd && subs.length === 1) {
+      const tris = [];
+      if (!triangulate(subs[0], tris)) { this._emit(tris, this.fillStyle); return; }
+    }
+    fillStencil(this, subs, this.fillStyle, evenodd);
+  };
+  P.stroke = function (path) {
+    if (path && typeof path === 'object' && !this._replay(path)) return;
     const w = Math.max(0.05, this.lineWidth * this._scale());
     const tris = [];
-    for (let i = 0; i < this._sub.length; i++) {
-      strokePoly(this._sub[i].pts, this._sub[i].closed, w, this.lineCap, this.lineJoin, tris);
+    let subs = this._sub;
+    if (this._dash) {
+      const cut = [];
+      for (let i = 0; i < subs.length; i++) {
+        dashify(subs[i].pts, subs[i].closed, this._dash, this.lineDashOffset || 0,
+                this._scale(), cut);
+      }
+      subs = cut;
     }
-    this._emit(tris, this.strokeStyle);
+    for (let i = 0; i < subs.length; i++) {
+      strokePoly(subs[i].pts, subs[i].closed, w, this.lineCap, this.lineJoin, tris);
+    }
+    if (!tris.length) return;
+    if (this._solid(this.strokeStyle)) { this._emit(tris, this.strokeStyle); return; }
+    strokeStencil(this, tris, this.strokeStyle);
+  };
+
+  /* Is this paint fully opaque? Only then can overlapping geometry be drawn
+     piece by piece without the overlaps showing. A gradient is assumed not to
+     be: they are rare in strokes and usually the reason one is soft. */
+  P._solid = function (style) {
+    if (style instanceof Gradient) return false;
+    if (this.globalAlpha < 0.999) return false;
+    return parse(style)[3] > 0.999;
   };
   P.fillRect = function (x, y, w, h) {
     this.beginPath(); this.rect(x, y, w, h); this.fill();
@@ -674,21 +811,70 @@
      still standing. That is only cheap because this art nests at most one
      deep and there are thirty clips in the whole game. */
   P.clip = function (rule) {
-    if (rule === 'evenodd') { note('clip:evenodd'); return; }
-    const tris = [];
-    for (let i = 0; i < this._sub.length; i++) triangulate(this._sub[i].pts, tris);
-    /* An empty clip path shows nothing in Canvas, so it shows nothing here.
-       Returning early instead would leave the stencil alone and let everything
-       after it draw UNCLIPPED — a leak that looks like art gone astray across
-       the frame rather than like a clip that failed, which is exactly how it
-       read. Pushing the empty set is honest: applyClips writes no coverage for
-       it and the depth test then rejects every fragment. */
+    if (rule && typeof rule === 'object') {
+      if (!this._replay(rule)) return;
+      rule = arguments[1];
+    }
+    const subs = [];
+    for (let i = 0; i < this._sub.length; i++) {
+      if (this._sub[i].pts.length >= 6) subs.push(this._sub[i].pts);
+    }
     this._clips = this._clips || [];
-    this._clips.push(tris);
+    this._clips.push({ subs: subs, evenodd: rule === 'evenodd' });
     applyClips(this._clips);
   };
-  P.setLineDash = function (a) { if (a && a.length) note('setLineDash'); };
-  P.getLineDash = function () { return []; };
+  P.setLineDash = function (a) {
+    this._dash = (a && a.length) ? a.slice() : null;
+    /* An odd-length pattern repeats doubled, per the spec. */
+    if (this._dash && this._dash.length % 2) this._dash = this._dash.concat(this._dash);
+  };
+  P.getLineDash = function () { return this._dash ? this._dash.slice() : []; };
+
+  /* Cut a polyline into the pattern's "on" runs before it is expanded. Done on
+     the flattened points in device space, so the pattern is scaled the way the
+     transform scales everything else. */
+  function dashify(pts, closed, pattern, offset, scale, out) {
+    const pat = [];
+    let total = 0;
+    for (let i = 0; i < pattern.length; i++) {
+      const v = Math.max(0, pattern[i] * scale);
+      pat.push(v); total += v;
+    }
+    if (total <= 1e-6) { out.push({ pts: pts, closed: closed }); return; }
+
+    let idx = 0, left = pat[0], on = true;
+    let skip = ((offset || 0) * scale) % total;
+    if (skip < 0) skip += total;
+    while (skip > 0) {
+      if (skip < left) { left -= skip; skip = 0; }
+      else { skip -= left; idx = (idx + 1) % pat.length; left = pat[idx]; on = !on; }
+    }
+
+    let run = on ? [pts[0], pts[1]] : null;
+    const n = pts.length / 2;
+    const last = closed ? n : n - 1;
+    for (let i = 0; i < last; i++) {
+      const ax = pts[(i % n) * 2], ay = pts[(i % n) * 2 + 1];
+      const bx = pts[((i + 1) % n) * 2], by = pts[((i + 1) % n) * 2 + 1];
+      let seg = Math.hypot(bx - ax, by - ay);
+      let t0 = 0;
+      while (seg - t0 > 1e-9) {
+        const step = Math.min(left, seg - t0);
+        const t1 = t0 + step;
+        const px = ax + (bx - ax) * (t1 / seg), py = ay + (by - ay) * (t1 / seg);
+        if (on) {
+          if (!run) run = [ax + (bx - ax) * (t0 / seg), ay + (by - ay) * (t0 / seg)];
+          run.push(px, py);
+        }
+        left -= step; t0 = t1;
+        if (left <= 1e-9) {
+          if (on && run) { out.push({ pts: run, closed: false }); run = null; }
+          idx = (idx + 1) % pat.length; left = pat[idx]; on = !on;
+        }
+      }
+    }
+    if (on && run && run.length >= 4) out.push({ pts: run, closed: false });
+  }
   /* THE BAKED LAYERS.
 
      The star field, the two cloud layers and the tinted ridgeline are already
@@ -702,8 +888,29 @@
      way to see that from here, and re-uploading every frame to be safe is how
      a texture cache becomes a leak. Without one this reports and does not
      draw, because a stale sky is a worse answer than a loud one. */
-  let imgSeq = 0;
+  /* Bounded, for the same reason the gradient ramps are. The shoal bakes one
+     silhouette per species per size bucket and never repaints it, so the set
+     is immutable but open-ended — forty species times eight buckets is three
+     hundred textures nobody ever frees. A ring of slots reuses the GL texture
+     objects, so the page owns IMGS of them for its whole life however many
+     distinct canvases pass through. */
+  const IMGS = 96;
+  const imgRing = new Array(IMGS);
   const imgIds = new WeakMap();
+  let imgNext = 0;
+
+  function imageTexture(src, rev) {
+    let e = imgIds.get(src);
+    if (!e) {
+      const slot = imgNext; imgNext = (imgNext + 1) % IMGS;
+      const old = imgRing[slot];
+      if (old) imgIds.delete(old.src);
+      e = { name: 'img' + slot, src: src };
+      imgRing[slot] = e;
+      imgIds.set(src, e);
+    }
+    return { name: e.name, tex: VF.gl.texture(e.name, src, String(rev)) };
+  }
 
   P.drawImage = function (src, a, b, c, d, e, f, g2, h2) {
     if (!src) return;
@@ -735,52 +942,381 @@
     const A = [kx * ia, kx * ic, ky * ib, ky * id,
                kx * (ie - dx) + sx / iw, ky * (iff - dy) + sy / ih];
 
-    let id2 = imgIds.get(src);
-    if (id2 === undefined) { id2 = 'img' + (++imgSeq); imgIds.set(src, id2); }
-    const tex = VF.gl.texture(id2, src, String(rev));
-    want({ kind: 'image', id: id2 + '@' + rev + '@' + A.join(','), a: A, tex: tex },
+    const im = imageTexture(src, rev);
+    want({ kind: 'image', id: im.name + '@' + rev + '@' + A.join(','), a: A, tex: im.tex },
          this._blend(), this.globalAlpha);
     push(tris, 1, 1, 1, 1);
   };
 
-  P.fillText = function () { note('fillText'); };
-  P.strokeText = function () { note('strokeText'); };
-  P.measureText = function () { note('measureText'); return { width: 0 }; };
+  /* ----------------------------------------------------------------- text
+
+     The one thing not worth reimplementing, and now it does not have to be:
+     the string is drawn by Canvas into a small scratch canvas at the device
+     scale and blitted through the same texture path the baked layers use. It
+     is cached on everything that changes the picture — the text, the font, the
+     colour, the alignment and the scale it was rendered at — in a bounded ring,
+     so a label redrawn every frame costs one lookup.
+
+     The metrics come from the same Canvas that will draw it, which is the only
+     way the box can be right. */
+  const TEXTS = 48;
+  const textRing = new Array(TEXTS);
+  const textSlot = Object.create(null);
+  let textNext = 0;
+  let mCv = null, mCtx = null;
+
+  function metrics(ctx, str) {
+    if (!mCv) {
+      mCv = document.createElement('canvas');
+      mCv.width = mCv.height = 8;
+      mCtx = mCv.getContext('2d');
+    }
+    mCtx.font = ctx.font;
+    mCtx.textAlign = ctx.textAlign;
+    mCtx.textBaseline = ctx.textBaseline;
+    return mCtx.measureText(str);
+  }
+
+  function textImage(ctx, str, fillOrStroke) {
+    const sc = U.clamp(ctx._scale(), 0.5, 8);
+    const q = Math.round(sc * 8) / 8;
+    const style = fillOrStroke ? ctx.strokeStyle : ctx.fillStyle;
+    if (typeof style !== 'string') { note('text:gradient'); return null; }
+    const key = str + '\u0001' + ctx.font + '\u0001' + style + '\u0001' +
+                ctx.textAlign + '\u0001' + ctx.textBaseline + '\u0001' + q +
+                '\u0001' + (fillOrStroke ? 's' + ctx.lineWidth : 'f');
+    let e = textSlot[key];
+    if (e) return e;
+
+    const m = metrics(ctx, str);
+    const l = m.actualBoundingBoxLeft, r = m.actualBoundingBoxRight;
+    const a = m.actualBoundingBoxAscent, d = m.actualBoundingBoxDescent;
+    if (!isFinite(l) || !isFinite(r) || !isFinite(a) || !isFinite(d)) {
+      note('text:metrics'); return null;
+    }
+    const pad = 2;
+    const w = Math.ceil(l + r) + pad * 2, h = Math.ceil(a + d) + pad * 2;
+    if (w <= pad * 2 || h <= pad * 2) return null;
+
+    const slot = textNext; textNext = (textNext + 1) % TEXTS;
+    if (textRing[slot]) delete textSlot[textRing[slot].key];
+    const cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.ceil(w * q));
+    cv.height = Math.max(1, Math.ceil(h * q));
+    const g = cv.getContext('2d');
+    g.scale(q, q);
+    g.font = ctx.font;
+    g.textAlign = ctx.textAlign;
+    g.textBaseline = ctx.textBaseline;
+    if (fillOrStroke) {
+      g.strokeStyle = style; g.lineWidth = ctx.lineWidth;
+      g.strokeText(str, pad + l, pad + a);
+    } else {
+      g.fillStyle = style;
+      g.fillText(str, pad + l, pad + a);
+    }
+    cv.__glRev = 'text' + slot + ':' + key;
+    e = { key: key, cv: cv, w: w, h: h, l: l, a: a, pad: pad, name: 'text' + slot };
+    textRing[slot] = e; textSlot[key] = e;
+    return e;
+  }
+
+  function drawText(ctx, str, x, y, stroke) {
+    const s = String(str);
+    if (!s) return;
+    const e = textImage(ctx, s, stroke);
+    if (!e) return;
+    ctx.drawImage(e.cv, x - e.l - e.pad, y - e.a - e.pad, e.w, e.h);
+  }
+
+  P.fillText = function (str, x, y) { drawText(this, str, x, y, false); };
+  P.strokeText = function (str, x, y) { drawText(this, str, x, y, true); };
+  P.measureText = function (str) { return metrics(this, String(str)); };
   P.putImageData = function () { note('putImageData'); };
   P.getImageData = function () { note('getImageData'); return null; };
 
   /* Write a set of clip shapes into the stencil and test against the result.
      Called with the whole standing stack, so it is idempotent: clear, replay,
      test. */
+  /* THE STENCIL, WHICH TWO THINGS WANT AT ONCE.
+
+     Clipping needs a standing "inside every clip" mask that survives across
+     draws. Filling needs a scratch winding counter that lives for the length
+     of one fill. They are the same eight bits, so they are split:
+
+       bit  0x80   inside every standing clip
+       bits 0x7F   the winding number of the fill being drawn right now
+
+     Which makes the fill's cover test one comparison rather than two:
+     `LESS, ref 0x80, mask 0xFF` passes exactly where the clip bit is set AND
+     the count is not zero, because 0x80|count > 0x80 iff count > 0, and
+     without the clip bit the value cannot reach 0x80 at all. Even-odd is the
+     same test through mask 0x81 — the parity bit alone. */
+  const CLIP_BIT = 0x80, COUNT_BITS = 0x7f;
+
+  /* Everything after a clip is drawn where the mask bit stands. */
+  function clipTest() {
+    const gl = VF.gl.ctx();
+    gl.enable(gl.STENCIL_TEST);
+    gl.stencilMask(COUNT_BITS);          // fills may scribble on the low bits
+    gl.stencilFunc(gl.EQUAL, CLIP_BIT, CLIP_BIT);
+    gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP);
+  }
+
+  /* Feed one ring's fan into the stencil, counting winding. Not culled: the
+     rasteriser's own front/back decides the sign, which is what makes this
+     work for either winding and for a shape that crosses itself. */
+  function windPass(subs) {
+    const gl = VF.gl.ctx();
+    const v = [];
+    for (let s = 0; s < subs.length; s++) {
+      const p = subs[s];
+      if (p.length < 6) continue;
+      for (let i = 2; i + 3 < p.length; i += 2) {
+        v.push(p[0], p[1], 0, 0, 0, 0,
+               p[i], p[i + 1], 0, 0, 0, 0,
+               p[i + 2], p[i + 3], 0, 0, 0, 0);
+      }
+    }
+    if (!v.length) return false;
+    gl.disable(gl.CULL_FACE);
+    gl.stencilFunc(gl.ALWAYS, 0, 0xff);
+    gl.stencilOpSeparate(gl.FRONT, gl.KEEP, gl.KEEP, gl.INCR_WRAP);
+    gl.stencilOpSeparate(gl.BACK, gl.KEEP, gl.KEEP, gl.DECR_WRAP);
+    const b = VF.gl.upload('sten', new Float32Array(v), [[0, 2, 0], [1, 4, 2]], 6);
+    gl.useProgram(prog);
+    gl.uniform1i(VF.gl.uniform(prog, 'mode'), 0);
+    VF.gl.mesh(prog, { res: [W, H], alpha: 1 }, b, v.length / 6);
+    return true;
+  }
+
+  function bounds(subs) {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (let s = 0; s < subs.length; s++) {
+      const p = subs[s];
+      for (let i = 0; i < p.length; i += 2) {
+        if (p[i] < x0) x0 = p[i];
+        if (p[i] > x1) x1 = p[i];
+        if (p[i + 1] < y0) y0 = p[i + 1];
+        if (p[i + 1] > y1) y1 = p[i + 1];
+      }
+    }
+    if (!(x1 > x0) || !(y1 > y0)) return null;
+    return [Math.max(0, Math.floor(x0) - 1), Math.max(0, Math.floor(y0) - 1),
+            Math.min(W, Math.ceil(x1) + 1), Math.min(H, Math.ceil(y1) + 1)];
+  }
+
+  /* One full-frame quad, painted through the path program and shaped entirely
+     by whatever stencil test is standing. Used only by the clip knock-out,
+     which genuinely is frame-wide. */
+  function fullQuad() {
+    const gl = VF.gl.ctx();
+    const t = [0, 0, W, 0, W, H, 0, 0, W, H, 0, H];
+    const v = [];
+    for (let i = 0; i < t.length; i += 2) v.push(t[i], t[i + 1], 0, 0, 0, 0);
+    const b = VF.gl.upload('sten', new Float32Array(v), [[0, 2, 0], [1, 4, 2]], 6);
+    gl.useProgram(prog);
+    gl.uniform1i(VF.gl.uniform(prog, 'mode'), 0);
+    VF.gl.mesh(prog, { res: [W, H], alpha: 1 }, b, 6);
+  }
+
+  /* Write the whole clip stack into the mask bit: start with everything in,
+     then knock out whatever each clip shape does not cover. */
   function applyClips(stack) {
     flush();
     if (!prog) return;
     const gl = VF.gl.ctx();
-    gl.clearStencil(0);
-    gl.clear(gl.STENCIL_BUFFER_BIT);
-    if (!stack.length) { gl.disable(gl.STENCIL_TEST); return; }
-
     gl.enable(gl.STENCIL_TEST);
+    gl.disable(gl.SCISSOR_TEST);
+    gl.stencilMask(0xff);
+    gl.clearStencil(CLIP_BIT);
+    gl.clear(gl.STENCIL_BUFFER_BIT);
     gl.colorMask(false, false, false, false);
-    gl.stencilFunc(gl.ALWAYS, 1, 0xff);
+
     for (let i = 0; i < stack.length; i++) {
-      /* each shape raises the count by one wherever it covers */
-      gl.stencilOp(gl.KEEP, gl.KEEP, gl.INCR);
-      gl.stencilFunc(gl.EQUAL, i, 0xff);
-      if (!stack[i].length) continue;      // covers nothing, so nothing passes
-      const v = [];
-      for (let k = 0; k < stack[i].length; k += 2) {
-        v.push(stack[i][k], stack[i][k + 1], 0, 0, 0, 0);
-      }
-      const b = VF.gl.upload('clip', new Float32Array(v), [[0, 2, 0], [1, 4, 2]], 6);
-      gl.useProgram(prog);
-      gl.uniform1i(VF.gl.uniform(prog, 'mode'), 0);
-      VF.gl.mesh(prog, { res: [W, H], alpha: 1 }, b, stack[i].length / 2);
+      gl.stencilMask(COUNT_BITS);
+      gl.clearStencil(0);
+      gl.clear(gl.STENCIL_BUFFER_BIT);
+      /* An empty clip path shows nothing in Canvas, so it shows nothing here:
+         no coverage is written, and the knock-out below clears the mask
+         everywhere. Returning early instead would leave the stencil alone and
+         let everything after it draw UNCLIPPED — a leak that reads as art gone
+         astray across the frame rather than as a clip that failed. */
+      windPass(stack[i].subs);
+      /* wherever that ring's winding came out zero, this clip is not covering,
+         so the standing mask loses its bit there */
+      gl.stencilMask(CLIP_BIT);
+      gl.stencilFunc(gl.EQUAL, 0, stack[i].evenodd ? 1 : COUNT_BITS);
+      /* (fail, depth-fail, pass) — and the FIRST one is what happens where the
+         test does NOT pass, which is where this clip DOES cover. Zeroing there
+         too clears the mask everywhere and nothing downstream draws at all. */
+      gl.stencilOp(gl.KEEP, gl.KEEP, gl.ZERO);
+      fullQuad();
     }
+
     gl.colorMask(true, true, true, true);
-    gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP);
-    gl.stencilFunc(gl.EQUAL, stack.length, 0xff);
+    clipTest();
   }
+
+  /* Write a set of triangles into the stencil and then pay the colour in
+     through it, TWICE OVER THE SAME GEOMETRY.
+
+     The obvious cover is a quad over the shape's bounding box, and it is what
+     this did first: correct, and half the frame rate, because a long diagonal
+     stroke has a bounding box the size of the screen and every pixel in it
+     gets shaded. Covering with the MARKING geometry instead touches only what
+     the shape touches — and clearing the mark as it goes means a pixel is
+     painted exactly ONCE however many pieces overlap it, which is the whole
+     reason the stencil was needed. It leaves the buffer clean behind it too,
+     so there is no clear to pay for either.
+
+     `mark` is 'wind' for a fill, where the winding number decides what is
+     inside, or 'cover' for a stroke, where covered is covered. */
+  function stencilPaint(ctx, verts, count, style, mark, evenodd) {
+    flush();
+    if (!prog || !count) return;
+    stats.stencil++; stats.tris += count / 3;
+    const gl = VF.gl.ctx();
+    const b = VF.gl.upload('sten', verts, [[0, 2, 0], [1, 4, 2]], 6);
+
+    /* 1. the mark, with no colour written */
+    gl.colorMask(false, false, false, false);
+    gl.stencilMask(COUNT_BITS);
+    gl.stencilFunc(gl.ALWAYS, 1, 0xff);
+    if (mark === 'wind') {
+      gl.disable(gl.CULL_FACE);
+      gl.stencilOpSeparate(gl.FRONT, gl.KEEP, gl.KEEP, gl.INCR_WRAP);
+      gl.stencilOpSeparate(gl.BACK, gl.KEEP, gl.KEEP, gl.DECR_WRAP);
+    } else {
+      gl.stencilOp(gl.KEEP, gl.KEEP, gl.REPLACE);
+    }
+    gl.useProgram(prog);
+    gl.uniform1i(VF.gl.uniform(prog, 'mode'), 0);
+    VF.gl.mesh(prog, { res: [W, H], alpha: 1 }, b, count);
+
+    /* 2. the colour, once per pixel, clearing the mark as it lands */
+    gl.colorMask(true, true, true, true);
+    gl.stencilFunc(gl.LESS, CLIP_BIT, evenodd ? (CLIP_BIT | 1) : 0xff);
+    gl.stencilOp(gl.KEEP, gl.KEEP, gl.ZERO);
+    VF.gl.blend(ctx._blend());
+    const pnt = paintOf(ctx, style);
+    const vals = { res: [W, H], alpha: pnt ? ctx.globalAlpha : 1 };
+    let m = 0;
+    if (pnt) {
+      if (pnt.kind === 'linear') { m = 1; vals.g0 = pnt.a; }
+      else { m = 2; vals.g0 = [pnt.a[0], pnt.a[1], pnt.a[2], 0];
+             vals.g1 = [pnt.a[3], pnt.a[4], pnt.a[5], 0]; }
+      vals.stops = pnt.tex; vals.img = pnt.tex;
+    }
+    gl.useProgram(prog);
+    gl.uniform1i(VF.gl.uniform(prog, 'mode'), m);
+    VF.gl.mesh(prog, vals, b, count);
+
+    clipTest();
+  }
+
+  /* Vertices for a triangle list with a flat paint baked in. A gradient needs
+     no vertex colour at all — the shader takes it from the ramp. */
+  function verts6(tris, ctx, style) {
+    const out = new Float32Array(tris.length * 3);
+    let r = 1, g = 1, b = 1, a = 1;
+    if (!(style instanceof Gradient)) {
+      const c = parse(style);
+      a = c[3] * ctx.globalAlpha;
+      r = c[0] * a; g = c[1] * a; b = c[2] * a;
+    }
+    for (let i = 0, k = 0; i < tris.length; i += 2, k += 6) {
+      out[k] = tris[i]; out[k + 1] = tris[i + 1];
+      out[k + 2] = r; out[k + 3] = g; out[k + 4] = b; out[k + 5] = a;
+    }
+    return out;
+  }
+
+  /* A TRANSLUCENT STROKE IS ONE SHAPE, NOT A HUNDRED.
+
+     Expanding a polyline gives a quad per segment and a disc per join, and
+     those overlap each other by design. Canvas rasterises the whole stroke as
+     one coverage region and blends it once; blending each piece separately
+     builds the alpha up at every join and every segment boundary, which on a
+     rod turned a soft grey glow into a hard white band twice as bright.
+
+     Opaque strokes skip all of this, because drawing an opaque colour twice is
+     the same as drawing it once, and most strokes are opaque. */
+  function strokeStencil(ctx, tris, style) {
+    stencilPaint(ctx, verts6(tris, ctx, style), tris.length / 2, style, 'cover', false);
+  }
+
+  /* A fill that ear clipping should not be trusted with: more than one
+     subpath, an even-odd rule, or a ring that made the clipper force its way
+     past a corner. The winding number goes into the stencil from a fan and the
+     same fan pays the colour in through it — exact for holes, for crossings
+     and for either rule, which the alternative is not. */
+  function fillStencil(ctx, subs, style, evenodd) {
+    const tris = [];
+    for (let s = 0; s < subs.length; s++) {
+      const p = subs[s];
+      if (p.length < 6) continue;
+      for (let i = 2; i + 3 < p.length; i += 2) {
+        tris.push(p[0], p[1], p[i], p[i + 1], p[i + 2], p[i + 3]);
+      }
+    }
+    if (!tris.length) return;
+    stencilPaint(ctx, verts6(tris, ctx, style), tris.length / 2, style, 'wind', evenodd);
+  }
+
+  /* ------------------------------------------------------------- Path2D
+
+     fishArt builds its fins as Path2D objects and hands them to `fill`. A
+     Path2D cannot be read back — the browser keeps its geometry to itself —
+     so the GPU renderer filled whatever subpath happened to be lying around
+     from the call before, which for the first fin was the glow's full-frame
+     rectangle. A fish came out as a solid rectangle, and then as a spray of
+     wedges as later fins reused later leftovers.
+
+     So Path2D is replaced, once, by a subclass of itself that also remembers
+     the calls made to it. Canvas gets a real Path2D and behaves exactly as it
+     did; the GPU gets the recording and replays it into its own path builder,
+     under the transform standing at fill time, which is what the spec says a
+     Path2D is drawn with. The art is not touched, which is the whole point.
+
+     Anything constructed from an SVG string cannot be recorded, and says so
+     rather than drawing the wrong shape. */
+  const RECORDED = ['moveTo', 'lineTo', 'bezierCurveTo', 'quadraticCurveTo',
+                    'arc', 'arcTo', 'ellipse', 'rect', 'roundRect', 'closePath'];
+
+  function installPath2D() {
+    const Native = window.Path2D;
+    if (!Native || Native.__vf) return;
+    function Recording(arg) {
+      const self = new Native(arg);
+      Object.setPrototypeOf(self, Recording.prototype);
+      self.__ops = [];
+      if (arg !== undefined) {
+        if (arg && arg.__ops) self.__ops = arg.__ops.slice();
+        else self.__ops = null;              // an SVG string: opaque, and said so
+      }
+      return self;
+    }
+    Recording.prototype = Object.create(Native.prototype);
+    Recording.prototype.constructor = Recording;
+    RECORDED.forEach(function (k) {
+      if (typeof Native.prototype[k] !== 'function') return;
+      Recording.prototype[k] = function () {
+        if (this.__ops) this.__ops.push([k].concat([].slice.call(arguments)));
+        return Native.prototype[k].apply(this, arguments);
+      };
+    });
+    Recording.prototype.addPath = function (other, tf) {
+      if (this.__ops) {
+        if (other && other.__ops && !tf) this.__ops = this.__ops.concat(other.__ops);
+        else this.__ops = null;
+      }
+      return Native.prototype.addPath.apply(this, arguments);
+    };
+    Recording.__vf = 1;
+    window.Path2D = Recording;
+  }
+  installPath2D();
 
   /* --------------------------------------------------------------- frame */
 
@@ -797,13 +1333,18 @@
   function begin(target) {
     if (!build()) return null;
     for (const k in hit) delete hit[k];
+    stats.batch = 0; stats.stencil = 0; stats.tris = 0;
     W = target ? target.w : VF.gl.size().w * VF.gl.size().dpr;
     H = target ? target.h : VF.gl.size().h * VF.gl.size().dpr;
     VF.gl.bind(target);
     const gl = VF.gl.ctx();
-    gl.disable(gl.STENCIL_TEST);
-    gl.clearStencil(0);
+    /* The clip bit starts set everywhere — nothing is clipped out yet — so
+       every draw can use one standing test whether or not a clip is in force. */
+    gl.disable(gl.SCISSOR_TEST);
+    gl.stencilMask(0xff);
+    gl.clearStencil(CLIP_BIT);
     gl.clear(gl.STENCIL_BUFFER_BIT);
+    clipTest();
     paint = null; blendMode = 'source-over'; alpha = 1;
     verts.length = 0; count = 0;
     return new Ctx();
@@ -812,7 +1353,11 @@
   function end(target, to) {
     flush();
     const gl = VF.gl.ctx();
-    if (gl) gl.disable(gl.STENCIL_TEST);
+    if (gl) {
+      gl.disable(gl.STENCIL_TEST);
+      gl.disable(gl.SCISSOR_TEST);
+      gl.stencilMask(0xff);
+    }
     if (target && target.__ms) VF.gl.resolve(target, to || null);
   }
 
@@ -826,6 +1371,13 @@
     unsupported: function () { return Object.assign({}, hit); },
     Gradient: Gradient,
     /* the tools reach in to check the pieces on their own */
-    __parse: parse, __triangulate: triangulate, __strokePoly: strokePoly
+    __parse: parse, __triangulate: triangulate, __strokePoly: strokePoly,
+    /* the ramp a gradient would actually be drawn with, so a tool can read the
+       texture back rather than infer it from the pixels it came out as */
+    /* the ramp a gradient would actually be drawn with, so a tool can read the
+       texture back rather than infer it from the pixels it came out as — which
+       is how a whole round's worth of wrong colour was finally cornered */
+    stats: function () { return Object.assign({}, stats); },
+    __lut: gradientTexture
   };
 })(window.VF = window.VF || {});

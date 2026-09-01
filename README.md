@@ -183,7 +183,7 @@ js/systems/           time, weather, progression, economy, loot, fishing,
                       encounters, daily, bounties, wall, away, returning,
                       charter, the harbour
 js/gl/                the WebGL2 layer: context and passes, sky and sea, a
-                      Canvas-2D-shaped path renderer, and the back of the frame
+                      Canvas-2D-shaped path renderer, and the two art layers
 js/world/             world coordinates and the camera, the shapes a place is
                       built from, the landmark graph, the event director, the
                       rumour ledger, the player's history, delayed
@@ -204,17 +204,18 @@ the economy.
 
 ## Notes on the design
 
-**The sea is on the GPU, and now so is everything behind it.** Two canvases,
-stacked, and they never exchange pixels. WebGL2 draws the sky, the water, the
-light on it and the air between you and the horizon; the rest of the fourteen
-thousand lines of hand-tuned procedural art — creatures, rods, the angler, the
-boat — keep drawing in Canvas 2D on a transparent canvas above it. The reason
-they are kept apart is measured rather than assumed: pushing a full-screen 2D
-canvas into a GPU texture is four and a half megabytes across the bus and
-costs 30 ms here, which is more than the entire frame budget, so the
-compositor does the one job it is very good at and neither layer ever has to
-read the other. A 2D layer only becomes a texture when it is a bake that
-changed, and those change a handful of times an hour.
+**The whole scene is on the GPU.** Two canvases, stacked, and they never
+exchange pixels. WebGL2 draws the sky, the water, the light on it, the air
+between you and the horizon, and — through `js/gl/path.js` — every one of the
+twenty-two stages of art in front of and behind it: the stars, the land, the
+landmarks, the shoal, the creature, the rod, the angler, the boat. The 2D
+canvas above is still there and still correct, and it is what draws any stage
+the GPU declines. The reason the two are kept apart is measured rather than
+assumed: pushing a full-screen 2D canvas into a GPU texture is four and a half
+megabytes across the bus and costs 30 ms here, which is more than the entire
+frame budget, so the compositor does the one job it is very good at and
+neither layer ever has to read the other. A 2D layer only becomes a texture
+when it is a bake that changed, and those change a handful of times an hour.
 
 **The art moves to the GPU by being handed a different object.**
 `js/gl/path.js` is a `CanvasRenderingContext2D`-shaped thing that happens to
@@ -232,22 +233,44 @@ already take their context as the first argument, and the ones in the scene
 draw through a module-level `ctx` that is simply pointed elsewhere for the
 length of a call.
 
-What it will not do it says out loud rather than approximating: multi-subpath
-fills (33 of 888 path builds), even-odd (four call sites), `shadowBlur` (two),
-text, and the nine exotic composite operations in the whole codebase.
-`unsupported()` reports what a frame asked for and did not get, and
-`js/gl/back.js` throws its whole backdrop away and reverts the frame to Canvas
-2D the moment that list is non-empty. A frame that is nearly right is worse
-than one drawn the old way, because nobody notices it in time.
+A few things it learned the hard way, each of which looked like a rendering
+bug and was really a rule:
+
+- **A gradient is painted through the transform standing when it is USED**, not
+  the one standing when it was made. The art makes one ramp for a whole figure
+  and then draws the head inside its own translate and rotate; baking the
+  coordinates at creation lit the head from the wrong end of its own body.
+- **A translucent stroke is one shape, not a hundred.** Expanding a polyline
+  gives a quad per segment and a disc per join, and blending those separately
+  builds the alpha up at every join. They go into the stencil as a mark and
+  one quad pays the colour in.
+- **Ear clipping does not notice a ring that crosses itself** — it finds
+  corners that pass every local test and emits triangles that escape the
+  outline. The area does notice, in one pass, and anything that does not add up
+  goes to a stencil-then-cover fill, which needs no decomposition and gets
+  holes and even-odd right for free.
+- **A `Path2D` cannot be read back**, so `Path2D` is replaced by a subclass of
+  itself that also remembers the calls made to it. Canvas gets a real one and
+  behaves exactly as before; the GPU replays the recording.
+
+What it still will not do it says out loud rather than approximating —
+`unsupported()` reports what a frame asked for and did not get.
+
+A frame costs about **110 draw calls and 5,500 triangles** for the whole scene,
+which `node tools/gllayers.js` prints. That is the number to tune against.
+Headless fps is not: this environment is SwiftShader, and moving art onto it
+means a software GL doing work Skia used to do, which is the one comparison
+guaranteed to look bad and mean nothing.
 
 **The ported set can only ever be a back-to-front prefix.** The 2D canvas sits
-entirely above the GL one, so anything moved to the GPU lands behind
-everything still in 2D. Porting the smallest, easiest module first would put
-people behind fish. So the first slice is not the easiest module, it is
-everything behind the water — the stars, the clouds, the horizon feature, the
-land and the landmarks standing at or beyond it — and it is composited inside
-the world shader rather than over the finished frame, because the water has to
-be able to cover the foot of a headland.
+entirely above the GL one, so anything moved to the GPU lands behind everything
+still in 2D. `js/gl/layer.js` therefore takes the longest prefix of each stage
+list it can actually draw and hands the rest back, and stops that prefix
+permanently at the first stage that asks for something the renderer has not
+got — throwing away the frame that discovered it, so even that frame draws the
+old way. There are two lists because the water is a hard boundary: the sky and
+the sea are one shader pass, so what goes behind the water is composited
+*inside* it, and what goes in front is a second buffer composited over it.
 
 The water was about fifty stacked translucent fills — a depth gradient, a
 horizon seam, eleven belled bands for the light path, a hundred and thirty
@@ -542,14 +565,17 @@ node tools/port.js        all four harbour viewpoints with the interface off, an
                           every hotspot in frame, clickable, and not a dead click
 node tools/gl.js          every shader builds, the water has light in it, and
                           the game still draws with WebGL2 refused
-node tools/glpath.js      every landmark shape drawn twice — once in Canvas 2D,
-                          once on the GPU — and whether you could tell. Each one
-                          is walked out in distance and then in size until it
-                          puts real ink on the frame, because two blank pictures
-                          agree perfectly
-node tools/glback.js      the same, for the whole back of the frame, in every
-                          zone at two times of day — and that a live frame
-                          actually takes the GPU path
+node tools/glpath.js      388 shapes drawn twice — once in Canvas 2D, once on
+                          the GPU — and whether you could tell: every landmark,
+                          every species, every silhouette, every rod, the
+                          angler, the cast and the boats. Each is walked out in
+                          distance and then in size until it puts real ink on
+                          the frame, because two blank pictures agree perfectly
+node tools/gllayers.js    the same for both whole stage lists, in every zone at
+                          two times of day; that a live frame actually takes the
+                          GPU path; and that the prefix has not gone backwards
+                          since the last run, because falling quietly back to
+                          Canvas 2D is the failure that looks fine
 node tools/gallery.js      renders the whole catalogue to one sheet
 node tools/closeup.js      renders a few species large, to judge surface detail
 node tools/rods.js         renders every rod preview to one sheet

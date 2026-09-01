@@ -959,23 +959,101 @@
     prof.acc[name] = (prof.acc[name] || 0) + (performance.now() - t0);
   }
 
-  /* Everything behind the water, into whatever context it is handed. The
-     stage functions below all draw through the module's own `ctx`, so porting
-     them is a matter of pointing that at the GPU for the length of the call —
-     which is why not one of them is edited. Defined here rather than inline
-     in draw() so that tools/glback.js drives the SAME code the frame does; two
-     copies of a stage list is two stage lists that drift. */
+  /* ------------------------------------------------------------- the stages
+
+     The frame in order, as two lists rather than a run of mark() calls.
+
+     Every one of these draws through the module's own `ctx`, so porting a
+     stage to the GPU is a matter of pointing that at js/gl/path.js for the
+     length of the call — which is why not one art function is edited. Naming
+     them and putting them in an array is what lets js/gl/layer.js take a
+     PREFIX of the list and hand the rest back: whatever it declines runs in 2D
+     on the canvas above, which is where those stages belong in the order
+     anyway. A partial port is the same picture drawn by two renderers.
+
+     The lists are built here and nowhere else, so that the comparison tools
+     drive the code the frame actually runs instead of a re-listing of it. Two
+     copies of a stage list are two stage lists that drift. */
+  function stage(name, raw) {
+    return { name: name, raw: raw, fn: function (g) {
+      const held = ctx;
+      ctx = g;
+      try { mark(name, raw); } finally { ctx = held; }
+    } };
+  }
+
+  /* Behind the water. */
+  function backList(P, q) {
+    return [
+      stage('stars', function () { buildStars(); drawStars(P, q); }),
+      stage('clouds', function () { buildClouds(); drawClouds(P); }),
+      stage('horizon', function () { drawHorizonFeature(P); }),
+      stage('land', function () { drawLand(P); }),
+      /* The zone's landmarks: the ones at or past the horizon go in with the
+         ridgeline, so they sit in the same weather as the distant land. Half
+         of what makes a place a place. */
+      stage('zoneback', function () {
+        if (VF.landmarkArt) VF.landmarkArt.drawBehind(ctx, L, P);
+        if (VF.zoneArt) VF.zoneArt.drawBack(ctx, L, P);
+      })
+    ];
+  }
+
+  /* On and in front of the water. `world` is whether the shader drew the sea,
+     which two of these branch on. */
+  function frontList(P, q, world) {
+    return [
+      stage('aurora', function () { drawAurora(P); }),
+      stage('lightning', function () { drawLightning(P); }),
+      stage('fog', function () { drawFog(P, q); }),
+      /* The body of the water, its light and its surface belong to the shader
+         when there is one. What stays here either way is what is reflected IN
+         the water — the land and the stars — because those are cached sprites
+         that already exist and blitting one costs less than sampling it. */
+      stage('water', function () { if (world) drawWaterOver(P, q); else drawWater(P, q); }),
+      stage('under', function () { if (P.void < 0.9) drawUnderwater(P); }),
+      stage('shoal', function () { seedShoal(); drawShoal(P, q); }),
+      stage('surface', function () {
+        if (!world) { seedGlints(); drawSurface(P, q); }
+        drawSurfaceMist(P, q);
+      }),
+      stage('skyfall', function () { drawSkyfall(); }),
+      stage('ripples', function () { if (P.void < 0.9) VF.fx.drawRipples(ctx, 0.26); }),
+      /* What is on the water HERE and nowhere else: the gulls, the panes, the
+         crystals, the contacts, the bottle drifting in — and the landmarks
+         standing in the water, which go over it and under the encounter
+         layer, so a wreck is in the sea rather than on the screen. Half of
+         what makes a zone a zone. */
+      stage('zone', function () {
+        if (VF.zoneArt) VF.zoneArt.drawFront(ctx, L, P);
+        if (VF.landmarkArt) VF.landmarkArt.drawOn(ctx, L, P);
+      }),
+      /* An encounter draws under the line and over the surface: it is in the
+         water, not on the screen. */
+      stage('creature', function () { if (VF.creatureArt) VF.creatureArt.draw(ctx, L, P); }),
+      stage('aim', function () { drawAim(P); }),
+      stage('line', function () { drawLineAndBobber(P); drawDeparture(P); }),
+      stage('particles', function () { VF.particles.draw(ctx); }),
+      stage('fore', function () { drawForeground(P); }),
+      stage('cutscene', function () { drawCutscene(); }),
+      stage('overlay', function () { VF.fx.drawOverlay(ctx, W, H); })
+    ];
+  }
+
+  /* Run a list from `from` onward on whatever context is current. The GPU took
+     everything before `from`; this is the remainder. */
+  function runFrom(list, from) {
+    for (let i = from; i < list.length; i++) mark(list[i].name, list[i].raw);
+  }
+
+  /* The whole of one list into a given context, for the comparison tools. */
   function drawBack(g, P, q) {
-    const held = ctx;
-    ctx = g;
-    try {
-      buildStars(); drawStars(P, q);
-      buildClouds(); drawClouds(P);
-      drawHorizonFeature(P);
-      drawLand(P);
-      if (VF.landmarkArt) VF.landmarkArt.drawBehind(ctx, L, P);
-      if (VF.zoneArt) VF.zoneArt.drawBack(ctx, L, P);
-    } finally { ctx = held; }
+    const list = backList(P, q);
+    for (let i = 0; i < list.length; i++) list[i].fn(g);
+  }
+  function drawFront(g, P, q, world) {
+    const list = frontList(P, q, world === undefined ? true : world);
+    for (let i = 0; i < list.length; i++) list[i].fn(g);
   }
 
   function draw() {
@@ -989,86 +1067,47 @@
 
     buildBackdrop();
 
-    /* EVERYTHING BEHIND THE WATER, on the other canvas.
+    /* THE FRAME, IN TWO HALVES, ON WHICHEVER RENDERER CAN DRAW EACH.
 
-       The 2D canvas sits above the GL one, so the ported set can only be a
-       back-to-front prefix of this list — the stars, the clouds, the horizon
-       feature, the land and the landmarks standing at or beyond it. They are
-       drawn by handing the same stage functions a context from js/gl/path.js
-       instead of this one; not a line of them changes. The result goes INTO
-       the world pass rather than over it, because the water has to be able to
-       cover the foot of a headland.
+       The 2D canvas sits above the GL one, so a stage can only move to the GPU
+       if every stage behind it already has. js/gl/layer.js takes the longest
+       prefix of each list it can actually draw and says how many it took; the
+       rest run here, in 2D, above — which is where they belong in the order
+       anyway. Nothing below knows or cares which renderer drew it. */
+    const backs = backList(P, q);
+    const useGl = glOn && VF.glWorld && VF.glWorld.ok() && VF.glLayer && VF.glLayer.ok();
 
-       js/gl/back.js hands back null the moment any of it asks for something
-       the GPU path does not do, and then every stage below runs in 2D exactly
-       as it always has. */
-    let backTex = null;
-    const backOn = glOn && VF.glWorld && VF.glWorld.ok() && VF.glBack && VF.glBack.ok();
-    mark('back', function () {
-      if (!backOn) return;
-      backTex = VF.glBack.build(L, P, function (g) {
+    let backTex = null, backTook = 0;
+    if (useGl) {
+      const r = VF.glLayer.back(backs, function (g) {
         if (shakeOff) g.translate(shakeOff.x, shakeOff.y);
-        drawBack(g, P, q);
       });
-    });
+      if (r) { backTex = r.tex; backTook = r.count; }
+    }
 
-    /* The world. It returns false if it could not — no WebGL2, a dead
-       context, a shader that would not build — and then the 2D sky and water
-       below draw exactly as they always did. */
+    /* The world, with the backdrop composited inside it — over its sky and
+       under its water, so the sea can cover the foot of a headland. It returns
+       false if it could not draw at all, and then the 2D sky and water below
+       draw exactly as they always did. */
     const world = glOn && VF.glWorld ? VF.glWorld.draw(L, P, backTex) : false;
-    if (!world) backTex = null;
+    if (!world) { backTex = null; backTook = 0; }
     if (world) ctx.clearRect(0, 0, W, H);
 
     mark('sky', function () { if (!world) drawSky(P); });
-    mark('stars', function () { if (backTex) return; buildStars(); drawStars(P, q); });
-    mark('clouds', function () { if (backTex) return; buildClouds(); drawClouds(P); });
-    mark('horizon', function () { if (!backTex) drawHorizonFeature(P); });
-    mark('land', function () { if (!backTex) drawLand(P); });
-    /* The zone's landmarks go in here, behind the fog and the water, so they
-       sit in the weather with the ridgeline instead of on top of the frame.
-       Half of what makes a place a place. */
-    /* The zone's landmarks: the ones at or past the horizon go in with the
-       ridgeline, so they sit in the same weather as the distant land. */
-    mark('zoneback', function () {
-      if (backTex) return;
-      if (VF.landmarkArt) VF.landmarkArt.drawBehind(ctx, L, P);
-      if (VF.zoneArt) VF.zoneArt.drawBack(ctx, L, P);
-    });
-    mark('aurora', function () { drawAurora(P); });
-    mark('lightning', function () { drawLightning(P); });
-    mark('fog', function () { drawFog(P, q); });
-    /* The body of the water, its light and its surface belong to the shader
-       when there is one. What stays here either way is what is reflected IN
-       the water — the land and the stars — because those are cached sprites
-       that already exist and blitting one costs less than sampling it. */
-    mark('water', function () { if (world) drawWaterOver(P, q); else drawWater(P, q); });
-    mark('under', function () { if (P.void < 0.9) drawUnderwater(P); });
-    mark('shoal', function () { seedShoal(); drawShoal(P, q); });
-    mark('surface', function () {
-      if (!world) { seedGlints(); drawSurface(P, q); }
-      drawSurfaceMist(P, q);
-    });
-    mark('skyfall', function () { drawSkyfall(); });
-    mark('ripples', function () { if (P.void < 0.9) VF.fx.drawRipples(ctx, 0.26); });
-    /* An encounter draws under the line and over the surface: it is in the
-       water, not on the screen. Everything it puts there inherits the fog,
-       the palette and the shake because it is inside the same transform. */
-    /* What is on the water HERE and nowhere else, under the encounter layer
-       and over the surface: the gulls, the panes, the crystals, the contacts,
-       the bottle drifting in. Half of what makes a zone a zone. */
-    mark('zone', function () {
-      if (VF.zoneArt) VF.zoneArt.drawFront(ctx, L, P);
-      /* and the ones standing in the water go over it, under the encounter
-         layer, so a wreck is in the sea rather than on the screen */
-      if (VF.landmarkArt) VF.landmarkArt.drawOn(ctx, L, P);
-    });
-    mark('creature', function () { if (VF.creatureArt) VF.creatureArt.draw(ctx, L, P); });
-    mark('aim', function () { drawAim(P); });
-    mark('line', function () { drawLineAndBobber(P); drawDeparture(P); });
-    mark('particles', function () { VF.particles.draw(ctx); });
-    mark('fore', function () { drawForeground(P); });
-    mark('cutscene', function () { drawCutscene(); });
-    mark('overlay', function () { VF.fx.drawOverlay(ctx, W, H); });
+    runFrom(backs, backTook);
+
+    const fronts = frontList(P, q, world);
+    let frontTook = 0;
+    if (world && useGl) {
+      const r = VF.glLayer.front(fronts, function (g) {
+        if (shakeOff) g.translate(shakeOff.x, shakeOff.y);
+      });
+      if (r && r.count) {
+        /* onto the canvas, blended, because a resolve cannot blend */
+        if (VF.glLayer.composite(r.tex)) frontTook = r.count;
+      }
+    }
+    runFrom(fronts, frontTook);
     syncVignette();
 
     if (wrongK > 0.01) drawWrong(wrongK);
@@ -1637,6 +1676,7 @@
     g.fillStyle = fade;
     g.fillRect(0, 0, c.width, depth);
     g.globalCompositeOperation = 'source-over';
+    c.__glRev = key;      // js/gl/path.js re-uploads on this and only this
     reflect = c;
   }
 
@@ -1975,6 +2015,7 @@
     g.translate(S / 2, S / 2);
     // baked at full strength; the alpha goes on at blit time
     try { VF.fishArt.drawSilhouette(g, fish, bucket, 1); } catch (e) { /* leave it blank */ }
+    c.__glRev = key;      // baked once per species per size bucket, never repainted
     const sp = { canvas: c, half: S / 2, bucket: bucket };
     finCache[key] = sp;
     return sp;
@@ -2978,9 +3019,15 @@
                            falls: departure.falls } : null;
     },
     groundY: groundY, visitSpots: visitSpots,
-    /* the back-of-the-frame stage set, so tools/glback.js compares the code
-       the renderer actually runs rather than a re-listing of it */
-    drawBack: drawBack,
+    /* the two stage sets, so the comparison tools drive the code the renderer
+       actually runs rather than a re-listing of it */
+    drawBack: drawBack, drawFront: drawFront,
+    /* and the lists themselves, so a tool can hand them to js/gl/layer.js the
+       same way the frame does — including the per-stage latch */
+    __backStages: backList,
+    __frontStages: function (P, q, world) {
+      return frontList(P, q, world === undefined ? true : world);
+    },
     /* Is this canvas point on the wanderer? The input layer asks before it
        decides a press was the start of a cast. */
     merchantHit: function (px, py) {
