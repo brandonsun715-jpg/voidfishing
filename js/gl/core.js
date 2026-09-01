@@ -363,14 +363,33 @@
 
   /* ------------------------------------------------------------- blending
 
-     Two modes and nothing else, because two modes is what the art uses: 132
-     of the 157 globalCompositeOperation calls in this codebase are 'lighter'
-     and 15 are 'source-over'. The other nine calls are exotic and stay on
-     Canvas 2D until each has a reason not to. */
+     Three modes, because three is what the art uses ON A LIVE CONTEXT: 132 of
+     the 157 globalCompositeOperation calls are 'lighter', 16 are
+     'source-over', and three are 'destination-out' — the void flag on a boat
+     and two knocked-out holes in fishArt.
+
+     The other six exotic calls turn out not to matter at all. Both 'source-in'
+     uses and all three of 'multiply', 'destination-in' and 'source-atop' are
+     on private scratch canvases that build a mask or a bake and are never
+     handed a GPU context; 'saturation' is in drawWrong, which runs after the
+     whole stage list on the 2D canvas above it. Six operations that looked
+     like a wall and are not in the way. */
+  /* Is this texture already uploaded at this version? A cache that paints its
+     own source lazily has to be able to ask, rather than assume — assuming is
+     what made the resize bug above invisible for a whole round. */
+  function hasTexture(name, version) {
+    const t = targets['tx:' + name];
+    return !!(t && t.version === version);
+  }
+
   function blend(mode) {
     if (!ok) return;
     gl.enable(gl.BLEND);
     if (mode === 'lighter') gl.blendFunc(gl.ONE, gl.ONE);
+    /* An absence rather than a colour: the source's alpha is subtracted from
+       what is already there and none of its colour is added. Exact, on
+       premultiplied content. */
+    else if (mode === 'destination-out') gl.blendFunc(gl.ZERO, gl.ONE_MINUS_SRC_ALPHA);
     else gl.blendFuncSeparate(gl.ONE, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
   }
 
@@ -404,11 +423,26 @@
     }
     canvas.style.width = w + 'px';
     canvas.style.height = h + 'px';
-    /* Every target is sized off the screen, so they all go. They rebuild
-       lazily on the next frame that asks for one. */
+    /* Offscreen BUFFERS are sized off the screen, so they all go and rebuild
+       lazily on the next frame that asks for one.
+
+       UPLOADED TEXTURES ARE NOT. The star field, the cloud layers, the
+       ridgeline, the shoal's silhouettes and the gradient ramps have nothing
+       to do with the size of the window, and dropping them here was a real
+       bug with a long fuse: the caches that own them live in js/gl/path.js and
+       went on believing they were uploaded, so the next cache HIT re-uploaded
+       whatever unrelated thing the shared 256x1 strip happened to hold at the
+       time — and served that ramp, under the right key, for the life of the
+       page. Every gradient in the game came out at nearly four times its
+       contrast, and only after a resize, which is why the frame looked right
+       and the comparison tool did not. */
     for (const k in targets) {
-      gl.deleteFramebuffer(targets[k].fbo);
-      gl.deleteTexture(targets[k].tex);
+      const t = targets[k];
+      if (k.indexOf('tx:') === 0) continue;
+      if (t.fbo) gl.deleteFramebuffer(t.fbo);
+      if (t.tex) gl.deleteTexture(t.tex);
+      if (t.rb) gl.deleteRenderbuffer(t.rb);
+      if (t.sb) gl.deleteRenderbuffer(t.sb);
       delete targets[k];
     }
   }
@@ -419,6 +453,7 @@
     setUniforms: setUniforms, uniform: uniform,
     buffer: buffer, upload: upload, mesh: mesh,
     msaa: msaa, resolve: resolve, bind: bind, texture: texture, blend: blend,
+    hasTexture: hasTexture,
     ctx: function () { return gl; },
     ok: function () { return ok && !lost; },
     caps: caps,
