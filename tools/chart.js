@@ -290,6 +290,43 @@ const OUT = path.join(__dirname, 'sc-port');
        sound.lvl > 0 && !!sound.withGear && sound.withGear !== sound.without,
        (sound.withGear || 'nothing said').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').slice(0, 66));
 
+  /* --- the reading half is still readable ---------------------------------
+
+     Giving the chart the room took it from the rail, and the first pass moved
+     every word in the spot card a third of the screen to the right and
+     squeezed it until the Travel button fell off the bottom of the panel. The
+     primary action of a panel is never below the fold, and the reason a
+     refusal happened is never underneath the thing that refused. */
+  const rail = await page.evaluate(() => {
+    /* pick somewhere this boat cannot work, so the card is at its tallest */
+    const nd = VF.mapArt.lastNodes().filter(n => n.p.id === 'shore')[0];
+    if (nd) {
+      const cv = document.querySelector('.map-canvas');
+      const r = cv.getBoundingClientRect();
+      ['pointerdown', 'pointerup'].forEach(k => cv.dispatchEvent(
+        new PointerEvent(k, { bubbles: true, clientX: r.left + nd.x,
+                              clientY: r.top + nd.y, pointerId: 1 })));
+    }
+    const side = document.querySelector('.map-side');
+    const pm = document.querySelector('.panel-map');
+    const act = document.querySelector('.spot-actions');
+    const say = document.querySelector('.map-side .fit-say');
+    const sr = side.getBoundingClientRect(), pr = pm.getBoundingClientRect();
+    const ar = act ? act.getBoundingClientRect() : null;
+    const yr = say ? say.getBoundingClientRect() : null;
+    return {
+      railW: Math.round(sr.width),
+      actionInFrame: !!ar && ar.bottom <= pr.bottom + 1 && ar.top >= pr.top,
+      /* and the reason is above the pinned row rather than under it */
+      reasonClear: !ar || !yr || yr.bottom <= ar.top + 1,
+      hasReason: !!yr
+    };
+  });
+  await page.waitForTimeout(200);
+  step('the rail still has room to read in', rail.railW >= 360, rail.railW + 'px');
+  step('and the way out of the panel is never below the fold', rail.actionInFrame);
+  step('a refusal says why, above the row that refused', !rail.hasReason || rail.reasonClear);
+
   /* --- it survives every viewport the rest of the game is tested at --- */
   for (const vp of [[1920, 1080], [1280, 720], [1024, 640], [720, 900]]) {
     await page.setViewportSize({ width: vp[0], height: vp[1] });

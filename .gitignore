@@ -5,6 +5,7 @@ package-lock.json
 tools/*.png
 tools/sc-world/
 tools/sc-port/
+tools/sc-gl/
 
 # generated build output
 dist/

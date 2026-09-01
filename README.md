@@ -182,7 +182,8 @@ js/systems/           time, weather, progression, economy, loot, fishing,
                       catches, quests, merchant, cutscenes, achievements,
                       encounters, daily, bounties, wall, away, returning,
                       charter, the harbour
-js/gl/                the WebGL2 layer: context and passes, sky and sea
+js/gl/                the WebGL2 layer: context and passes, sky and sea, a
+                      Canvas-2D-shaped path renderer, and the back of the frame
 js/world/             world coordinates and the camera, the shapes a place is
                       built from, the landmark graph, the event director, the
                       rumour ledger, the player's history, delayed
@@ -203,17 +204,50 @@ the economy.
 
 ## Notes on the design
 
-**The sea is on the GPU; the things in it are not.** Two canvases, stacked,
-and they never exchange pixels. WebGL2 draws the sky, the water, the light on
-it and the air between you and the horizon; the fourteen thousand lines of
-hand-tuned procedural art — creatures, rods, the angler, the boat, the
-landmarks — keep drawing in Canvas 2D on a transparent canvas above it. The
-reason they are kept apart is measured rather than assumed: pushing a
-full-screen 2D canvas into a GPU texture is four and a half megabytes across
-the bus and costs 30 ms here, which is more than the entire frame budget, so
-the compositor does the one job it is very good at and neither layer ever has
-to read the other. A 2D layer only becomes a texture when it is a bake that
+**The sea is on the GPU, and now so is everything behind it.** Two canvases,
+stacked, and they never exchange pixels. WebGL2 draws the sky, the water, the
+light on it and the air between you and the horizon; the rest of the fourteen
+thousand lines of hand-tuned procedural art — creatures, rods, the angler, the
+boat — keep drawing in Canvas 2D on a transparent canvas above it. The reason
+they are kept apart is measured rather than assumed: pushing a full-screen 2D
+canvas into a GPU texture is four and a half megabytes across the bus and
+costs 30 ms here, which is more than the entire frame budget, so the
+compositor does the one job it is very good at and neither layer ever has to
+read the other. A 2D layer only becomes a texture when it is a bake that
 changed, and those change a handful of times an hour.
+
+**The art moves to the GPU by being handed a different object.**
+`js/gl/path.js` is a `CanvasRenderingContext2D`-shaped thing that happens to
+be a GPU: `moveTo`, `quadraticCurveTo`, `fill`, `stroke`,
+`createLinearGradient`, `clip`, `drawImage`, the transform stack, `'lighter'`
+and `'source-over'`. Paths are flattened at a tolerance taken from the current
+transform, filled by ear clipping, stroked by expanding the polyline, clipped
+through the stencil buffer, and drawn 4× multisampled into an offscreen buffer
+that resolves in one blit. Colours are parsed by painting them into a 1×1 2D
+canvas and reading the bytes back, and gradients by painting the real
+`CanvasGradient` into a 256×1 strip and uploading it — when the bar is
+"nothing may look different", the cheapest way to match a rasteriser exactly
+is to ask it. Not one art module is edited; 185 of the 603 drawing functions
+already take their context as the first argument, and the ones in the scene
+draw through a module-level `ctx` that is simply pointed elsewhere for the
+length of a call.
+
+What it will not do it says out loud rather than approximating: multi-subpath
+fills (33 of 888 path builds), even-odd (four call sites), `shadowBlur` (two),
+text, and the nine exotic composite operations in the whole codebase.
+`unsupported()` reports what a frame asked for and did not get, and
+`js/gl/back.js` throws its whole backdrop away and reverts the frame to Canvas
+2D the moment that list is non-empty. A frame that is nearly right is worse
+than one drawn the old way, because nobody notices it in time.
+
+**The ported set can only ever be a back-to-front prefix.** The 2D canvas sits
+entirely above the GL one, so anything moved to the GPU lands behind
+everything still in 2D. Porting the smallest, easiest module first would put
+people behind fish. So the first slice is not the easiest module, it is
+everything behind the water — the stars, the clouds, the horizon feature, the
+land and the landmarks standing at or beyond it — and it is composited inside
+the world shader rather than over the finished frame, because the water has to
+be able to cover the foot of a headland.
 
 The water was about fifty stacked translucent fills — a depth gradient, a
 horizon seam, eleven belled bands for the light path, a hundred and thirty
@@ -508,6 +542,14 @@ node tools/port.js        all four harbour viewpoints with the interface off, an
                           every hotspot in frame, clickable, and not a dead click
 node tools/gl.js          every shader builds, the water has light in it, and
                           the game still draws with WebGL2 refused
+node tools/glpath.js      every landmark shape drawn twice — once in Canvas 2D,
+                          once on the GPU — and whether you could tell. Each one
+                          is walked out in distance and then in size until it
+                          puts real ink on the frame, because two blank pictures
+                          agree perfectly
+node tools/glback.js      the same, for the whole back of the frame, in every
+                          zone at two times of day — and that a live frame
+                          actually takes the GPU path
 node tools/gallery.js      renders the whole catalogue to one sheet
 node tools/closeup.js      renders a few species large, to judge surface detail
 node tools/rods.js         renders every rod preview to one sheet

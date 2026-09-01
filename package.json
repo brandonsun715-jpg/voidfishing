@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "A quiet fishing game at the edge of an endless void.",
   "scripts": {
-    "test": "node tools/smoke.js && node tools/cases.js && node tools/silhouettes.js && node tools/astral.js && node tools/encounters.js && node tools/expansion.js && node tools/trips.js && node tools/consequences.js && node tools/rumours.js && node tools/chains.js && node tools/react.js && node tools/boatmath.js && node tools/reach.js && node tools/chart.js && node tools/port.js && node tools/gl.js && node tools/zonecheck.js && node tools/space.js && node tools/soak.js 25 && node tools/ui-audit.js && node tools/responsive.js && npm run build && node tools/distcheck.js",
+    "test": "node tools/smoke.js && node tools/cases.js && node tools/silhouettes.js && node tools/astral.js && node tools/encounters.js && node tools/expansion.js && node tools/trips.js && node tools/consequences.js && node tools/rumours.js && node tools/chains.js && node tools/react.js && node tools/boatmath.js && node tools/reach.js && node tools/chart.js && node tools/port.js && node tools/gl.js && node tools/glpath.js && node tools/glback.js && node tools/zonecheck.js && node tools/space.js && node tools/soak.js 25 && node tools/ui-audit.js && node tools/responsive.js && npm run build && node tools/distcheck.js",
     "smoke": "node tools/smoke.js",
     "soak": "node tools/soak.js",
     "audit": "node tools/ui-audit.js",

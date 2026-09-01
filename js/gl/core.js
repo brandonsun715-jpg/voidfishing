@@ -170,6 +170,64 @@
     }
   }
 
+  /* ------------------------------------------------------------ geometry
+
+     Everything in this file used to be a full-screen pass: one oversized
+     triangle, no attributes, no buffers. The path renderer needs actual
+     geometry, so this is the smallest thing that gives it some — a dynamic
+     buffer per name, orphaned on every upload so the driver never has to wait
+     for the last frame to finish reading it. */
+
+  const buffers = Object.create(null);
+
+  function buffer(name) {
+    let b = buffers[name];
+    if (b) return b;
+    b = { buf: gl.createBuffer(), vao: gl.createVertexArray(), cap: 0, attrs: null };
+    buffers[name] = b;
+    return b;
+  }
+
+  /* Upload and describe in one call. `attrs` is [[location, size, offset], …]
+     in floats, and the stride is worked out from the widest one — the layout
+     is described once and then remembered on the VAO. */
+  function upload(name, data, attrs, stride) {
+    const b = buffer(name);
+    gl.bindVertexArray(b.vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, b.buf);
+    /* Orphan: hand the driver a fresh store rather than waiting on the old
+       one. This is the whole reason a per-frame dynamic buffer is affordable. */
+    const bytes = data.byteLength;
+    if (bytes > b.cap) {
+      gl.bufferData(gl.ARRAY_BUFFER, Math.max(bytes, 65536), gl.STREAM_DRAW);
+      b.cap = Math.max(bytes, 65536);
+    } else {
+      gl.bufferData(gl.ARRAY_BUFFER, b.cap, gl.STREAM_DRAW);
+    }
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, data);
+    const key = JSON.stringify(attrs) + ':' + stride;
+    if (b.attrs !== key) {
+      b.attrs = key;
+      for (let i = 0; i < attrs.length; i++) {
+        const a = attrs[i];
+        gl.enableVertexAttribArray(a[0]);
+        gl.vertexAttribPointer(a[0], a[1], gl.FLOAT, false, stride * 4, a[2] * 4);
+      }
+    }
+    return b;
+  }
+
+  /* Draw geometry with a program. The counterpart to `pass`, which draws the
+     screen; this draws things in it. */
+  function mesh(p, vals, b, count, mode) {
+    if (!ok || !p || !count) return false;
+    gl.useProgram(p);
+    if (vals) setUniforms(p, vals);
+    gl.bindVertexArray(b.vao);
+    gl.drawArrays(mode === undefined ? gl.TRIANGLES : mode, 0, count);
+    return true;
+  }
+
   /* ------------------------------------------------------------- targets */
 
   /* A named offscreen buffer at some fraction of the screen. Bloom runs at a
@@ -200,6 +258,120 @@
     t = { __tex: 1, name: name, tex: tex, fbo: fbo, w: w, h: h };
     targets[name] = t;
     return t;
+  }
+
+  /* --------------------------------------------------------------- MSAA
+
+     Canvas 2D antialiases every path it draws. A GL context created with
+     `antialias:false` — which this one is, because every pass so far has been
+     full-screen and had no edges — does not, so path art drawn straight to it
+     comes out with hard stair-stepped edges and looks nothing like the art it
+     replaced.
+
+     WebGL2 can multisample an offscreen buffer, which WebGL1 could not: a
+     multisampled renderbuffer to draw into, and a blit to resolve it into an
+     ordinary texture. Measured here: MAX_SAMPLES is 4, and RGBA8 supports 4×.
+
+     This is the piece that makes the migration possible at all. Without it
+     there is no version of the ported art that matches the original. */
+  function msaa(name, scale) {
+    const w = Math.max(1, Math.round(W * DPR * (scale || 1)));
+    const h = Math.max(1, Math.round(H * DPR * (scale || 1)));
+    let t = targets['ms:' + name];
+    if (t && t.w === w && t.h === h) return t;
+    if (t) {
+      gl.deleteFramebuffer(t.fbo); gl.deleteRenderbuffer(t.rb);
+      if (t.sb) gl.deleteRenderbuffer(t.sb);
+    }
+
+    const samples = Math.min(4, gl.getParameter(gl.MAX_SAMPLES) || 0);
+    const rb = gl.createRenderbuffer();
+    gl.bindRenderbuffer(gl.RENDERBUFFER, rb);
+    if (samples > 1) {
+      gl.renderbufferStorageMultisample(gl.RENDERBUFFER, samples, gl.RGBA8, w, h);
+    } else {
+      gl.renderbufferStorage(gl.RENDERBUFFER, gl.RGBA8, w, h);
+    }
+    /* And a stencil beside it, because `clip` is a real thing the art does —
+       thirty call sites, and two of them are the cliff faces that the strata
+       are drawn inside. A clip to an arbitrary shape is a stencil or it is
+       nothing. */
+    const sb = gl.createRenderbuffer();
+    gl.bindRenderbuffer(gl.RENDERBUFFER, sb);
+    if (samples > 1) {
+      gl.renderbufferStorageMultisample(gl.RENDERBUFFER, samples, gl.DEPTH24_STENCIL8, w, h);
+    } else {
+      gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH24_STENCIL8, w, h);
+    }
+    const fbo = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.RENDERBUFFER, rb);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_STENCIL_ATTACHMENT, gl.RENDERBUFFER, sb);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+    t = { __ms: 1, name: name, fbo: fbo, rb: rb, sb: sb, w: w, h: h, samples: samples };
+    targets['ms:' + name] = t;
+    return t;
+  }
+
+  /* Resolve a multisampled buffer down. `to` null means the screen, which is
+     the ordinary case: draw the art at 4× into the offscreen buffer and blit
+     it onto the canvas in one go. */
+  function resolve(from, to) {
+    if (!ok || !from) return false;
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, from.fbo);
+    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, to ? to.fbo : null);
+    const dw = to ? to.w : Math.round(W * DPR), dh = to ? to.h : Math.round(H * DPR);
+    gl.blitFramebuffer(0, 0, from.w, from.h, 0, 0, dw, dh,
+                       gl.COLOR_BUFFER_BIT, gl.LINEAR);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    return true;
+  }
+
+  /* Bind a target (multisampled or not) and set the viewport to it. */
+  function bind(t) {
+    if (!ok) return;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, t ? t.fbo : null);
+    gl.viewport(0, 0, t ? t.w : Math.round(W * DPR), t ? t.h : Math.round(H * DPR));
+  }
+
+  /* ------------------------------------------------------------ textures
+
+     A 2D canvas becomes a texture only when the bake behind it changed — the
+     star field, the cloud layers, the ridgeline, a glyph sheet. `version` is
+     whatever the caller uses to know that: a key string, a counter. Passing
+     the same one twice costs nothing. */
+  function texture(name, source, version, smooth) {
+    let t = targets['tx:' + name];
+    if (t && t.version === version) return t;
+    if (!t) {
+      t = { __tex: 1, name: name, tex: gl.createTexture(), w: 0, h: 0, version: null };
+      targets['tx:' + name] = t;
+    }
+    gl.bindTexture(gl.TEXTURE_2D, t.tex);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+    const f = smooth === false ? gl.NEAREST : gl.LINEAR;
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, f);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, f);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    t.w = source.width; t.h = source.height; t.version = version;
+    return t;
+  }
+
+  /* ------------------------------------------------------------- blending
+
+     Two modes and nothing else, because two modes is what the art uses: 132
+     of the 157 globalCompositeOperation calls in this codebase are 'lighter'
+     and 15 are 'source-over'. The other nine calls are exotic and stay on
+     Canvas 2D until each has a reason not to. */
+  function blend(mode) {
+    if (!ok) return;
+    gl.enable(gl.BLEND);
+    if (mode === 'lighter') gl.blendFunc(gl.ONE, gl.ONE);
+    else gl.blendFuncSeparate(gl.ONE, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
   }
 
   /* Draw one full-screen pass. `to` is a target or null for the screen. */
@@ -245,6 +417,8 @@
     init: init, resize: resize,
     program: program, pass: pass, target: target, clear: clear,
     setUniforms: setUniforms, uniform: uniform,
+    buffer: buffer, upload: upload, mesh: mesh,
+    msaa: msaa, resolve: resolve, bind: bind, texture: texture, blend: blend,
     ctx: function () { return gl; },
     ok: function () { return ok && !lost; },
     caps: caps,

@@ -44,6 +44,7 @@
                                        0xBEEF ^ VF.locations.index(loc.id) * 7919,
                                        q, U.hexToRgb(loc.starTint), DPR);
     starField = built.canvas;
+    starField.__glRev = key;      // js/gl/path.js re-uploads on this and only this
     stars = built.bright;
   }
 
@@ -71,18 +72,20 @@
     clouds = [];
     const layers = q === 'high' ? 2 : 1;
     for (let i = 0; i < layers; i++) {
+      const layer = VF.skyArt.buildCloudLayer(W, bandH, {
+        downscale: q === 'high' ? 3 : 4,
+        scale: i === 0 ? 2.4 : 4.6,
+        seed: seedBase + i * 977,
+        cover: cover * (i === 0 ? 1 : 0.78),
+        soft: i === 0 ? 0.34 : 0.26,
+        lit: U.mixRgb(U.hexToRgb(loc.glow), [255, 255, 255], 0.20),
+        dark: U.mixRgb(U.hexToRgb(loc.fog), [0, 0, 0], 0.62),
+        lightX: L.glowX / Math.max(1, W),
+        lightY: L.glowY / Math.max(1, bandH)
+      });
+      layer.__glRev = key + ':' + i;
       clouds.push({
-        canvas: VF.skyArt.buildCloudLayer(W, bandH, {
-          downscale: q === 'high' ? 3 : 4,
-          scale: i === 0 ? 2.4 : 4.6,
-          seed: seedBase + i * 977,
-          cover: cover * (i === 0 ? 1 : 0.78),
-          soft: i === 0 ? 0.34 : 0.26,
-          lit: U.mixRgb(U.hexToRgb(loc.glow), [255, 255, 255], 0.20),
-          dark: U.mixRgb(U.hexToRgb(loc.fog), [0, 0, 0], 0.62),
-          lightX: L.glowX / Math.max(1, W),
-          lightY: L.glowY / Math.max(1, bandH)
-        }),
+        canvas: layer,
         // the high layer is further away, so it moves slower
         speed: i === 0 ? 0.0042 : 0.0092,
         alpha: i === 0 ? 0.13 : 0.085,
@@ -184,6 +187,7 @@
     if (key !== landKey || !landPad) {
       landKey = key;
       bakeLand(P);
+      landPad.__glRev = key;
     }
     if (landPad) ctx.drawImage(landPad, 0, 0);
   }
@@ -955,6 +959,25 @@
     prof.acc[name] = (prof.acc[name] || 0) + (performance.now() - t0);
   }
 
+  /* Everything behind the water, into whatever context it is handed. The
+     stage functions below all draw through the module's own `ctx`, so porting
+     them is a matter of pointing that at the GPU for the length of the call —
+     which is why not one of them is edited. Defined here rather than inline
+     in draw() so that tools/glback.js drives the SAME code the frame does; two
+     copies of a stage list is two stage lists that drift. */
+  function drawBack(g, P, q) {
+    const held = ctx;
+    ctx = g;
+    try {
+      buildStars(); drawStars(P, q);
+      buildClouds(); drawClouds(P);
+      drawHorizonFeature(P);
+      drawLand(P);
+      if (VF.landmarkArt) VF.landmarkArt.drawBehind(ctx, L, P);
+      if (VF.zoneArt) VF.zoneArt.drawBack(ctx, L, P);
+    } finally { ctx = held; }
+  }
+
   function draw() {
     const P = VF.palette.P;
     const wrongK = VF.wrong ? VF.wrong.intensity() : 0;
@@ -966,23 +989,48 @@
 
     buildBackdrop();
 
-    /* The world first, on the other canvas. It returns false if it could not
-       — no WebGL2, a dead context, a shader that would not build — and then
-       the 2D sky and water below draw exactly as they always did. */
-    const world = glOn && VF.glWorld ? VF.glWorld.draw(L, P) : false;
+    /* EVERYTHING BEHIND THE WATER, on the other canvas.
+
+       The 2D canvas sits above the GL one, so the ported set can only be a
+       back-to-front prefix of this list — the stars, the clouds, the horizon
+       feature, the land and the landmarks standing at or beyond it. They are
+       drawn by handing the same stage functions a context from js/gl/path.js
+       instead of this one; not a line of them changes. The result goes INTO
+       the world pass rather than over it, because the water has to be able to
+       cover the foot of a headland.
+
+       js/gl/back.js hands back null the moment any of it asks for something
+       the GPU path does not do, and then every stage below runs in 2D exactly
+       as it always has. */
+    let backTex = null;
+    const backOn = glOn && VF.glWorld && VF.glWorld.ok() && VF.glBack && VF.glBack.ok();
+    mark('back', function () {
+      if (!backOn) return;
+      backTex = VF.glBack.build(L, P, function (g) {
+        if (shakeOff) g.translate(shakeOff.x, shakeOff.y);
+        drawBack(g, P, q);
+      });
+    });
+
+    /* The world. It returns false if it could not — no WebGL2, a dead
+       context, a shader that would not build — and then the 2D sky and water
+       below draw exactly as they always did. */
+    const world = glOn && VF.glWorld ? VF.glWorld.draw(L, P, backTex) : false;
+    if (!world) backTex = null;
     if (world) ctx.clearRect(0, 0, W, H);
 
     mark('sky', function () { if (!world) drawSky(P); });
-    mark('stars', function () { buildStars(); drawStars(P, q); });
-    mark('clouds', function () { buildClouds(); drawClouds(P); });
-    mark('horizon', function () { drawHorizonFeature(P); });
-    mark('land', function () { drawLand(P); });
+    mark('stars', function () { if (backTex) return; buildStars(); drawStars(P, q); });
+    mark('clouds', function () { if (backTex) return; buildClouds(); drawClouds(P); });
+    mark('horizon', function () { if (!backTex) drawHorizonFeature(P); });
+    mark('land', function () { if (!backTex) drawLand(P); });
     /* The zone's landmarks go in here, behind the fog and the water, so they
        sit in the weather with the ridgeline instead of on top of the frame.
        Half of what makes a place a place. */
     /* The zone's landmarks: the ones at or past the horizon go in with the
        ridgeline, so they sit in the same weather as the distant land. */
     mark('zoneback', function () {
+      if (backTex) return;
       if (VF.landmarkArt) VF.landmarkArt.drawBehind(ctx, L, P);
       if (VF.zoneArt) VF.zoneArt.drawBack(ctx, L, P);
     });
@@ -1431,6 +1479,7 @@
       grad.addColorStop(1, U.rgbToCss(P.glow, 0));
       g.fillStyle = grad;
       g.fillRect(0, 0, S, S);
+      c.__glRev = key;
       bloom = c;
     }
     const d = R * 24;
@@ -2929,6 +2978,9 @@
                            falls: departure.falls } : null;
     },
     groundY: groundY, visitSpots: visitSpots,
+    /* the back-of-the-frame stage set, so tools/glback.js compares the code
+       the renderer actually runs rather than a re-listing of it */
+    drawBack: drawBack,
     /* Is this canvas point on the wanderer? The input layer asks before it
        decides a press was the start of a cast. */
     merchantHit: function (px, py) {

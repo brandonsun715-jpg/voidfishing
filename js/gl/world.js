@@ -49,6 +49,8 @@ uniform float chop;         // wind and rain, minus whatever has gone still
 uniform float calm;         // 0..1, how much the water has stopped
 uniform float camU;         // lateral camera, so the field moves with the frame
 uniform float voidK;        // how much of this place is not water
+uniform sampler2D back;     // everything behind the water, already drawn
+uniform bool  hasBack;
 
 /* The surface, sampled in the plane's own coordinates rather than the
    screen's.
@@ -100,6 +102,16 @@ void main() {
     float band = smoothstep(0.0, 1.0, pow(t, 3.0));
     float near = 1.0 - clamp(abs(uv.x - light.x) * 1.6, 0.0, 1.0);
     c += glow * band * (0.045 * bright + 0.02) * (0.4 + near * 0.6);
+    /* The stars, the clouds, the ridgeline and whatever stands on it, drawn
+       by js/gl/back.js into a buffer of their own and composited HERE rather
+       than over the finished frame — the water has to be able to cover the
+       foot of a headland, and a layer laid on afterwards cannot be covered by
+       anything. Premultiplied, because that is how it was blended. uv.y runs
+       down and a texture's v runs up, so the sample is flipped. */
+    if (hasBack) {
+      vec4 bk = texture(back, vec2(uv.x, 1.0 - uv.y));
+      c = bk.rgb + c * (1.0 - bk.a);
+    }
     frag = vec4(c, 1.0);
     return;
   }
@@ -190,7 +202,7 @@ void main() {
 
   /* Everything the shader needs, pulled from the same places the 2D renderer
      pulls it from — so the two paths cannot drift apart in colour. */
-  function uniforms(L, P) {
+  function uniforms(L, P, back) {
     const w = Math.max(1, L.w), h = Math.max(1, L.h);
     const calm = Math.max(VF.encounters ? VF.encounters.calm() : 0,
                           VF.conditions ? VF.conditions.flag('calm') * 0.8 : 0,
@@ -213,20 +225,22 @@ void main() {
       chop: U.clamp(chop, 0.05, 3),
       calm: U.clamp(calm, 0, 1),
       camU: VF.camera ? VF.camera.u() : 0,
-      voidK: U.clamp(P.void || 0, 0, 1)
+      voidK: U.clamp(P.void || 0, 0, 1),
+      back: back || null,
+      hasBack: !!back
     };
   }
 
   /* Returns true if it drew, and false if the 2D path should do it instead.
      Every caller checks, so losing the context mid-frame degrades rather than
      failing. */
-  function draw(L, P) {
+  function draw(L, P, back) {
     if (failed || !VF.gl || !VF.gl.ok()) return false;
     if (!prog) {
       prog = VF.gl.program('world', FS);
       if (!prog) { failed = true; return false; }
     }
-    return VF.gl.pass(prog, uniforms(L, P), null);
+    return VF.gl.pass(prog, uniforms(L, P, back), null);
   }
 
   VF.glWorld = {
