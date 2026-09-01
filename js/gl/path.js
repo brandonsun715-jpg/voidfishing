@@ -64,14 +64,24 @@
     in vec2 vPos;
     out vec4 frag;
 
-    uniform int   mode;      // 0 flat, 1 linear, 2 radial
+    uniform int   mode;      // 0 flat, 1 linear, 2 radial, 3 image
     uniform vec4  g0;        // linear (x0,y0,x1,y1) · radial (x0,y0,r0,_)
-    uniform vec4  g1;        // radial (x1,y1,r1,_)
+                             // image  (the 2x2 of device pixels -> uv)
+    uniform vec4  g1;        // radial (x1,y1,r1,_) · image (the translation)
     uniform float alpha;
     uniform sampler2D stops;
+    uniform sampler2D img;
 
     void main() {
       if (mode == 0) { frag = vCol * alpha; return; }
+      if (mode == 3) {
+        /* One inverse affine takes a device pixel straight to a source pixel,
+           so a baked canvas blits under any transform the art had set without
+           the geometry carrying texture coordinates of its own. */
+        frag = texture(img, vec2(g0.x * vPos.x + g0.y * vPos.y + g1.x,
+                                 g0.z * vPos.x + g0.w * vPos.y + g1.y)) * alpha;
+        return;
+      }
 
       float t;
       if (mode == 1) {
@@ -156,7 +166,7 @@
      next frame cost one lookup and the whole game costs LUTS textures for the
      life of the page. A ramp is only the stops — a linear and a radial with
      the same colours share one strip. */
-  const LUTS = 32;
+  const LUTS = 64;
   const lutKey = new Array(LUTS);
   const lutSlot = Object.create(null);
   let lutNext = 0;
@@ -419,12 +429,17 @@
     } else if (paint.kind === 'linear') {
       vals.mode = 1;
       vals.g0 = paint.a;
-      vals.stops = paint.tex;
+      vals.stops = paint.tex; vals.img = paint.tex;
+    } else if (paint.kind === 'image') {
+      vals.mode = 3;
+      vals.g0 = [paint.a[0], paint.a[1], paint.a[2], paint.a[3]];
+      vals.g1 = [paint.a[4], paint.a[5], 0, 0];
+      vals.stops = paint.tex; vals.img = paint.tex;
     } else {
       vals.mode = 2;
       vals.g0 = [paint.a[0], paint.a[1], paint.a[2], 0];
       vals.g1 = [paint.a[3], paint.a[4], paint.a[5], 0];
-      vals.stops = paint.tex;
+      vals.stops = paint.tex; vals.img = paint.tex;
     }
     /* `mode` is an int uniform and setUniforms sends numbers as floats, so it
        is set directly rather than through the shape-guessing path. */
@@ -674,10 +689,63 @@
   };
   P.setLineDash = function (a) { if (a && a.length) note('setLineDash'); };
   P.getLineDash = function () { return []; };
+  /* THE BAKED LAYERS.
+
+     The star field, the two cloud layers and the tinted ridgeline are already
+     offscreen 2D canvases that the scene blits — the exact case a texture is
+     for, and the one js/gl/core.js's own header carves out. Supporting
+     drawImage here rather than building a separate blitter means those three
+     stages port the same way everything else does: by being handed a different
+     object. `ctx.drawImage(starField, 0, 0, W, sky)` is unchanged.
+
+     A canvas must say when its bake changed, through `__glRev`. There is no
+     way to see that from here, and re-uploading every frame to be safe is how
+     a texture cache becomes a leak. Without one this reports and does not
+     draw, because a stale sky is a worse answer than a loud one. */
+  let imgSeq = 0;
+  const imgIds = new WeakMap();
+
+  P.drawImage = function (src, a, b, c, d, e, f, g2, h2) {
+    if (!src) return;
+    const iw = src.width || src.naturalWidth || 0;
+    const ih = src.height || src.naturalHeight || 0;
+    if (!iw || !ih) return;
+    const rev = src.__glRev;
+    if (rev === undefined || rev === null) { note('drawImage:unversioned'); return; }
+
+    let sx = 0, sy = 0, sw = iw, sh = ih, dx, dy, dw, dh;
+    if (f === undefined) { dx = a; dy = b; dw = c === undefined ? iw : c; dh = d === undefined ? ih : d; }
+    else { sx = a; sy = b; sw = c; sh = d; dx = e; dy = f; dw = g2; dh = h2; }
+    if (!dw || !dh || !sw || !sh) return;
+
+    /* the destination quad, in device pixels */
+    const p0 = this._pt(dx, dy), p1 = this._pt(dx + dw, dy);
+    const p2 = this._pt(dx + dw, dy + dh), p3 = this._pt(dx, dy + dh);
+    const tris = [p0[0], p0[1], p1[0], p1[1], p2[0], p2[1],
+                  p0[0], p0[1], p2[0], p2[1], p3[0], p3[1]];
+
+    /* and the affine that runs the other way, device pixel back to source */
+    const m = this._m;
+    const det = m[0] * m[3] - m[1] * m[2];
+    if (!det) return;
+    const ia = m[3] / det, ib = -m[1] / det, ic = -m[2] / det, id = m[0] / det;
+    const ie = (m[2] * m[5] - m[3] * m[4]) / det;
+    const iff = (m[1] * m[4] - m[0] * m[5]) / det;
+    const kx = sw / (iw * dw), ky = sh / (ih * dh);
+    const A = [kx * ia, kx * ic, ky * ib, ky * id,
+               kx * (ie - dx) + sx / iw, ky * (iff - dy) + sy / ih];
+
+    let id2 = imgIds.get(src);
+    if (id2 === undefined) { id2 = 'img' + (++imgSeq); imgIds.set(src, id2); }
+    const tex = VF.gl.texture(id2, src, String(rev));
+    want({ kind: 'image', id: id2 + '@' + rev + '@' + A.join(','), a: A, tex: tex },
+         this._blend(), this.globalAlpha);
+    push(tris, 1, 1, 1, 1);
+  };
+
   P.fillText = function () { note('fillText'); };
   P.strokeText = function () { note('strokeText'); };
   P.measureText = function () { note('measureText'); return { width: 0 }; };
-  P.drawImage = function () { note('drawImage'); };
   P.putImageData = function () { note('putImageData'); };
   P.getImageData = function () { note('getImageData'); return null; };
 

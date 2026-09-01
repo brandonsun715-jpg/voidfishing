@@ -1166,6 +1166,9 @@
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.clearRect(0, 0, L.w, L.h);
     try { fn(g, L, P); } catch (e) { /* a bad landmark must not take the frame */ }
+    /* js/gl/path.js re-uploads this to the GPU on this and only this — it has
+       no way of seeing that a canvas was repainted underneath it. */
+    bake.__glRev = key;
     return bake;
   }
 
