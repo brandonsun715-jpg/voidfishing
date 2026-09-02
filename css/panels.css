@@ -1125,8 +1125,22 @@ input[type=range]::-moz-range-thumb {
      hundred pixels to three hundred and sixty, which moved every word in it
      a third of the screen to the right and squeezed the spot card until its
      Travel button fell off the bottom of the panel. The panel is wider
-     instead, so the chart gains without the reading half losing. */
-  grid-template-columns: 1fr minmax(380px, 460px);
+     instead, so the chart gains without the reading half losing.
+
+     And `minmax(0, 1fr)` rather than `1fr`, which is the whole of why this
+     panel used to walk off the side of the screen. A `1fr` track is
+     `minmax(auto, 1fr)`, and a grid item's automatic minimum is its
+     MIN-CONTENT size — for a canvas carrying an explicit pixel width, that
+     width. js/ui/panels.js measures this column every frame and writes the
+     result back onto the canvas as inline pixels, so the column could never go
+     below whatever it last measured. Narrow the window and the loop closed on
+     itself: the panel shrank, the chart could not, the two columns stopped
+     fitting, `overflow: hidden` clipped the difference, and the rail — the
+     place name, the soundings, the way out — was pushed past the panel's right
+     edge and gone. It never came back, because the next frame measured the
+     inflated column and wrote it down again, and every further resize ratcheted
+     it another two pixels along. */
+  grid-template-columns: minmax(0, 1fr) minmax(380px, 460px);
   width: 100%; height: 100%; min-height: 0;
 }
 .map-chart {
@@ -1145,7 +1159,9 @@ input[type=range]::-moz-range-thumb {
   color: var(--ink-2); font: inherit; font-size: 10.5px; cursor: pointer;
 }
 .map-home:hover { background: rgba(255,255,255,0.10); color: var(--ink); }
-.map-canvas { display: block; width: 100%; height: 100%; }
+/* Out of the flow entirely, so the size js/ui/panels.js measures off this
+   column can never become the size of the column. Measurement runs one way. */
+.map-canvas { display: block; position: absolute; inset: 0; width: 100%; height: 100%; }
 .map-canvas:focus-visible { outline: 1px solid var(--accent); outline-offset: -2px; }
 .map-side { padding: 18px 20px 22px; min-width: 0; overflow-y: auto; }
 
@@ -1222,16 +1238,25 @@ input[type=range]::-moz-range-thumb {
 @media (max-width: 780px) {
   /* Stacked, the chart loses its column and gets a squat box instead — and
      fourteen places in three hundred pixels is a ladder nobody can read. Give
-     it real height and let the panel scroll past it. */
-  .panel-map { height: auto; max-height: min(760px, 90vh); }
-  .map-wrap { grid-template-columns: 1fr; height: auto; }
-  .map-body { overflow-y: auto; display: block; }
+     it real height and let the RAIL scroll under it.
+
+     The rail, and not the panel body. Scrolling the body instead put the
+     sticky action row inside a box that never scrolled, so it stopped being
+     sticky and the Travel button sat sixty pixels below the fold — the same
+     promise broken a different way. Keeping the body a fixed flex box and the
+     rail the scroller means this layout works exactly as the wide one does,
+     which is also one fewer thing that can only go wrong at one size. */
+  .panel-map { height: min(760px, 90vh); }
+  .map-wrap {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+    height: 100%;
+  }
   .map-chart {
-    height: 460px; min-height: 460px;
+    height: 340px; min-height: 340px;
     border-right: none; border-bottom: 1px solid var(--line);
   }
   .spot-meta { grid-template-columns: repeat(2, 1fr); }
-  .map-side { overflow: visible; }
 }
 
 /* ------------------------------------------------------------- rod cards
