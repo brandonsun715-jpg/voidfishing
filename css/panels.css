@@ -1215,6 +1215,57 @@ input[type=range]::-moz-range-thumb {
 .spot-actions .btn-primary { flex: 1 1 auto; }
 .spot-here { font-family: var(--mono); font-size: 11px; color: var(--accent); letter-spacing: 0.06em; }
 
+/* =================================================================== plates
+
+   Photographs, and they are shown the way photographs are: one large enough to
+   look at, the rest as a contact sheet under it. The caption is not a title —
+   it is the stamp the shutter took with the picture, so it reads as a note on
+   the back rather than as a heading. */
+
+.plate-big {
+  display: flex; flex-direction: column; gap: 9px;
+  margin-bottom: 14px;
+}
+/* Tall enough to look at, short enough that the plate, its caption and the
+   sheet under it are all on screen at once — a photograph you have to scroll
+   to see the top of is a photograph you are not looking at. */
+.plate-img {
+  display: block; margin: 0 auto;
+  max-width: 100%; width: auto;
+  max-height: min(46vh, 420px); height: auto;
+  border: 1px solid var(--line-2); border-radius: var(--r);
+  background: #05070c;
+  box-shadow: 0 18px 48px rgba(0,0,0,0.55);
+}
+.plate-cap {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  font-size: 11.5px; color: var(--ink-3);
+}
+.plate-where { font-family: var(--mono); letter-spacing: 0.04em; }
+.plate-subj { color: var(--ink-2); font-style: italic; }
+.plate-drop { margin-left: auto; font-size: 10.5px; padding: 3px 9px; }
+
+.plate-count {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em;
+  color: var(--ink-4); margin-bottom: 8px;
+}
+
+.plate-sheet {
+  display: grid; gap: 6px;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+}
+.plate-thumb {
+  display: block; padding: 0; border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: #05070c; cursor: pointer; overflow: hidden; line-height: 0;
+  transition: border-color 160ms var(--e-move), transform 160ms var(--e-move);
+}
+.plate-thumb img { display: block; width: 100%; height: auto; opacity: 0.72; }
+.plate-thumb:hover { border-color: var(--line-2); transform: translateY(-1px); }
+.plate-thumb:hover img { opacity: 0.92; }
+.plate-thumb.on { border-color: var(--accent); }
+.plate-thumb.on img { opacity: 1; }
+.plate-thumb:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
+
 /* ================================================================== charter */
 
 /* The condition rows are the widest in the game, and the shared stat grid

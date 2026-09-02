@@ -354,6 +354,11 @@
     i = clampSlot(i);
     const st = storage();
     if (st) { try { st.removeItem(slotKey(i)); } catch (e) { /* ignore */ } }
+    /* Anything else keyed to this slot goes with it — the album, at time of
+       writing. Named rather than assumed to be the active one, because erasing
+       slot three from slot one must not leave slot three's photographs behind
+       for the next game that opens there. */
+    VF.bus.emit('save:erased', { slot: i });
     if (i === active) {
       VF.state.data = VF.state.defaults();
       VF.bus.emit('save:reset');

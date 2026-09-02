@@ -1574,6 +1574,74 @@
     });
   }
 
+  /* ------------------------------------------------------------- plates
+
+     What you photographed, and what you knew at the time. The caption is not
+     a title someone wrote for the picture — it is the stamp the shutter took
+     with it, which is why a fish you never landed says "something on the
+     line" and not its name. */
+  function plateCaption(p) {
+    const bits = [];
+    if (p.placeName) bits.push(p.placeName);
+    if (p.phase) bits.push(p.phase.toLowerCase());
+    if (p.weather) bits.push(p.weather.toLowerCase());
+    return bits.join(' · ');
+  }
+
+  function platesView(b) {
+    const shots = VF.album ? VF.album.list() : [];
+    if (!shots.length) {
+      b.appendChild(U.el('div', 'empty',
+        'nothing kept yet. press P to photograph what is in front of you.'));
+      return;
+    }
+    /* One plate large, the rest as a contact sheet under it. Which one is
+       large is the only state this view has. */
+    const big = U.el('div', 'plate-big');
+    const sheet = U.el('div', 'plate-sheet');
+
+    function show(p) {
+      U.clear(big);
+      const im = U.el('img', 'plate-img');
+      im.src = p.img; im.alt = plateCaption(p);
+      im.width = p.w; im.height = p.h;
+      big.appendChild(im);
+      const cap = U.el('div', 'plate-cap');
+      cap.appendChild(U.el('span', 'plate-where', plateCaption(p)));
+      if (p.subject && p.subject.name) {
+        cap.appendChild(U.el('span', 'plate-subj', p.subject.name));
+      }
+      const drop = U.el('button', 'btn btn-ghost plate-drop', 'throw away');
+      drop.addEventListener('click', function () {
+        VF.audio.back();
+        VF.album.remove(p.id);
+        refresh('plates');
+      });
+      cap.appendChild(drop);
+      big.appendChild(cap);
+      U.qsa('.plate-thumb', sheet).forEach(function (t) {
+        t.classList.toggle('on', t.dataset.id === p.id);
+      });
+    }
+
+    shots.forEach(function (p) {
+      const t = U.el('button', 'plate-thumb');
+      t.dataset.id = p.id;
+      t.title = plateCaption(p);
+      const im = U.el('img');
+      im.src = p.img; im.alt = plateCaption(p);
+      t.appendChild(im);
+      t.addEventListener('click', function () { VF.audio.click(); show(p); });
+      sheet.appendChild(t);
+    });
+
+    b.appendChild(big);
+    b.appendChild(U.el('div', 'plate-count',
+      shots.length + ' of ' + VF.album.CAP + ' kept · the oldest goes when the album is full'));
+    b.appendChild(sheet);
+    show(shots[0]);
+  }
+
   function buildJournal(tab) {
     /* Saved state and old deep links can still name the tab that used to
        exist. It is the threads list now. Redirected here rather than in the
@@ -1590,6 +1658,7 @@
     const leads = VF.discovery ? VF.discovery.open() : [];
     const ready = leads.filter(function (l) { return l.ready; }).length;
     const cc = VF.creatureData ? VF.creatureData.counts() : { met: 0, caught: 0 };
+    const pn = VF.album ? VF.album.count() : 0;
     /* This had seven tabs. Three of them — quests, leads, field — were three
        lists of the same sentence: a thing you are part way through and have
        not finished. A player looking for "what am I supposed to be doing"
@@ -1605,12 +1674,14 @@
       { id: 'board', label: 'board' + (VF.bounties.anyReady() ? ' •' : (bn ? ' ' + bn : '')) },
       { id: 'entries', label: 'entries' },
       { id: 'people', label: 'people' + (VF.npcs.anyNew() ? ' •' : '') },
+      { id: 'plates', label: 'plates' + (pn ? ' ' + pn : '') },
       { id: 'records', label: 'records' }
     ], tab, function (t) { refresh(t); }));
     const b = body();
 
     if (tab === 'board') { b.appendChild(boardView()); p.appendChild(b); return p; }
     if (tab === 'field') { fieldView(b); p.appendChild(b); return p; }
+    if (tab === 'plates') { platesView(b); p.appendChild(b); return p; }
 
     if (tab === 'quests') {
       const open = VF.quests.visible();

@@ -6,6 +6,7 @@ tools/*.png
 tools/sc-world/
 tools/sc-port/
 tools/sc-gl/
+tools/sc-album/
 
 # generated build output
 dist/

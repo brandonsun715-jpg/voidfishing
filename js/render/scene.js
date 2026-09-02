@@ -10,6 +10,7 @@
   const TAU = U.TAU;
 
   let canvas = null, ctx = null;
+  let glCanvas = null;          // the medium, kept so the shutter can reach it
   let glOn = false;
   let W = 0, H = 0, DPR = 1;
   let t = 0;
@@ -483,7 +484,7 @@
        If WebGL2 is missing, or a shader will not compile, or the context is
        lost mid-session, glOn goes false and every stage below draws exactly
        what it always drew. The game runs on whatever somebody has. */
-    const glCanvas = document.getElementById('glscene');
+    glCanvas = document.getElementById('glscene');
     glOn = !!(glCanvas && VF.gl && VF.gl.init(glCanvas));
     ctx = cv.getContext('2d', { alpha: glOn });
     VF.bus.on('gl:lost', function () { glOn = false; });
@@ -1114,6 +1115,17 @@
     if (debugOn) drawDebug();
     if (prof) { prof.frames++; }
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+
+    /* THE SHUTTER, and it has to be here.
+
+       The GL context is created with preserveDrawingBuffer:false — the right
+       setting, and the reason a photograph cannot be taken from anywhere else:
+       once this frame returns, that buffer is gone. So js/systems/album.js
+       arms, and the picture is taken at the tail of the draw that follows,
+       while both canvases still hold the frame the player was looking at. */
+    if (VF.album && VF.album.pending()) {
+      VF.album.capture(VF.gl && VF.gl.ok() ? glCanvas : null, canvas);
+    }
   }
 
   /* Where the line is going, while the meter is filling.
