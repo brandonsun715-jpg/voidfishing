@@ -375,7 +375,7 @@
       const t = VF.treasureData.get(rod.requiresTreasure);
       return { why: 'treasure', note: 'Requires ' + (t ? t.name.toLowerCase() : 'something from the water') };
     }
-    if (rod.requiresSpecies && !d.fishdex[rod.requiresSpecies]) {
+    if (rod.requiresSpecies && !VF.record.held(rod.requiresSpecies)) {
       const f = VF.fish.byId(rod.requiresSpecies);
       return { why: 'species', note: 'Requires ' + (f ? f.name : 'a catch you have not made') +
                                      ' in the record' };

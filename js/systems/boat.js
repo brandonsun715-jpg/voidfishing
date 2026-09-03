@@ -301,7 +301,7 @@
     const at = b.trophies.indexOf(fishId);
     if (at >= 0) b.trophies.splice(at, 1);
     else {
-      if (!VF.state.data.fishdex[fishId]) return false;
+      if (!VF.record.held(fishId)) return false;
       if (b.trophies.length >= 3) b.trophies.shift();
       b.trophies.push(fishId);
     }

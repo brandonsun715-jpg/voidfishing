@@ -171,6 +171,18 @@
 .dex-cell:hover { transform: translateY(-2px); border-color: var(--line-3); background: var(--fill-2); }
 .dex-cell.undiscovered { cursor: default; opacity: 0.55; }
 .dex-cell.undiscovered:hover { transform: none; }
+
+/* A page with something written on it. `undiscovered` dims a cell to 0.55 and
+   stops it responding, which is right for a blank page and wrong for a species
+   you have met — that one opens, and it comes further up out of the dark the
+   more of it you have. Ordered after the rule it overrides; equal specificity,
+   so the later one wins. */
+.dex-cell.dex-glimpsed { cursor: pointer; opacity: 0.72; }
+.dex-cell.dex-hooked { cursor: pointer; opacity: 0.86; }
+.dex-cell.dex-glimpsed:hover,
+.dex-cell.dex-hooked:hover {
+  transform: translateY(-2px); border-color: var(--line-3); background: var(--fill-2);
+}
 .dex-art { width: 100%; height: 66px; display: block; }
 .dex-name {
   font-size: 10.5px; color: var(--ink-2); margin-top: 5px;
@@ -1066,6 +1078,29 @@ input[type=range]::-moz-range-thumb {
   color: var(--ink-4);
   margin-top: 10px;
   letter-spacing: 0.04em;
+}
+
+/* ------------------------------------------- an entry you have not finished
+
+   The name of a thing you have never landed, and the tally underneath it. The
+   row of question marks is deliberately the same weight as the name it stands
+   in for, so the page does not visibly shrink when a species is only half
+   known — it is the same entry with less written in it. */
+.catch-name.unnamed { color: var(--ink-4); letter-spacing: 0.18em; }
+.dex-partial {
+  font-family: var(--mono);
+  font-size: 10.5px; letter-spacing: 0.06em;
+  color: var(--ink-4);
+  margin: -6px 0 14px;
+}
+
+/* What your own catches say, as against what the species is. */
+.dex-habits { margin-bottom: 14px; }
+.dex-habit-rows {
+  font-size: 11.5px; line-height: 1.7; color: var(--ink-3);
+  margin-top: 8px;
+  border-left: 1px solid var(--line-2);
+  padding-left: 11px;
 }
 
 /* ============================================ moving a game off this machine

@@ -45,7 +45,12 @@
       seenLocations: ['shore'],
 
       /* --- collection ---
-         fishdex[id] = { caught, record: {kg, m, pct, mutation}, firstSeen, mutations: {id:count} } */
+         fishdex[id] = { caught, record: {kg, m, pct, mutation}, firstSeen, mutations: {id:count},
+                         seen, hooked, felt, where:{}, when:{}, weather:{}, bait:{} }
+         An entry is no longer the same thing as having caught one — something
+         glimpsed and lost has an entry too. js/systems/record.js owns the
+         shape and the four states it reads as; ask VF.record.held(id) rather
+         than testing this map. */
       fishdex: {},
       kept: [],               // array of catch records the player chose to keep
       wall: [],               // the handful of them that are up on the wall

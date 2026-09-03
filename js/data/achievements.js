@@ -77,10 +77,10 @@
       test: function (d) { return !!d.fishdex.earth || !!d.fishdex.kaiju; } },
     { id: 'astral_all', name: '??????', desc: 'Land all eight.', hidden: true, reward: 9000000000,
       count: [function (d) {
-        return ASTRAL.reduce(function (n, id) { return n + (d.fishdex[id] ? 1 : 0); }, 0);
+        return ASTRAL.reduce(function (n, id) { return n + (VF.record.held(id) ? 1 : 0); }, 0);
       }, 8],
       test: function (d) {
-        return ASTRAL.every(function (id) { return !!d.fishdex[id]; });
+        return ASTRAL.every(function (id) { return VF.record.held(id); });
       } },
 
     { id: 'mutation_1', name: 'Not Standard Issue', desc: 'Land a mutated fish.', reward: 800,

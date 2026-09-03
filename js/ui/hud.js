@@ -1228,7 +1228,7 @@
            the end of the line is the reveal. Until then the tier's own mark
            in css/hud.css stands in, which gives nothing away and is still
            not a trout. */
-        const seen = !!VF.state.data.fishdex[f.c.id];
+        const seen = VF.record.held(f.c.id);
         const gl = seen ? VF.fishArt.glyph(f.c.fish) : '';
         if (gl) D.mgFish.style.setProperty('--fishglyph', gl);
         else D.mgFish.style.removeProperty('--fishglyph');
