@@ -95,7 +95,12 @@
       boat: null,             // shaped by js/systems/boat.js on first use
       voyages: 0,             // how many crossings have been sailed
       seas: {},               // voyage-event id -> times seen, for weighting
-      creatures: {},          // creature id -> { met, caught, escaped, state }
+      /* creature id -> { met, caught, seen, escaped }, plus the pursuit
+         ledger — gone (the verb it got away on), goneAt (the counters at that
+         moment) and again (how many rematches). js/systems/pursuit.js owns
+         those three; something that got away is out there having got away,
+         and this is what remembers where the boat was when it happened. */
+      creatures: {},
       clues: {},              // clue id -> { at, spent }  — the things that point somewhere
       leads: {},              // lead id -> { at, done }   — what a clue points at
       expeditions: {},        // expedition id -> { started, leg, done, found: {} }

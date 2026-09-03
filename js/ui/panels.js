@@ -2021,7 +2021,12 @@
              (e.felt ? ' · felt ' + U.weight(e.felt) : '');
     }
     const n = e.seen | 0;
-    return 'took the bait and went' + (n > 1 ? ' ×' + n : '');
+    /* Some of these were never offered a bait. An encounter that got away is
+       a sighting of the species and reads as one — two of them cannot be
+       landed by any means, and telling the player they nibbled would be the
+       book describing something that did not happen. */
+    return (e.how === 'met' ? 'seen, never on the line' : 'took the bait and went') +
+           (n > 1 ? ' ×' + n : '');
   }
 
   function buildDex() {
@@ -2259,6 +2264,8 @@
          at this stage, so they are written as one. */
       bd.appendChild(U.el('p', 'catch-desc', st === 'hooked'
         ? 'It took the hook and it was gone. You have never had one out of the water — there is the weight of it and the shape of it and nothing else.'
+        : e.how === 'met'
+        ? 'It was out there and then it was not. Nothing was on the line at any point, which is the only reason you are still holding the rod.'
         : 'Something came at the bait and left before the hook set. A shape at depth, and a count.'));
       bd.appendChild(U.el('p', 'dex-partial', metLine(f, e, st)));
     }

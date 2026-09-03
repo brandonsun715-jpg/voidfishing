@@ -93,11 +93,18 @@
 
   /* --------------------------------------------------------------- events */
 
-  /* It brushed the bait and was gone. */
-  function glimpse(id) {
+  /* It brushed the bait and was gone.
+
+     `how` is what kind of sighting it was: nothing, for the ordinary one at
+     the end of a line, or 'met' for the handful that are encountered rather
+     than fished for — js/systems/creature.js credits a sighting when one of
+     those gets away, and two of them can never be landed at all, so the book
+     must not describe them as having taken a bait they were never offered. */
+  function glimpse(id, how) {
     if (!id || !VF.fish.byId(id)) return;
     const e = ensure(id);
     e.seen++;
+    if (how) e.how = how;
     VF.bus.emit('record:changed', { id: id, how: 'glimpsed' });
   }
 
