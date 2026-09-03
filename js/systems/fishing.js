@@ -852,8 +852,12 @@
 
       case 'bite':
         if (S.t >= (S.biteWindow || BITE_WINDOW)) {
+          /* What was down there, said before it is thrown away. Nothing is
+             caught and nothing is scored, but something DID take an interest,
+             and js/systems/record.js is the half of the book that keeps that. */
+          const brushed = S.pending;
           S.pending = null;
-          VF.bus.emit('fishing:missed');
+          VF.bus.emit('fishing:missed', brushed ? { id: brushed.id, catch: brushed } : null);
           beginWaiting();
         }
         break;

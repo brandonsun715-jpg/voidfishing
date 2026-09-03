@@ -34,6 +34,11 @@
     options: null, picked: -1, pickMsg: '', pickT: 0,
     disguise: null, revealed: 0,
     lead: null, fromCatch: null,
+    /* The script being walked. Not def.phases directly: a creature that got
+       away once comes back to a different opening, and js/systems/pursuit.js
+       is what decides which list that is. */
+    phases: [],
+    handed: 0,            // the ordinary fight has had it, so the record knows
     waiting: 0,           // 'hook' is parked here until the fight resolves
     ending: null,         // 'land' | 'escape'
     shake: 0
@@ -65,8 +70,15 @@
     S.lead = opts.lead || null;
     S.fromCatch = opts.c || null;
     S.ending = null;
-    if (VF.pace) VF.pace.spend(3); S.waiting = 0; S.shake = 0;
+    if (VF.pace) VF.pace.spend(3); S.waiting = 0; S.shake = 0; S.handed = 0;
     S.disguise = null; S.revealed = 0;
+
+    /* Which script, and whether this is a rematch. Both read BEFORE the debt
+       is closed, because closing it is what turns the second meeting into the
+       first one of the next pair. */
+    const back = !!(VF.pursuit && VF.pursuit.owed(def));
+    S.phases = VF.pursuit ? VF.pursuit.phasesFor(def) : def.phases;
+    if (back) VF.pursuit.returned(def);
 
     const r = rec(id);
     const first = !r.met;
@@ -81,7 +93,11 @@
     VF.audio.encounter();
     VF.audio.duck(1);
     VF.fx.pulse(0.6);
-    VF.bus.emit('creature:start', { id: id, def: def, first: first });
+    VF.bus.emit('creature:start', { id: id, def: def, first: first, back: back });
+    /* Said separately from creature:start so anything that only cares about
+       the rematch — the journal, the HUD line, a tool — does not have to
+       inspect the store to find out. */
+    if (back) VF.bus.emit('creature:again', { id: id, def: def, times: VF.pursuit.times(id) });
     next();
     VF.save.save();
     return true;
@@ -100,7 +116,7 @@
     if (!def) return;
     if (jump === 'escape') return finish(false);
     S.i = (typeof jump === 'number') ? jump : S.i + 1;
-    const ph = def.phases[S.i];
+    const ph = S.phases[S.i];
     if (!ph) return finish(true);
 
     S.phase = ph;
@@ -213,6 +229,10 @@
       rarity: def.rarity,
       wide: true
     });
+    /* From here the species is in the ordinary fight, so fishing:landed and
+       fishing:lost tell js/systems/record.js what happened and finish() must
+       not say it a second time. */
+    if (ok) S.handed = 1;
     if (!ok) finish(false);
   }
 
@@ -223,6 +243,18 @@
     if (!def) { abort(); return; }
     S.ending = won ? 'land' : 'escape';
     const r = rec(def.id);
+    /* What it was doing when it left. Read here because S.phase is cleared at
+       the bottom, and it is the whole of what a second meeting has to go on. */
+    const verb = S.phase ? S.phase.verb : null;
+
+    /* The book gets this whether or not the rod ever had it. Every creature
+       names a species, so meeting one and losing it is a sighting of that
+       species in exactly the sense js/systems/record.js means — the silhouette
+       comes up out of the dark in the Fishdex, which is the only honest thing
+       an encounter you cannot land should leave behind. When it went as far as
+       the ordinary fight, that fight has already said so and saying it twice
+       would count one meeting as two. */
+    if (VF.record && def.fish && !S.handed) VF.record.glimpse(def.fish, 'met');
 
     if (won) {
       /* An encounter that ended without a catch is still an encounter, and
@@ -251,6 +283,11 @@
       }
       VF.toast.plain(esc.text || 'it is gone.', 'warn', 4200);
     }
+
+    /* And the ledger: an escape is a debt, a landing settles it. Everything
+       about when it may come back and what it says when it does is decided
+       from this one call. */
+    if (VF.pursuit) VF.pursuit.note(def, won, verb);
 
     VF.audio.duck(0);
     VF.bus.emit('creature:end', { id: def.id, won: won });
@@ -439,7 +476,7 @@
     }
     if (then === 'escape') return next('escape');
     if (then === 'hook') {
-      const at = S.def.phases.findIndex(function (p) { return p.verb === 'hook'; });
+      const at = S.phases.findIndex(function (p) { return p.verb === 'hook'; });
       return next(at >= 0 ? at : S.i + 1);
     }
     if (then === 'devour') {
@@ -482,7 +519,7 @@
     const list = VF.creatureData.eligible('bite', { rank: VF.rarities.rank(c && c.rarity) });
     for (let i = 0; i < list.length; i++) {
       const def = list[i];
-      if (VF.rng.g() >= (def.chance || 0) * luckK()) continue;
+      if (VF.rng.g() >= (def.chance || 0) * luckK() * pursuitK(def)) continue;
       if (def.steal && c) VF.bait.consume(VF.state.data.bait);
       begin(def.id, { c: c });
       return def;
@@ -498,11 +535,19 @@
     const list = VF.creatureData.eligible('reel', { rank: VF.rarities.rank(c && c.rarity) });
     for (let i = 0; i < list.length; i++) {
       const def = list[i];
-      if (VF.rng.g() >= (def.chance || 0) * luckK()) continue;
+      if (VF.rng.g() >= (def.chance || 0) * luckK() * pursuitK(def)) continue;
       begin(def.id, { c: c });
       return def;
     }
     return null;
+  }
+
+  /* What the last meeting is worth to this one — zero while something that got
+     away is still away, high once it is due back, and falling for anything
+     already finished with. js/systems/pursuit.js has the whole of the reason;
+     from here it is one number. */
+  function pursuitK(def) {
+    return VF.pursuit ? VF.pursuit.weight(def) : 1;
   }
 
   function luckK() {
@@ -543,6 +588,7 @@
     tryOnBite: tryOnBite, tryOnReel: tryOnReel,
     /* the admin console and the tools drive it directly */
     abort: abort,
+    phases: function () { return S.phases; },
     current: function () { return S.id; }
   };
 })(window.VF = window.VF || {});

@@ -243,7 +243,12 @@
       S.rolledFollow = 1;
       const list = VF.creatureData.eligible('voyage', {});
       for (let i = 0; i < list.length; i++) {
-        if (VF.rng.g() < (list[i].chance || 0)) { S.onArrive = { creature: list[i].id }; break; }
+        /* The third of the three rolls, and it obeys the same ledger as the
+           other two: something that got in behind the boat once and was shaken
+           off is not back until enough crossings have happened, and then it is
+           back harder. js/systems/pursuit.js. */
+        const k = VF.pursuit ? VF.pursuit.weight(list[i]) : 1;
+        if (VF.rng.g() < (list[i].chance || 0) * k) { S.onArrive = { creature: list[i].id }; break; }
       }
     }
 

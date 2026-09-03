@@ -171,6 +171,18 @@
 .dex-cell:hover { transform: translateY(-2px); border-color: var(--line-3); background: var(--fill-2); }
 .dex-cell.undiscovered { cursor: default; opacity: 0.55; }
 .dex-cell.undiscovered:hover { transform: none; }
+
+/* A page with something written on it. `undiscovered` dims a cell to 0.55 and
+   stops it responding, which is right for a blank page and wrong for a species
+   you have met — that one opens, and it comes further up out of the dark the
+   more of it you have. Ordered after the rule it overrides; equal specificity,
+   so the later one wins. */
+.dex-cell.dex-glimpsed { cursor: pointer; opacity: 0.72; }
+.dex-cell.dex-hooked { cursor: pointer; opacity: 0.86; }
+.dex-cell.dex-glimpsed:hover,
+.dex-cell.dex-hooked:hover {
+  transform: translateY(-2px); border-color: var(--line-3); background: var(--fill-2);
+}
 .dex-art { width: 100%; height: 66px; display: block; }
 .dex-name {
   font-size: 10.5px; color: var(--ink-2); margin-top: 5px;
@@ -1068,6 +1080,29 @@ input[type=range]::-moz-range-thumb {
   letter-spacing: 0.04em;
 }
 
+/* ------------------------------------------- an entry you have not finished
+
+   The name of a thing you have never landed, and the tally underneath it. The
+   row of question marks is deliberately the same weight as the name it stands
+   in for, so the page does not visibly shrink when a species is only half
+   known — it is the same entry with less written in it. */
+.catch-name.unnamed { color: var(--ink-4); letter-spacing: 0.18em; }
+.dex-partial {
+  font-family: var(--mono);
+  font-size: 10.5px; letter-spacing: 0.06em;
+  color: var(--ink-4);
+  margin: -6px 0 14px;
+}
+
+/* What your own catches say, as against what the species is. */
+.dex-habits { margin-bottom: 14px; }
+.dex-habit-rows {
+  font-size: 11.5px; line-height: 1.7; color: var(--ink-3);
+  margin-top: 8px;
+  border-left: 1px solid var(--line-2);
+  padding-left: 11px;
+}
+
 /* ============================================ moving a game off this machine
 
    Sits under the four slots because that is the question it answers: a slot
@@ -1125,8 +1160,22 @@ input[type=range]::-moz-range-thumb {
      hundred pixels to three hundred and sixty, which moved every word in it
      a third of the screen to the right and squeezed the spot card until its
      Travel button fell off the bottom of the panel. The panel is wider
-     instead, so the chart gains without the reading half losing. */
-  grid-template-columns: 1fr minmax(380px, 460px);
+     instead, so the chart gains without the reading half losing.
+
+     And `minmax(0, 1fr)` rather than `1fr`, which is the whole of why this
+     panel used to walk off the side of the screen. A `1fr` track is
+     `minmax(auto, 1fr)`, and a grid item's automatic minimum is its
+     MIN-CONTENT size — for a canvas carrying an explicit pixel width, that
+     width. js/ui/panels.js measures this column every frame and writes the
+     result back onto the canvas as inline pixels, so the column could never go
+     below whatever it last measured. Narrow the window and the loop closed on
+     itself: the panel shrank, the chart could not, the two columns stopped
+     fitting, `overflow: hidden` clipped the difference, and the rail — the
+     place name, the soundings, the way out — was pushed past the panel's right
+     edge and gone. It never came back, because the next frame measured the
+     inflated column and wrote it down again, and every further resize ratcheted
+     it another two pixels along. */
+  grid-template-columns: minmax(0, 1fr) minmax(380px, 460px);
   width: 100%; height: 100%; min-height: 0;
 }
 .map-chart {
@@ -1145,7 +1194,9 @@ input[type=range]::-moz-range-thumb {
   color: var(--ink-2); font: inherit; font-size: 10.5px; cursor: pointer;
 }
 .map-home:hover { background: rgba(255,255,255,0.10); color: var(--ink); }
-.map-canvas { display: block; width: 100%; height: 100%; }
+/* Out of the flow entirely, so the size js/ui/panels.js measures off this
+   column can never become the size of the column. Measurement runs one way. */
+.map-canvas { display: block; position: absolute; inset: 0; width: 100%; height: 100%; }
 .map-canvas:focus-visible { outline: 1px solid var(--accent); outline-offset: -2px; }
 .map-side { padding: 18px 20px 22px; min-width: 0; overflow-y: auto; }
 
@@ -1199,6 +1250,57 @@ input[type=range]::-moz-range-thumb {
 .spot-actions .btn-primary { flex: 1 1 auto; }
 .spot-here { font-family: var(--mono); font-size: 11px; color: var(--accent); letter-spacing: 0.06em; }
 
+/* =================================================================== plates
+
+   Photographs, and they are shown the way photographs are: one large enough to
+   look at, the rest as a contact sheet under it. The caption is not a title —
+   it is the stamp the shutter took with the picture, so it reads as a note on
+   the back rather than as a heading. */
+
+.plate-big {
+  display: flex; flex-direction: column; gap: 9px;
+  margin-bottom: 14px;
+}
+/* Tall enough to look at, short enough that the plate, its caption and the
+   sheet under it are all on screen at once — a photograph you have to scroll
+   to see the top of is a photograph you are not looking at. */
+.plate-img {
+  display: block; margin: 0 auto;
+  max-width: 100%; width: auto;
+  max-height: min(46vh, 420px); height: auto;
+  border: 1px solid var(--line-2); border-radius: var(--r);
+  background: #05070c;
+  box-shadow: 0 18px 48px rgba(0,0,0,0.55);
+}
+.plate-cap {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  font-size: 11.5px; color: var(--ink-3);
+}
+.plate-where { font-family: var(--mono); letter-spacing: 0.04em; }
+.plate-subj { color: var(--ink-2); font-style: italic; }
+.plate-drop { margin-left: auto; font-size: 10.5px; padding: 3px 9px; }
+
+.plate-count {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em;
+  color: var(--ink-4); margin-bottom: 8px;
+}
+
+.plate-sheet {
+  display: grid; gap: 6px;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+}
+.plate-thumb {
+  display: block; padding: 0; border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: #05070c; cursor: pointer; overflow: hidden; line-height: 0;
+  transition: border-color 160ms var(--e-move), transform 160ms var(--e-move);
+}
+.plate-thumb img { display: block; width: 100%; height: auto; opacity: 0.72; }
+.plate-thumb:hover { border-color: var(--line-2); transform: translateY(-1px); }
+.plate-thumb:hover img { opacity: 0.92; }
+.plate-thumb.on { border-color: var(--accent); }
+.plate-thumb.on img { opacity: 1; }
+.plate-thumb:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
+
 /* ================================================================== charter */
 
 /* The condition rows are the widest in the game, and the shared stat grid
@@ -1222,16 +1324,25 @@ input[type=range]::-moz-range-thumb {
 @media (max-width: 780px) {
   /* Stacked, the chart loses its column and gets a squat box instead — and
      fourteen places in three hundred pixels is a ladder nobody can read. Give
-     it real height and let the panel scroll past it. */
-  .panel-map { height: auto; max-height: min(760px, 90vh); }
-  .map-wrap { grid-template-columns: 1fr; height: auto; }
-  .map-body { overflow-y: auto; display: block; }
+     it real height and let the RAIL scroll under it.
+
+     The rail, and not the panel body. Scrolling the body instead put the
+     sticky action row inside a box that never scrolled, so it stopped being
+     sticky and the Travel button sat sixty pixels below the fold — the same
+     promise broken a different way. Keeping the body a fixed flex box and the
+     rail the scroller means this layout works exactly as the wide one does,
+     which is also one fewer thing that can only go wrong at one size. */
+  .panel-map { height: min(760px, 90vh); }
+  .map-wrap {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+    height: 100%;
+  }
   .map-chart {
-    height: 460px; min-height: 460px;
+    height: 340px; min-height: 340px;
     border-right: none; border-bottom: 1px solid var(--line);
   }
   .spot-meta { grid-template-columns: repeat(2, 1fr); }
-  .map-side { overflow: visible; }
 }
 
 /* ------------------------------------------------------------- rod cards

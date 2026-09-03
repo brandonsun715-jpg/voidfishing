@@ -327,23 +327,71 @@ const OUT = path.join(__dirname, 'sc-port');
   step('and the way out of the panel is never below the fold', rail.actionInFrame);
   step('a refusal says why, above the row that refused', !rail.hasReason || rail.reasonClear);
 
-  /* --- it survives every viewport the rest of the game is tested at --- */
-  for (const vp of [[1920, 1080], [1280, 720], [1024, 640], [720, 900]]) {
+  /* --- IT SURVIVES BEING RESIZED, WHICH IS NOT THE SAME AS OPENING AT A SIZE.
+
+     This loop used to reopen at each viewport and ask only whether the CHART
+     still had room. The chart having too much room IS the failure, so it
+     passed for months while the rail walked off the side of the screen: the
+     canvas wrote its measured width back into the grid every frame, the `1fr`
+     column could never shrink below it, and each resize ratcheted the chart
+     another two pixels wider until the reading half was clipped away entirely.
+
+     So: resize with the panel OPEN, wide to narrow and back, the way a person
+     does it — and watch the half that SHRINKS. */
+  const sizes = [[1920, 1080], [1440, 900], [1280, 720], [1100, 800], [1024, 640],
+                 [900, 1000], [820, 800], [720, 900], [1440, 900]];
+  let lastChart = 0, lastW = 0, lastStacked = null, ratchet = 0;
+  for (const vp of sizes) {
     await page.setViewportSize({ width: vp[0], height: vp[1] });
     await page.waitForTimeout(320);
     const r = await page.evaluate(() => {
       const cv = document.querySelector('.map-canvas');
-      if (!cv) return { ok: false, why: 'no canvas' };
-      const b = cv.getBoundingClientRect();
+      const pm = document.querySelector('.panel-map');
+      const sd = document.querySelector('.map-side');
+      const act = document.querySelector('.spot-actions');
+      if (!cv || !pm || !sd) return { ok: false, why: 'no panel' };
+      const b = cv.getBoundingClientRect(), p = pm.getBoundingClientRect();
+      const s = sd.getBoundingClientRect();
+      const a = act ? act.getBoundingClientRect() : null;
       const doc = document.documentElement;
-      return { ok: b.width > 120 && b.height > 120,
-               why: Math.round(b.width) + '×' + Math.round(b.height),
-               hscroll: doc.scrollWidth > doc.clientWidth + 1 };
+      const stacked = innerWidth <= 780;
+      return {
+        ok: b.width > 120 && b.height > 120,
+        why: Math.round(b.width) + '×' + Math.round(b.height),
+        hscroll: doc.scrollWidth > doc.clientWidth + 1,
+        chartW: Math.round(b.width),
+        /* the reading half, which is what actually went missing */
+        railIn: s.right <= p.right + 1 && s.left >= p.left - 1,
+        railOnScreen: s.right <= innerWidth + 1 && s.left >= -1,
+        railW: Math.round(s.width),
+        /* and the way out of the panel. Stacked, the body scrolls and the row
+           is pinned to the bottom of it; side by side it must simply be in. */
+        actIn: !!a && a.right <= innerWidth + 1 && a.left >= -1 &&
+               (stacked ? a.bottom <= innerHeight + 1
+                        : a.bottom <= p.bottom + 1 && a.top >= p.top - 1),
+        panelIn: p.left >= -1 && p.right <= innerWidth + 1
+      };
     });
+    /* Only a NARROWING window that widens the chart is the ratchet. Crossing
+       into the stacked layout gives the chart the whole width on purpose, and
+       so does making the window bigger again. */
+    const stacked = vp[0] <= 780;
+    if (lastChart && r.chartW > lastChart && vp[0] < lastW && stacked === lastStacked) ratchet++;
+    lastChart = r.chartW || lastChart; lastW = vp[0]; lastStacked = stacked;
     step(vp.join('×') + ': the chart still has room', r.ok && !r.hscroll,
          r.why + (r.hscroll ? ' — and the page scrolls sideways' : ''));
+    step(vp.join('×') + ': and the rail is still in the panel, on the screen',
+         r.railIn && r.railOnScreen && r.railW >= 300,
+         r.railW + 'px' + (r.railIn ? '' : ' — OUTSIDE the panel') +
+         (r.railOnScreen ? '' : ' — OFF the screen'));
+    step(vp.join('×') + ': and the way out is reachable', r.actIn && r.panelIn);
   }
   await page.setViewportSize({ width: 1440, height: 900 });
+  await page.waitForTimeout(320);
+  /* The ratchet itself: a column that only ever grows is the mechanism, and it
+     is worth naming separately from the symptom it eventually produces. */
+  step('the chart column never grows while the window shrinks', ratchet === 0,
+       ratchet ? ratchet + ' resize(s) made it wider' : '');
 
   steps.forEach(s => console.log('  ' + (s.ok ? 'ok  ' : 'FAIL') + '  ' + s.s + (s.note ? '  — ' + s.note : '')));
   if (errors.length) { console.log('\npage errors:'); [...new Set(errors)].slice(0, 6).forEach(e => console.log('  ' + e)); }

@@ -1363,7 +1363,7 @@
       art.width = 168; art.height = 84;
       const g = art.getContext('2d');
       g.save(); g.translate(84, 42);
-      const got = !!VF.state.data.fishdex[f.id];
+      const got = VF.record.held(f.id);
       if (got) VF.fishArt.draw(g, f, VF.fishArt.fitSize(f, 84, false), { time: 0.3 });
       else { g.globalAlpha = 0.34; VF.fishArt.drawSilhouette(g, f, VF.fishArt.fitSize(f, 84, false), 0.85); }
       g.restore();
@@ -1574,6 +1574,74 @@
     });
   }
 
+  /* ------------------------------------------------------------- plates
+
+     What you photographed, and what you knew at the time. The caption is not
+     a title someone wrote for the picture — it is the stamp the shutter took
+     with it, which is why a fish you never landed says "something on the
+     line" and not its name. */
+  function plateCaption(p) {
+    const bits = [];
+    if (p.placeName) bits.push(p.placeName);
+    if (p.phase) bits.push(p.phase.toLowerCase());
+    if (p.weather) bits.push(p.weather.toLowerCase());
+    return bits.join(' · ');
+  }
+
+  function platesView(b) {
+    const shots = VF.album ? VF.album.list() : [];
+    if (!shots.length) {
+      b.appendChild(U.el('div', 'empty',
+        'nothing kept yet. press P to photograph what is in front of you.'));
+      return;
+    }
+    /* One plate large, the rest as a contact sheet under it. Which one is
+       large is the only state this view has. */
+    const big = U.el('div', 'plate-big');
+    const sheet = U.el('div', 'plate-sheet');
+
+    function show(p) {
+      U.clear(big);
+      const im = U.el('img', 'plate-img');
+      im.src = p.img; im.alt = plateCaption(p);
+      im.width = p.w; im.height = p.h;
+      big.appendChild(im);
+      const cap = U.el('div', 'plate-cap');
+      cap.appendChild(U.el('span', 'plate-where', plateCaption(p)));
+      if (p.subject && p.subject.name) {
+        cap.appendChild(U.el('span', 'plate-subj', p.subject.name));
+      }
+      const drop = U.el('button', 'btn btn-ghost plate-drop', 'throw away');
+      drop.addEventListener('click', function () {
+        VF.audio.back();
+        VF.album.remove(p.id);
+        refresh('plates');
+      });
+      cap.appendChild(drop);
+      big.appendChild(cap);
+      U.qsa('.plate-thumb', sheet).forEach(function (t) {
+        t.classList.toggle('on', t.dataset.id === p.id);
+      });
+    }
+
+    shots.forEach(function (p) {
+      const t = U.el('button', 'plate-thumb');
+      t.dataset.id = p.id;
+      t.title = plateCaption(p);
+      const im = U.el('img');
+      im.src = p.img; im.alt = plateCaption(p);
+      t.appendChild(im);
+      t.addEventListener('click', function () { VF.audio.click(); show(p); });
+      sheet.appendChild(t);
+    });
+
+    b.appendChild(big);
+    b.appendChild(U.el('div', 'plate-count',
+      shots.length + ' of ' + VF.album.CAP + ' kept · the oldest goes when the album is full'));
+    b.appendChild(sheet);
+    show(shots[0]);
+  }
+
   function buildJournal(tab) {
     /* Saved state and old deep links can still name the tab that used to
        exist. It is the threads list now. Redirected here rather than in the
@@ -1590,6 +1658,7 @@
     const leads = VF.discovery ? VF.discovery.open() : [];
     const ready = leads.filter(function (l) { return l.ready; }).length;
     const cc = VF.creatureData ? VF.creatureData.counts() : { met: 0, caught: 0 };
+    const pn = VF.album ? VF.album.count() : 0;
     /* This had seven tabs. Three of them — quests, leads, field — were three
        lists of the same sentence: a thing you are part way through and have
        not finished. A player looking for "what am I supposed to be doing"
@@ -1605,12 +1674,14 @@
       { id: 'board', label: 'board' + (VF.bounties.anyReady() ? ' •' : (bn ? ' ' + bn : '')) },
       { id: 'entries', label: 'entries' },
       { id: 'people', label: 'people' + (VF.npcs.anyNew() ? ' •' : '') },
+      { id: 'plates', label: 'plates' + (pn ? ' ' + pn : '') },
       { id: 'records', label: 'records' }
     ], tab, function (t) { refresh(t); }));
     const b = body();
 
     if (tab === 'board') { b.appendChild(boardView()); p.appendChild(b); return p; }
     if (tab === 'field') { fieldView(b); p.appendChild(b); return p; }
+    if (tab === 'plates') { platesView(b); p.appendChild(b); return p; }
 
     if (tab === 'quests') {
       const open = VF.quests.visible();
@@ -1865,9 +1936,9 @@
   function waterCard(loc) {
     const d = VF.state.data;
     const here = d.location === loc.id;
-    const fish = VF.fish.nativeTo(loc.id).filter(function (f) { return !f.hidden || d.fishdex[f.id]; });
+    const fish = VF.fish.nativeTo(loc.id).filter(function (f) { return !f.hidden || VF.record.held(f.id); });
     const home = fish.filter(function (f) { return f.locs[0] === loc.id; });
-    const got = fish.filter(function (f) { return !!d.fishdex[f.id]; }).length;
+    const got = fish.filter(function (f) { return VF.record.held(f.id); }).length;
     const objs = VF.treasureData.nativeTo(loc.id);
     const sig = objs.filter(function (t) { return t.locs && t.locs.length === 1; });
     const gotObj = objs.filter(function (t) { return (d.treasures[t.id] | 0) > 0; }).length;
@@ -1940,14 +2011,37 @@
     return card;
   }
 
+  /* What is known about something not yet landed, in the terms it was learned
+     in. A count, because meeting the same thing four times and losing it is a
+     fact about that thing. */
+  function metLine(f, e, st) {
+    if (st === 'hooked') {
+      const n = e.hooked | 0;
+      return 'hooked and lost' + (n > 1 ? ' ×' + n : '') +
+             (e.felt ? ' · felt ' + U.weight(e.felt) : '');
+    }
+    const n = e.seen | 0;
+    /* Some of these were never offered a bait. An encounter that got away is
+       a sighting of the species and reads as one — two of them cannot be
+       landed by any means, and telling the player they nibbled would be the
+       book describing something that did not happen. */
+    return (e.how === 'met' ? 'seen, never on the line' : 'took the bait and went') +
+           (n > 1 ? ' ×' + n : '');
+  }
+
   function buildDex() {
     const d = VF.state.data;
     /* Species in a hidden tier are not in the total, not in the filter row and
        not in the grid until one has been caught — so the record never shows a
        gap the player has no way to explain. */
     const shown = VF.fish.knownList();
-    const found = shown.filter(function (f) { return !!d.fishdex[f.id]; }).length;
-    const p = shell('Fishdex', found + ' of ' + shown.length + ' species recorded');
+    /* Not one number over another. "How much of the game is left" is the one
+       thing this book should never be about; what you have met and what you
+       have held are two different findings and both are worth saying. */
+    const c = VF.record.counts(shown);
+    const p = shell('Fishdex', c.held + ' landed · ' + c.met + ' met · ' +
+                    shown.length + ' in these waters' +
+                    (c.known ? ' · ' + c.known + ' known well' : ''));
 
     p.appendChild(tabs([
       { id: 'waters', label: 'waters' },
@@ -1962,8 +2056,8 @@
       b.appendChild(grid);
       /* And the ones that are not from anywhere, which is its own fact about
          them rather than a hole in the record. */
-      const odd = VF.fish.unplaced().filter(function (f) { return !f.hidden || d.fishdex[f.id]; });
-      const oddGot = odd.filter(function (f) { return !!d.fishdex[f.id]; }).length;
+      const odd = VF.fish.unplaced().filter(function (f) { return !f.hidden || VF.record.held(f.id); });
+      const oddGot = odd.filter(function (f) { return VF.record.held(f.id); }).length;
       const note = U.el('div', 'water-odd');
       note.appendChild(U.el('div', 'water-odd-k', 'from no particular water'));
       note.appendChild(U.el('div', 'water-odd-v', oddGot + ' / ' + odd.length +
@@ -2030,7 +2124,7 @@
       if (dexLoc === 'none' && f.locs.length) return false;
       if (dexLoc !== 'all' && dexLoc !== 'none' && f.locs.indexOf(dexLoc) < 0) return false;
       if (dexFilter !== 'all' && f.rarity !== dexFilter) return false;
-      const has = !!d.fishdex[f.id];
+      const has = VF.record.held(f.id);
       if (dexMode === 'found' && !has) return false;
       if (dexMode === 'missing' && has) return false;
       return true;
@@ -2055,9 +2149,11 @@
 
     const grid = U.el('div', 'dex-grid');
     list.forEach(function (f, i) {
-      const entry = d.fishdex[f.id];
-      const has = !!entry;
-      const cell = U.el('div', 'dex-cell' + (has ? '' : ' undiscovered'));
+      const entry = VF.record.entry(f.id);
+      const st = VF.record.state(f.id);
+      const has = VF.record.knows(f.id, 'art');      // landed, so it can be drawn
+      const met = st !== 'unknown';
+      const cell = U.el('div', 'dex-cell dex-' + st + (has ? '' : ' undiscovered'));
       const r = VF.rarities.get(f.rarity);
 
       const idx = U.el('div', 'dex-n', '#' + String(VF.fish.list.indexOf(f) + 1).padStart(2, '0'));
@@ -2073,7 +2169,13 @@
       g.save(); g.translate(120, 66);
       const sz = VF.fishArt.fitSize(f, 118, false);
       if (has) VF.fishArt.draw(g, f, sz, { time: i * 0.7 });
-      else { g.globalAlpha = 0.34; VF.fishArt.drawSilhouette(g, f, sz, 0.85); }
+      else {
+        /* The shape comes up out of the dark as you meet it more often. A
+           blank page and a thing you have hooked twice used to look the same,
+           which threw away the most interesting part of fishing. */
+        g.globalAlpha = st === 'hooked' ? 0.62 : st === 'glimpsed' ? 0.46 : 0.34;
+        VF.fishArt.drawSilhouette(g, f, sz, 0.85);
+      }
       g.restore();
       cell.appendChild(cv);
 
@@ -2082,7 +2184,7 @@
       cell.appendChild(U.el('div', 'dex-rec', has
         ? (entry.record ? U.weight(entry.record.kg) + ' · ×' + entry.caught +
             (nTraits ? ' · ' + nTraits + 't' : '') : '×' + entry.caught)
-        : r.name));
+        : met ? metLine(f, entry, st) : r.name));
 
       /* Why a gap is a gap. A tier the current loadout has all but stopped
          drawing is the commonest reason a species stays missing, and the game
@@ -2094,7 +2196,9 @@
         cell.appendChild(w);
       }
 
-      if (has) {
+      /* A species you have met opens too — there is something to read, and a
+         cell that does nothing when pressed says you have learned nothing. */
+      if (met) {
         cell.addEventListener('click', function () { VF.audio.click(); showDexDetail(f, entry); });
       }
       grid.appendChild(cell);
@@ -2104,7 +2208,23 @@
     return p;
   }
 
+  /* The entry, told at the depth you have earned it.
+
+     A species you glimpsed once is a shape and a tally. One that took the hook
+     and got away adds the only thing it left behind, which is what it pulled
+     at. Landing one gives you the animal — its name, its measure, what it is
+     worth, what was living on it. Landing enough of them gives you the one
+     part of this book nobody wrote for you: where they actually come from,
+     when, and on what.
+
+     Every gate below asks VF.record what is known rather than working it out
+     here, so the page cannot drift from the rule. */
   function showDexDetail(f, entry) {
+    const R = VF.record;
+    const e = entry || R.entry(f.id) ||
+              { caught: 0, seen: 0, hooked: 0, traits: {}, mutations: {} };
+    const st = R.state(f.id);
+    const shown = R.knows(f.id, 'art');          // landed: the animal itself
     const r = VF.rarities.get(f.rarity);
     const card = U.el('div', 'catch-card');
     const ban = U.el('div', 'catch-banner', r.name);
@@ -2112,29 +2232,50 @@
     card.appendChild(ban);
 
     const hero = U.el('div', 'catch-hero');
-    hero.style.background = 'radial-gradient(ellipse at 50% 55%, ' + U.rgbToCss(U.hexToRgb(r.glow), 0.14) + ', rgba(0,0,0,0) 68%)';
+    hero.style.background = 'radial-gradient(ellipse at 50% 55%, ' +
+      U.rgbToCss(U.hexToRgb(r.glow), shown ? 0.14 : 0.05) + ', rgba(0,0,0,0) 68%)';
     const cv = U.el('canvas');
     cv.width = 400; cv.height = 168;
     cv.style.width = '100%'; cv.style.height = '168px';
     const g = cv.getContext('2d');
     g.save(); g.translate(200, 84);
     // objects are boxier than any fish, so the hero has to be fitted, not fixed
-    VF.fishArt.draw(g, f, Math.min(62, VF.fishArt.fitSize(f, cv.height, false)),
-                    { time: 1.2, mutation: entry.record ? entry.record.mutation : null });
+    const sz = Math.min(62, VF.fishArt.fitSize(f, cv.height, false));
+    if (shown) {
+      VF.fishArt.draw(g, f, sz, { time: 1.2, mutation: e.record ? e.record.mutation : null });
+    } else {
+      /* Only ever the outline, and dimmer for the one you have merely seen —
+         you cannot describe the colour of a thing that never left the water. */
+      g.globalAlpha = st === 'hooked' ? 0.6 : 0.42;
+      VF.fishArt.drawSilhouette(g, f, sz, 0.9);
+    }
     g.restore();
     hero.appendChild(cv);
     card.appendChild(hero);
 
     const bd = U.el('div', 'catch-body');
-    bd.appendChild(U.el('h2', 'catch-name', f.name));
-    bd.appendChild(U.el('p', 'catch-desc', f.desc));
+    bd.appendChild(U.el('h2', 'catch-name' + (shown ? '' : ' unnamed'),
+                        shown ? f.name : '?????'));
+
+    if (shown) {
+      bd.appendChild(U.el('p', 'catch-desc', f.desc));
+    } else {
+      /* Not a locked panel with a padlock on it. The encounters ARE the entry
+         at this stage, so they are written as one. */
+      bd.appendChild(U.el('p', 'catch-desc', st === 'hooked'
+        ? 'It took the hook and it was gone. You have never had one out of the water — there is the weight of it and the shape of it and nothing else.'
+        : e.how === 'met'
+        ? 'It was out there and then it was not. Nothing was on the line at any point, which is the only reason you are still holding the rod.'
+        : 'Something came at the bait and left before the hook set. A shape at depth, and a count.'));
+      bd.appendChild(U.el('p', 'dex-partial', metLine(f, e, st)));
+    }
 
     /* And what catching it repeatedly taught you. Only for the species that
        have any written — the record does not promise a paragraph it does not
        have, and a locked line for four hundred species that will never fill
        is worse than no line at all. */
-    if (VF.lore.has(f.id)) {
-      const caught = entry.caught | 0;
+    if (shown && VF.lore.has(f.id)) {
+      const caught = e.caught | 0;
       VF.lore.unlocked(f.id, caught).forEach(function (l) {
         const para = U.el('p', 'catch-desc lore');
         const tag = U.el('span', 'lore-at', '×' + l.at);
@@ -2150,37 +2291,88 @@
     }
 
     const m = U.el('div', 'catch-metrics');
-    m.appendChild(metricEl('Record', entry.record ? U.weight(entry.record.kg) : '—'));
-    m.appendChild(metricEl('Caught', U.commas(entry.caught)));
-    m.appendChild(metricEl('Base value', '◈ ' + U.money(f.value)));
+    if (shown) {
+      m.appendChild(metricEl('Record', e.record ? U.weight(e.record.kg) : '—'));
+      m.appendChild(metricEl('Caught', U.commas(e.caught)));
+      m.appendChild(metricEl('Base value', '◈ ' + U.money(f.value)));
+    } else {
+      /* The same three boxes, filled with the three things you do have. A
+         weight you felt through a rod is a real measurement and it belongs in
+         the same place a landed one's record would sit. */
+      m.appendChild(metricEl('Felt', R.knows(f.id, 'weight') && e.felt
+                                     ? U.weight(e.felt) : '—'));
+      m.appendChild(metricEl('Hooked', U.commas(e.hooked | 0)));
+      m.appendChild(metricEl('Seen', U.commas(e.seen | 0)));
+    }
     bd.appendChild(m);
 
-    const where = f.locs.length ? f.locs.map(function (l) { return VF.locations.get(l).name; }).join(' · ') : 'anywhere at all';
-    const baits = f.baits.length ? f.baits.map(function (x) { return VF.bait.get(x).name; }).join(', ') : 'anything';
-    const meta = U.el('div');
-    meta.style.cssText = 'font-size:11.5px;line-height:1.7;color:var(--ink-3);margin-bottom:14px';
-    meta.appendChild(kv('Found at', where));
-    meta.appendChild(kv('Prefers', baits));
-    if (f.time.length) meta.appendChild(kv('Active', f.time.join(', ')));
-    if (f.weather.length) meta.appendChild(kv('Weather', f.weather.map(function (w) { return VF.weatherData.get(w).name; }).join(', ')));
-    bd.appendChild(meta);
+    if (shown) {
+      const where = f.locs.length ? f.locs.map(function (l) { return VF.locations.get(l).name; }).join(' · ') : 'anywhere at all';
+      const baits = f.baits.length ? f.baits.map(function (x) { return VF.bait.get(x).name; }).join(', ') : 'anything';
+      const meta = U.el('div');
+      meta.style.cssText = 'font-size:11.5px;line-height:1.7;color:var(--ink-3);margin-bottom:14px';
+      meta.appendChild(kv('Found at', where));
+      meta.appendChild(kv('Prefers', baits));
+      if (f.time.length) meta.appendChild(kv('Active', f.time.join(', ')));
+      if (f.weather.length) meta.appendChild(kv('Weather', f.weather.map(function (w) { return VF.weatherData.get(w).name; }).join(', ')));
+      bd.appendChild(meta);
+    }
+
+    /* The findings. Not the species table above — that is what the thing is.
+       This is what YOUR catches were, which is the only part of the page you
+       wrote, and it is why the count to KNOWN is worth walking. */
+    const hab = R.habits(f.id);
+    if (hab) {
+      const hw = U.el('div', 'dex-habits');
+      hw.appendChild(U.el('span', 'k', 'what you found out'));
+      const rows = U.el('div', 'dex-habit-rows');
+      const put = function (label, t, name) {
+        if (!t) return;
+        rows.appendChild(kv(label, name(t.key) + ' — ' + t.n + ' of ' + t.of));
+      };
+      put('Came from', hab.where, function (k) {
+        const l = VF.locations.get(k); return l ? l.name : k;
+      });
+      put('At', hab.when, function (k) {
+        for (let i = 0; i < VF.time.PHASES.length; i++) {
+          if (VF.time.PHASES[i].id === k) return VF.time.PHASES[i].name.toLowerCase();
+        }
+        return k;
+      });
+      put('In', hab.weather, function (k) {
+        const w = VF.weatherData.get(k); return w ? w.name.toLowerCase() : k;
+      });
+      put('Took', hab.bait, function (k) {
+        const b = VF.bait.get(k); return b ? b.name : k;
+      });
+      if (!rows.childNodes.length) {
+        rows.appendChild(U.el('div', null, 'nothing that repeats yet'));
+      }
+      hw.appendChild(rows);
+      bd.appendChild(hw);
+    } else if (shown) {
+      bd.appendChild(U.el('p', 'lore-soon',
+        'their habits at ' + R.KNOWN + ' landed — ' + (e.caught | 0) + ' so far'));
+    }
 
     /* every trait, with the ones seen on this species filled in */
-    const tw = U.el('div');
-    tw.appendChild(U.el('span', 'k', 'traits recorded on this species'));
-    const trow = U.el('div', 'trait-row');
-    trow.style.marginTop = '8px';
-    const seen = entry.traits || {};
-    VF.traits.list.forEach(function (tr) {
-      const n = seen[tr.id] | 0;
-      const chip = U.el('span', 'trait-chip', n ? tr.name + ' ×' + n : '?????');
-      chip.style.color = n ? tr.color : 'var(--ink-4)';
-      chip.style.borderColor = n ? U.rgbToCss(U.hexToRgb(tr.color), 0.42) : 'var(--line)';
-      if (n) chip.title = tr.desc;
-      trow.appendChild(chip);
-    });
-    tw.appendChild(trow);
-    bd.appendChild(tw);
+    if (shown) {
+      const tw = U.el('div');
+      tw.appendChild(U.el('span', 'k', 'traits recorded on this species'));
+      const trow = U.el('div', 'trait-row');
+      trow.style.marginTop = '8px';
+      const seen = e.traits || {};
+      VF.traits.list.forEach(function (tr) {
+        const n = seen[tr.id] | 0;
+        const chip = U.el('span', 'trait-chip', n ? tr.name + ' ×' + n : '?????');
+        chip.style.color = n ? tr.color : 'var(--ink-4)';
+        chip.style.borderColor = n ? U.rgbToCss(U.hexToRgb(tr.color), 0.42) : 'var(--line)';
+        if (n) chip.title = tr.desc;
+        trow.appendChild(chip);
+      });
+      tw.appendChild(trow);
+      bd.appendChild(tw);
+    }
 
     const acts = U.el('div', 'catch-actions');
     acts.style.gridTemplateColumns = '1fr';
@@ -3102,7 +3294,7 @@
     for (let i = 0; i < cached.length; i++) {
       const f = cached[i];
       byTier[f.rarity] = (byTier[f.rarity] | 0) + 1;
-      if (d.fishdex[f.id]) have++;
+      if (VF.record.held(f.id)) have++;
     }
     return { total: cached.length, have: have, byTier: byTier };
   }

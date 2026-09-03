@@ -45,7 +45,12 @@
       seenLocations: ['shore'],
 
       /* --- collection ---
-         fishdex[id] = { caught, record: {kg, m, pct, mutation}, firstSeen, mutations: {id:count} } */
+         fishdex[id] = { caught, record: {kg, m, pct, mutation}, firstSeen, mutations: {id:count},
+                         seen, hooked, felt, where:{}, when:{}, weather:{}, bait:{} }
+         An entry is no longer the same thing as having caught one — something
+         glimpsed and lost has an entry too. js/systems/record.js owns the
+         shape and the four states it reads as; ask VF.record.held(id) rather
+         than testing this map. */
       fishdex: {},
       kept: [],               // array of catch records the player chose to keep
       wall: [],               // the handful of them that are up on the wall
@@ -90,7 +95,12 @@
       boat: null,             // shaped by js/systems/boat.js on first use
       voyages: 0,             // how many crossings have been sailed
       seas: {},               // voyage-event id -> times seen, for weighting
-      creatures: {},          // creature id -> { met, caught, escaped, state }
+      /* creature id -> { met, caught, seen, escaped }, plus the pursuit
+         ledger — gone (the verb it got away on), goneAt (the counters at that
+         moment) and again (how many rematches). js/systems/pursuit.js owns
+         those three; something that got away is out there having got away,
+         and this is what remembers where the boat was when it happened. */
+      creatures: {},
       clues: {},              // clue id -> { at, spent }  — the things that point somewhere
       leads: {},              // lead id -> { at, done }   — what a clue points at
       expeditions: {},        // expedition id -> { started, leg, done, found: {} }

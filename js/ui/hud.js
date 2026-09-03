@@ -297,6 +297,27 @@
       if (e.code === 'F8') { e.preventDefault(); if (!e.repeat) toggleCinema(); return; }
       if (e.code === 'F9') { e.preventDefault(); if (!e.repeat) VF.scene.debug(); return; }
 
+      /* The shutter, and it is up here with F8 for a reason: the moment you
+         most want to keep is usually one you have just taken the interface
+         away to look at, and a key that stops working when a panel is open or
+         the HUD is hidden is a key that is never there when it is wanted.
+
+         It only arms — js/render/scene.js takes the picture at the tail of the
+         next frame, while the GL buffer still exists. */
+      if (e.code === 'KeyP' && VF.album) {
+        e.preventDefault();
+        if (!e.repeat && VF.album.shoot()) {
+          VF.audio.click();
+          /* Full means the oldest one is about to go, which is worth saying
+             once rather than discovering later by its absence. */
+          const full = VF.album.count() + 1 >= VF.album.CAP;
+          VF.toast.plain(full ? 'kept — the album is full, the oldest plate goes'
+                              : 'kept · journal, plates',
+                         full ? 'warn' : null, 1500);
+        }
+        return;
+      }
+
       if (VF.state.rt.panelOpen) return;
       switch (e.code) {
         /* Looking around. Arrows rather than A and D, which are the aquarium
@@ -1207,7 +1228,7 @@
            the end of the line is the reveal. Until then the tier's own mark
            in css/hud.css stands in, which gives nothing away and is still
            not a trout. */
-        const seen = !!VF.state.data.fishdex[f.c.id];
+        const seen = VF.record.held(f.c.id);
         const gl = seen ? VF.fishArt.glyph(f.c.fish) : '';
         if (gl) D.mgFish.style.setProperty('--fishglyph', gl);
         else D.mgFish.style.removeProperty('--fishglyph');

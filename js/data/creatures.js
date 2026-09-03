@@ -31,7 +31,19 @@
 
    Every one names a `fish` — the species that goes in the fishdex when it is
    landed — so the collection, the aquarium, the wall and the records all work
-   on these with no special cases. */
+   on these with no special cases.
+
+   `again` is the second meeting, for the ones that got away:
+
+     { after: { casts: 10 }, chance: 3.2, text: '...', phases: [...] }
+
+   `after` is the remove, counted in things the player DID — casts, voyages,
+   trips, visits — never in seconds. Until it is satisfied the creature is not
+   in the water at all; afterwards `chance` multiplies its roll, so the rematch
+   is a consequence rather than a coincidence. `text` replaces the opening line
+   and `phases` replaces the whole script. Both optional, and a creature with
+   no `again` at all still comes back changed — js/systems/pursuit.js writes it
+   an opening out of whatever it was doing when it left. */
 (function (VF) {
   'use strict';
 
@@ -58,7 +70,12 @@
         { verb: 'hook', text: 'it comes up on its own.' },
         { verb: 'land' }
       ],
-      onEscape: { text: 'it was somewhere else before the hook was anywhere.', keepLead: 1 } },
+      onEscape: { text: 'it was somewhere else before the hook was anywhere.', keepLead: 1 },
+      /* It relocates; that is the whole of it. So the second meeting is the
+         one where it does not bother, because it has worked out that being
+         somewhere else is only useful against something that is looking. */
+      again: { after: { trips: 1 }, chance: 3.0,
+               text: 'the water goes heavy in the same way. it does not move this time.' } },
 
     /* ================================================================= THE THIEF
        Fastest encounter in the game and the only one you can lose in four
@@ -90,7 +107,12 @@
         { verb: 'hook', text: 'it turns and takes the hook out of spite.' },
         { verb: 'land' }
       ],
-      onEscape: { text: 'the bait is gone and the hook is not bent.', clue: 'stolen' } },
+      onEscape: { text: 'the bait is gone and the hook is not bent.', clue: 'stolen' },
+      /* Ten casts is about an evening. It is not far, and it should not be:
+         the joke of this one is that it comes back for the same trick and you
+         both know it. */
+      again: { after: { casts: 10 }, chance: 3.2,
+               text: 'the line goes slack in exactly the same way, at the same part of the cast.' } },
 
     /* ================================================================= THE MIMIC
        Announced as something else. The card the player is looking at is a lie
@@ -161,7 +183,11 @@
         { verb: 'hook', text: 'it is on. all of it is on.' },
         { verb: 'land' }
       ],
-      onEscape: { text: 'the line came back cut clean by nothing.', clue: 'devoured' } },
+      onEscape: { text: 'the line came back cut clean by nothing.', clue: 'devoured' },
+      /* It waits under things being pulled upward. It does not need to find
+         you again; it needs you to go on fishing, which you will. */
+      again: { after: { casts: 22 }, chance: 2.8,
+               text: 'the second shape is already there. it was there before the first one.' } },
 
     /* =============================================================== THE WATCHER
        The slowest thing in the game. It is on screen for minutes before it
@@ -278,7 +304,11 @@
         { verb: 'hook', text: 'and then it leans on the rod.' },
         { verb: 'land' }
       ],
-      onEscape: { text: 'the wake goes back to being the width of the boat.' } }
+      onEscape: { text: 'the wake goes back to being the width of the boat.' },
+      /* Counted in crossings, because that is the only thing it can get in
+         behind. Two of them is long enough to have stopped looking astern. */
+      again: { after: { voyages: 2 }, chance: 2.6,
+               text: 'it is on the wake again. it did not have to catch up.' } }
   ];
 
   const BY_ID = VF.util.byId(LIST);
@@ -296,9 +326,13 @@
       if (c.on.weather.length && c.on.weather.indexOf(wx) < 0) return false;
       if (c.on.time.length && c.on.time.indexOf(ph) < 0) return false;
       if (c.minRank && (opts.rank || 0) < c.minRank) return false;
-      /* One of them at a time is enough of a coincidence. Anything already
-         met is rarer afterwards rather than gone — these are encounters, not
-         a checklist, and meeting the thief twice is the thief being the thief. */
+      /* One of them at a time is enough of a coincidence. Where a creature is
+         ALLOWED is all this filter decides; how likely it is given what has
+         already happened between it and this boat belongs to
+         js/systems/pursuit.js, which the two rolls multiply in. Anything
+         already met is rarer afterwards rather than gone — these are
+         encounters, not a checklist, and meeting the thief twice is the thief
+         being the thief. */
       return true;
     });
   }

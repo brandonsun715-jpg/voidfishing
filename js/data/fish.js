@@ -1631,10 +1631,10 @@
        so it is not a gap in the collection either. Nor is one that can only be
        met: an empty row for a creature nobody has heard of is the encounter
        spoiled before it happens. */
-    if (f.encounter && !VF.state.data.fishdex[f.id]) return false;
+    if (f.encounter && !VF.record.held(f.id)) return false;
     if (f.discover && !(VF.state.data.discovered || {})[f.discover] &&
-        !VF.state.data.fishdex[f.id]) return false;
-    return !VF.rarities.hidden(f.rarity) || !!VF.state.data.fishdex[f.id];
+        !VF.record.held(f.id)) return false;
+    return !VF.rarities.hidden(f.rarity) || VF.record.held(f.id);
   }
   function knownList() { return F.filter(known); }
 

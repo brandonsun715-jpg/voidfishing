@@ -229,6 +229,12 @@
       }
       if (e.record && e.record.mutation && !e.record.traits) e.record.traits = [e.record.mutation];
       if (e.record && !e.record.traits) e.record.traits = [];
+      /* And schema 1 only ever counted landings. js/systems/record.js keeps
+         what was seen and hooked as well, and credits an old entry with both,
+         because landing three of a thing means having seen three of it. It
+         normalises on read too — this is only so a save that is loaded and
+         iterated by something else is already in the new shape. */
+      if (VF.record) VF.record.norm(e);
     }
     /* Older saves stored one mutation per kept fish; the list is the record
        now. The wall holds the same shape, so it gets the same repair. */
@@ -354,6 +360,11 @@
     i = clampSlot(i);
     const st = storage();
     if (st) { try { st.removeItem(slotKey(i)); } catch (e) { /* ignore */ } }
+    /* Anything else keyed to this slot goes with it — the album, at time of
+       writing. Named rather than assumed to be the active one, because erasing
+       slot three from slot one must not leave slot three's photographs behind
+       for the next game that opens there. */
+    VF.bus.emit('save:erased', { slot: i });
     if (i === active) {
       VF.state.data = VF.state.defaults();
       VF.bus.emit('save:reset');

@@ -297,7 +297,10 @@
     ));
 
     const prev = d.fishdex[f.id];
-    const isNew = !prev;
+    /* New means never LANDED, not never met. A species you glimpsed and lost
+       has had an entry since js/systems/record.js, and the first time you
+       actually bring one in is still the first time. */
+    const isNew = !VF.record.held(f.id);
     const isRecord = !!prev && size.kg > (prev.record ? prev.record.kg : 0);
     const isGiant = size.pct >= 0.985 || traits.indexOf('massive') >= 0;
 
