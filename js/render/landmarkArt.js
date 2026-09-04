@@ -1143,17 +1143,33 @@
     g.restore();
   };
 
-  /* A piece of the picture with nothing in it. Not black — black is a colour
-     and would read as an object. This takes what is already there away, so
-     what is behind it is the far side of the frame. */
+  /* A piece of water with nothing happening in it.
+
+     The first version of this erased with destination-out, on the theory that
+     an absence should take the picture away rather than paint over it. In
+     this renderer that is a no-op with extra steps: the 2D layer is
+     transparent over the GL world, so erasing 2D ink reveals the shader's
+     water — which is what was there. It put zero pixels on the frame at every
+     range, tools/glpath.js said so, and it had been invisible in every
+     screenshot since it was written.
+
+     So it is drawn rather than erased: a patch of the far haze laid flat over
+     the surface, killing the waves, the glints and the light in it. Every
+     other part of this water is moving; this part is not, and it is not
+     moving in a shape with an edge. That reads as wrong, which is the job. */
   ART.absence = function (g, l, p, P, L) {
-    const w = unit(p, L) * 0.055 * l.scale;
-    const h = p.scale * L.h * 0.055 * l.scale;
+    const w = unit(p, L) * 0.075 * l.scale;
+    const h = p.scale * L.h * 0.048 * l.scale;
     g.save();
-    g.globalCompositeOperation = 'destination-out';
-    g.globalAlpha = 0.62;
+    /* Soft-edged: a hard ellipse is an object, and this is meant to be a
+       failure of the picture rather than a thing in it. */
+    const gr = g.createRadialGradient(p.x, p.y - h * 0.3, 0, p.x, p.y - h * 0.3, w);
+    gr.addColorStop(0, U.rgbToCss(VF.space.airMix(P.fog, l.d), 0.92));
+    gr.addColorStop(0.68, U.rgbToCss(VF.space.airMix(P.fog, l.d), 0.72));
+    gr.addColorStop(1, U.rgbToCss(VF.space.airMix(P.fog, l.d), 0));
+    g.fillStyle = gr;
     g.beginPath();
-    g.ellipse(p.x, p.y - h * 0.4, w, h * 0.7, 0, 0, TAU);
+    g.ellipse(p.x, p.y - h * 0.3, w, h, 0, 0, TAU);
     g.fill();
     g.restore();
   };
