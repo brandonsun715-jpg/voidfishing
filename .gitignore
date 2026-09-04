@@ -7,6 +7,8 @@ tools/sc-world/
 tools/sc-port/
 tools/sc-gl/
 tools/sc-album/
+tools/sc-cinema/
+tools/sc-pixels/
 
 # generated build output
 dist/
