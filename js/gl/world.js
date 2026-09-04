@@ -309,11 +309,18 @@ vec3 skyAt(vec2 p, float hy, float aspect, bool reflected) {
        the whole sky a second time, and nobody has ever resolved the fourth
        octave of a cloud in the water — the shape and the colour are the
        reflection, the grain is cost. */
-    /* Octaves off the quality dial, and two fewer in the reflected copy —
-       mirror water evaluates the whole sky a second time, and nobody has
-       ever resolved the fourth octave of a cloud in the water. */
+    /* Octaves off the quality dial.
+
+       The reflected copy runs shallower, because mirror water evaluates the
+       whole sky a second time — EXCEPT on glass, where the reflection is the
+       zone. Dropping two octaves there took the fine structure out of what
+       the Glass Flats reflect, and tools/atmosphere.js caught it immediately:
+       the correlation between that water and the sky above it fell from 0.79
+       to 0.06, which is the difference between a mirror and a blue floor.
+       Cheap in the wrong place is not cheap. */
     int co = qual <= 0 ? 2 : qual == 1 ? 3 : 4;
-    vec2 cl = clouds(p, hy, aspect, reflected ? max(2, co - 2) : co);
+    int ro = waterModel == 1 ? co : max(2, co - 2);
+    vec2 cl = clouds(p, hy, aspect, reflected ? ro : co);
     if (cl.x > 0.0) {
       /* A cloud is lit sky, so its colour starts from the sky it is in rather
          than from white — which is the difference between weather and a
