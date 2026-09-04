@@ -92,6 +92,7 @@ uniform float voidK;        // how much of this place is not water
 uniform float cloudAmt;     // 0 clear, 1 closed over
 uniform float cloudY;       // how high the deck sits. low deck = fast, big shapes
 uniform vec3  cloudTint;
+uniform int   qual;        // 0 low · 1 medium · 2 high · 3 cinematic
 uniform int   skyModel;     // 0 open · 1 closed · 2 inverted · 3 unbounded
 uniform int   waterModel;   // 0 open · 1 mirror · 2 swell · 3 still
 uniform sampler2D back;     // everything behind the water, already drawn
@@ -110,7 +111,11 @@ float hash21(vec2 p) {
 
 float vnoise(vec2 p) {
   vec2 i = floor(p), f = fract(p);
-  f = f * f * (3.0 - 2.0 * f);
+  /* Quintic rather than cubic. A cubic smoothstep is continuous in value and
+     first derivative but NOT the second, so the cell boundaries of the grid
+     stay visible as faint creases — and summed over octaves they line up into
+     the axis-aligned blocks that were showing along the horizon. */
+  f = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
   float a = hash21(i);
   float b = hash21(i + vec2(1.0, 0.0));
   float c = hash21(i + vec2(0.0, 1.0));
@@ -120,10 +125,15 @@ float vnoise(vec2 p) {
 
 float fbm(vec2 p, int oct) {
   float s = 0.0, a = 0.5;
+  /* Every octave is rotated as well as scaled. Scaling alone leaves each
+     octave on the same axis-aligned lattice as the last, so their cell edges
+     coincide and reinforce; a rotation between them means no two octaves
+     share a grid direction and the sum has no grain of its own. */
+  const mat2 rot = mat2(0.8000, 0.6000, -0.6000, 0.8000);
   for (int i = 0; i < 5; i++) {
     if (i >= oct) break;
     s += a * vnoise(p);
-    p = p * 2.03 + vec2(11.3, 7.7);
+    p = rot * p * 2.03 + vec2(11.3, 7.7);
     a *= 0.5;
   }
   return s;
@@ -167,9 +177,22 @@ vec2 clouds(vec2 p, float hy, float aspect, int oct) {
      hundred times its overhead value in the last two percent of the frame,
      and the deck stops being cloud and becomes horizontal stripes — correct
      perspective taken so far past what a screen can resolve that it reads as
-     a different material. Five times is the whole useful range. */
-  float dist = cloudY / max(ang, 0.045);
-  vec2 q = vec2((p.x - 0.5) * aspect * dist * 3.0 + camU * 0.9 + time * 0.010,
+     a different material.
+
+     AND THE LATERAL TERM IS DAMPED, which is the other half and the one that
+     made the sky unusable. A flat deck compresses toward the horizon as
+     1/angle in BOTH axes, so taken literally the lateral scale also stretches
+     by that factor — and lines of constant lateral coordinate are then lines
+     through the vanishing point, which turns low-frequency noise into a fan
+     of hard wedges radiating out of it. That is exactly what it drew.
+
+     Real cloud does converge, but a camera's field of view is narrow enough
+     that it converges gently over the part of the sky you can see. This is
+     the same projection with the sideways term pulled most of the way back
+     toward flat, which keeps the recession and loses the fan. */
+  float dist = cloudY / max(ang, 0.055);
+  float lat = mix(1.0, dist, 0.34);
+  vec2 q = vec2((p.x - 0.5) * aspect * lat * 2.6 + camU * 0.9 + time * 0.010,
                 dist * 1.5 + time * 0.004);
 
   float n = fbm(q, oct);
@@ -184,10 +207,16 @@ vec2 clouds(vec2 p, float hy, float aspect, int oct) {
   cov *= smoothstep(0.0, 0.030, ang);
 
   /* Lit from the light rather than from above: sample again a short way
-     toward it and take the difference. One extra FBM at three octaves buys
-     the whole sense of the deck having a shape. */
+     toward it and take the difference.
+
+     ONE OCTAVE, not a second whole FBM. What this term needs is the large
+     shape of the deck — which side of a mass of cloud faces the light — and
+     that lives entirely in the first octave; the rest was three more noise
+     evaluations per pixel buying detail nobody can see in a shading term.
+     Seven noise lookups per sky pixel to four, on half the frame, at sixty
+     frames a second. */
   vec2 toL = normalize(vec2((light.x - p.x) * aspect, ang - (hy - light.y)) + vec2(1e-5));
-  float n2 = fbm(q + toL * vec2(1.6, 0.9), oct - 1);
+  float n2 = vnoise(q + toL * vec2(1.6, 0.9)) * 0.5;
   float lit = clamp((n - n2) * 2.4 + 0.5, 0.0, 1.0);
   return vec2(cov, lit);
 }
@@ -198,6 +227,27 @@ vec2 clouds(vec2 p, float hy, float aspect, int oct) {
    it. lod drops cloud octaves for the reflected copy — a reflection carries
    the shape and the colour and nobody has ever resolved the fourth octave of
    a cloud in the water. */
+/* The dome and the body of light in it, WITHOUT the cloud deck.
+
+   Split out because the water wants to reflect the sky and the deck is the
+   expensive half. On anything but glass the surface is broken enough that
+   what comes back is the gradient and the light — a chop scatters cloud
+   detail into nothing long before it scatters the sky's own colour — so open
+   water reflects this and pays for none of the noise. */
+vec3 skyBase(vec2 p, float hy, float aspect) {
+  float t = clamp(p.y / max(0.0001, hy), 0.0, 1.0);
+  vec3 c = mix(skyZen, skyTop, smoothstep(0.0, 1.0, pow(t, 0.88)));
+  c = mix(c, skyBot, smoothstep(0.46, 1.0, t));
+  if (skyModel == 2) c = mix(skyZen, skyBot, pow(t, 0.55));
+  else if (skyModel == 3) c = mix(skyZen, skyTop, smoothstep(0.0, 1.0, pow(t, 0.95)));
+  if (skyModel != 1) c += lightBody(p, aspect);
+  if (skyModel != 3) {
+    float hz = pow(t, 3.4);
+    c = mix(c, fog, hz * clamp(fogAmt, 0.0, 1.0) * 0.78);
+  }
+  return c;
+}
+
 vec3 skyAt(vec2 p, float hy, float aspect, bool reflected) {
   float t = clamp(p.y / max(0.0001, hy), 0.0, 1.0);   // 0 overhead, 1 horizon
 
@@ -224,8 +274,10 @@ vec3 skyAt(vec2 p, float hy, float aspect, bool reflected) {
        reads to a star detector as a sky full of stars, which is how it was
        caught. */
     float ra = max(1.0 - t, 0.34);
-    vec2 rq = vec2((p.x - 0.5) * aspect * 2.4 / ra + camU * 1.6, 1.1 / ra);
-    float rock = fbm(rq, 3) * 0.68 + fbm(rq * 4.3, 2) * 0.32;
+    float rlat = mix(1.0, 1.0 / ra, 0.34);
+    vec2 rq = vec2((p.x - 0.5) * aspect * 2.4 * rlat + camU * 1.6, 1.1 / ra);
+    float rock = qual <= 0 ? fbm(rq, 2)
+                           : fbm(rq, 3) * 0.68 + fbm(rq * 4.3, 2) * 0.32;
     c = mix(skyZen * 0.30, c, pow(t, 0.80));
     c *= 0.52 + rock * 1.05;
     /* Light off the underside of it, near the water where the water is
@@ -257,7 +309,18 @@ vec3 skyAt(vec2 p, float hy, float aspect, bool reflected) {
        the whole sky a second time, and nobody has ever resolved the fourth
        octave of a cloud in the water — the shape and the colour are the
        reflection, the grain is cost. */
-    vec2 cl = clouds(p, hy, aspect, reflected ? 2 : 4);
+    /* Octaves off the quality dial.
+
+       The reflected copy runs shallower, because mirror water evaluates the
+       whole sky a second time — EXCEPT on glass, where the reflection is the
+       zone. Dropping two octaves there took the fine structure out of what
+       the Glass Flats reflect, and tools/atmosphere.js caught it immediately:
+       the correlation between that water and the sky above it fell from 0.79
+       to 0.06, which is the difference between a mirror and a blue floor.
+       Cheap in the wrong place is not cheap. */
+    int co = qual <= 0 ? 2 : qual == 1 ? 3 : 4;
+    int ro = waterModel == 1 ? co : max(2, co - 2);
+    vec2 cl = clouds(p, hy, aspect, reflected ? ro : co);
     if (cl.x > 0.0) {
       /* A cloud is lit sky, so its colour starts from the sky it is in rather
          than from white — which is the difference between weather and a
@@ -390,17 +453,53 @@ void main() {
   if (waterModel == 1 || waterModel == 3) {
     float dep = 46.0 / (k + 0.085);
     vec2 bq = vec2(px.x * (0.30 + 0.70 * k) * 0.022 + camU * 5.0, dep * 0.16);
-    float g = fbm(bq, 3) * 0.72 + fbm(bq * 3.7, 2) * 0.28;
+    float g = qual <= 0 ? fbm(bq, 2)
+                        : fbm(bq, 3) * 0.72 + fbm(bq * 3.7, 2) * 0.28;
     float show = smoothstep(0.02, 0.55, k) * (1.0 - fogAmt * 0.5);
     base = mix(base, mix(base, bed, 0.30 + g * 0.62), show * 0.80);
   }
 
   /* --- what the surface reflects ---------------------------------------
 
-     A mirror is the sky it is under. The sample is the sky's own function
-     read at the mirrored height, pushed sideways by the surface slope so the
-     reflection breaks where the water does — which is the one thing that
-     stops it looking like a second sky pasted below the first. */
+     EVERY SEA REFLECTS ITS SKY. Only the two mirror models did, and what the
+     other three had instead was one line — mix thirty percent of skyBot into
+     the crests — which is a constant colour, not a reflection. It cannot know
+     that the sky above it is orange on one side and blue on the other, so at
+     sunset the water went warm only where the light's own lane fell and
+     stayed grey everywhere else. That is the single largest reason the ocean
+     read as a surface with lighting on it rather than as water.
+
+     Fresnel decides how much: almost everything at a grazing angle out by the
+     horizon, very little looking straight down past the gunwale, which is
+     both correct and the reason a reflection makes distance legible. The
+     sample is taken through the surface slope, so it breaks where the water
+     does — the one thing that stops it looking like a second sky pasted
+     below the first.
+
+     Open water reflects the dome and the light and not the cloud deck: a
+     chop scatters cloud detail into nothing long before it scatters the sky's
+     colour, and the deck is the expensive half. */
+  if (waterModel != 1 && waterModel != 3) {
+    float my = clamp(hy - (y - hy) * mix(1.00, 0.34, k), 0.0, hy);
+    float bend = dhx * mix(0.0018, 0.022, k);
+    vec3 sky = skyBase(vec2(clamp(uv.x + bend, 0.0, 1.0), my), hy, aspect);
+    /* Schlick, near enough. Water reflects about two percent of what hits it
+       head-on and very nearly all of it at a grazing angle, and that enormous
+       range is exactly what makes a sea legible as a receding plane: the
+       horizon is a mirror and the water by the boat is a window.
+
+       The first version of this used a plain power with a ceiling of 0.56 and
+       was almost invisible at the one place it matters most. */
+    float fres = 0.03 + 0.97 * pow(1.0 - k, 3.4);
+    /* Chop breaks a reflection up; a calm sea holds it. */
+    float hold = mix(0.62, 0.95, calm);
+    base = mix(base, sky, clamp(fres * hold, 0.0, 0.95));
+  }
+
+  /* And glass gets the whole sky, deck and all, at its own weight — the two
+     blocks are exclusive, because running both mixes a reflection into a
+     reflection and the Glass Flats came out as an unbroken sheet of sky with
+     no water left in it. */
   if (waterModel == 1 || waterModel == 3) {
     float my = clamp(hy - (y - hy) * mix(1.00, 0.34, k), 0.0, hy);
     float bend = dhx * mix(0.0025, 0.030, k);
@@ -447,10 +546,13 @@ void main() {
   float spec = lane * (glint * 0.85 + sheen * 0.25) * (1.0 - calm * 0.8);
   vec3 col = base + glow * (haze * (0.30 * bright + 0.05) + spec * (1.5 * bright + 0.35));
 
-  /* A little of the sky on every crest, so the water away from the light is
-     still a surface rather than a fill. */
+  /* A little of the sky on every crest. Much less than it was: this used to
+     be the only reflection in the game and had to carry the whole job, and
+     with a real one above it the old weight double-counted and flattened the
+     near water into haze. What is left is the face of a crest catching a
+     different part of the sky than the trough beside it. */
   float crest = smoothstep(-0.020, 0.055, -dhy);
-  col = mix(col, mix(col, skyBot, 0.30), crest * (0.16 + 0.30 * k) * (1.0 - calm * 0.6));
+  col = mix(col, mix(col, skyBot, 0.30), crest * (0.05 + 0.10 * k) * (1.0 - calm * 0.6));
 
   /* Foam, only where it is genuinely steep and only near enough to resolve.
      A mirror does not break, so it does not get any. */
@@ -490,6 +592,8 @@ void main() {
   frag = vec4(col, 1.0);
 }
 `;
+
+  const QUAL = { low: 0, medium: 1, high: 2, cinematic: 3 };
 
   let prog = null;
   let failed = false;
@@ -533,6 +637,8 @@ void main() {
       cloudAmt: U.clamp(P.cloudAmt, 0, 1),
       cloudY: U.clamp(P.cloudY, 0.02, 1.2),
       cloudTint: n(P.cloudTint),
+      qual: VF.gl.int(QUAL[VF.state.data.settings.quality] === undefined
+                        ? 2 : QUAL[VF.state.data.settings.quality]),
       skyModel: VF.gl.int(P.skyModel),
       waterModel: VF.gl.int(P.waterModel),
       back: back || null,

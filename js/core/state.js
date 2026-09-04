@@ -168,7 +168,7 @@
         master: 0.8,
         music: 0.55,
         sfx: 0.75,
-        quality: 'high',      // low | medium | high
+        quality: 'high',      // low | medium | high | cinematic
         /* The stylesheet honours prefers-reduced-motion, but a media query
            reaches transitions and keyframes and nothing else — the two effects
            that are motion rather than decoration live on the canvas, where CSS

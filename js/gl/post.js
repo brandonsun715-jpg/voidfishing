@@ -170,7 +170,15 @@
       frag = vec4(c, 1.0);
     }`;
 
-  let bright = null, blur = null, resolve = null;
+  /* Straight through, flipped, for lifting the world buffer into the scene. */
+  const UP_FS = `#version 300 es
+    precision highp float;
+    in vec2 uv;
+    out vec4 frag;
+    uniform sampler2D src;
+    void main() { frag = texture(src, vec2(uv.x, 1.0 - uv.y)); }`;
+
+  let bright = null, blur = null, resolve = null, up = null;
   let failed = false, built = false;
 
   /* Exposure is smoothed in JS rather than measured off the frame. A real
@@ -187,7 +195,8 @@
     bright = VF.gl.program('post-bright', BRIGHT_FS);
     blur = VF.gl.program('post-blur', BLUR_FS);
     resolve = VF.gl.program('post-resolve', RESOLVE_FS);
-    failed = !(bright && blur && resolve);
+    up = VF.gl.program('post-up', UP_FS);
+    failed = !(bright && blur && resolve && up);
     return !failed;
   }
 
@@ -209,20 +218,70 @@
     return VF.gl.target('post-scene', dpr, true);
   }
 
+  /* THE WORLD DOES NOT NEED THE ART'S RESOLUTION.
+
+     The sky and the sea are the most expensive fragments in the game — a
+     multi-octave noise field over half the frame, per pixel, every frame —
+     and on a high-density display they were being computed at four times the
+     pixels they can possibly use. What is IN them is a gradient, a cloud
+     deck and a wave field: smooth, low-frequency, and indistinguishable at
+     three quarters scale.
+
+     What genuinely needs every pixel is the art on top of it — a rod is one
+     pixel wide in places, and rigging is thinner. So the world is rendered
+     small and scaled up, and the art layer is composited over it at full
+     resolution afterwards. The one thing lost is the very finest of the
+     specular glitter on the water, which is why this does not go below half
+     and why Cinematic does not do it at all. */
+  const WORLD_SCALE = { low: 0.5, medium: 0.62, high: 0.78, cinematic: 1 };
+
+  function worldTarget(q) {
+    const dpr = VF.gl.size().dpr || 1;
+    const k = WORLD_SCALE[q] === undefined ? 0.78 : WORLD_SCALE[q];
+    if (k >= 0.999) return null;              // straight into the scene buffer
+    return VF.gl.target('post-world', dpr * k, true);
+  }
+
   /* Open the frame. Everything drawn after this goes into the buffer instead
      of onto the canvas; end() puts it on the canvas. Returns null when post
      is unavailable, and every caller treats that as "draw straight to the
      screen the way you always did". */
-  function begin() {
+  function begin(q) {
     if (!ok() || !programs()) return null;
     const t = sceneTarget();
     if (!t) return null;
-    VF.gl.bind(t);
     const gl = VF.gl.ctx();
     gl.disable(gl.SCISSOR_TEST);
+    /* Whichever buffer the world is going into, cleared. */
+    const w = worldTarget(q);
+    VF.gl.bind(w || t);
     gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
+    if (w) {
+      VF.gl.bind(t);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+    }
     return t;
+  }
+
+  /* Where the world pass should draw: the small buffer when there is one, and
+     the scene buffer when there is not. */
+  function worldInto(q) {
+    return worldTarget(q) || sceneTarget();
+  }
+
+  /* And the small buffer up into the scene, before the art goes over it. A
+     plain textured pass; the target's own LINEAR filtering does the work. */
+  function lift(q) {
+    const w = worldTarget(q);
+    if (!w || !programs()) return false;
+    const t = sceneTarget();
+    if (!t) return false;
+    const gl = VF.gl.ctx();
+    gl.disable(gl.BLEND);
+    gl.disable(gl.SCISSOR_TEST);
+    gl.disable(gl.STENCIL_TEST);
+    return VF.gl.pass(up, { src: w }, t);
   }
 
   /* Everything a place asks of the chain, in one object, defaulted so a
@@ -322,6 +381,8 @@
   VF.glPost = {
     ok: ok,
     begin: begin,
+    worldInto: worldInto,
+    lift: lift,
     end: end,
     /* the tools ask what the chain is doing, and force it off */
     exposure: function () { return ev; },

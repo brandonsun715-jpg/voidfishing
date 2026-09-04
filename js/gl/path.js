@@ -200,7 +200,7 @@
        the texture to still be uploaded is a bet on another module's cache, and
        it lost. */
     if (!VF.gl.hasTexture('grad' + slot, sig)) {
-      if (!lut) lut = new Uint8Array(256 * 4);
+      if (!lut) lut = new Float32Array(256 * 4);
       /* Built here rather than by painting the real CanvasGradient into a
          256x1 canvas and uploading that.
 
@@ -214,9 +214,25 @@
          is what the Nowhere Sea's surface mist did — seven nearly invisible
          ellipses that came out as a black smear, on the GPU only.
 
-         Interpolating in premultiplied space is also what the canvas spec
-         says gradients do, so this is the same maths at full precision
-         instead of through two 8-bit conversions. */
+         AND THE STRIP IS HALF FLOAT, which is the half that matters and
+         which took three goes to get right.
+
+         Premultiplied in eight bits cannot hold a dark colour at a low alpha:
+         rgb(30,30,30) at alpha 0.0075 premultiplies to 0.22 of a level and
+         rounds to zero however carefully it was computed, so the colour is
+         gone and what arrives is black with a little opacity — which DARKENS
+         where the 2D canvas tints. Building the ramp in float did not fix
+         that, because the destination was still eight bits.
+
+         Storing it unpremultiplied instead keeps the colour and breaks
+         something else: LINEAR filtering then interpolates unpremultiplied
+         values, which is wrong wherever alpha changes fast, and eight rods
+         came apart on it immediately.
+
+         There is no arrangement of eight bits that does both. Sixteen-bit
+         float does: premultiplied, so the filtering is correct, and with
+         enough range under the decimal point that a nearly transparent colour
+         survives being written down. */
       const st = [];
       for (let i = 0; i < g._stops.length; i++) {
         const c = parse(g._stops[i][1]);
@@ -236,14 +252,14 @@
              colour rather than extrapolating. */
           const u = x <= a[0] ? 0 : x >= b[0] ? 1 : (span > 0 ? (x - a[0]) / span : 0);
           const o = i * 4;
-          lut[o]     = Math.round(U.clamp(a[1] + (b[1] - a[1]) * u, 0, 1) * 255);
-          lut[o + 1] = Math.round(U.clamp(a[2] + (b[2] - a[2]) * u, 0, 1) * 255);
-          lut[o + 2] = Math.round(U.clamp(a[3] + (b[3] - a[3]) * u, 0, 1) * 255);
-          lut[o + 3] = Math.round(U.clamp(a[4] + (b[4] - a[4]) * u, 0, 1) * 255);
+          lut[o]     = U.clamp(a[1] + (b[1] - a[1]) * u, 0, 1);
+          lut[o + 1] = U.clamp(a[2] + (b[2] - a[2]) * u, 0, 1);
+          lut[o + 2] = U.clamp(a[3] + (b[3] - a[3]) * u, 0, 1);
+          lut[o + 3] = U.clamp(a[4] + (b[4] - a[4]) * u, 0, 1);
         }
       }
     }
-    return VF.gl.textureData('grad' + slot, lut, 256, 1, sig);
+    return VF.gl.textureData('grad' + slot, lut, 256, 1, sig, true, true);
   }
 
   function Gradient(kind, a) {

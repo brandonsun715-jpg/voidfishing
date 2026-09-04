@@ -46,7 +46,13 @@
          cloud not far up, and weather allowed to do whatever it likes to it.
          This is the reference the other eight are different FROM. */
       air: { sky: 'open', water: 'open', elev: 0.26, disc: 0.030,
-             cloud: 0.34, cloudY: 0.30 },
+             cloud: 0.34, cloudY: 0.30,
+             /* Neutral, and deliberately the least graded place in the game.
+                Cool in the shadows and warm at the top is what daylight on
+                water does on its own; this is the reference the other eight
+                are graded AWAY from, so it gets almost nothing. */
+             grade: { sat: 1.03, con: 1.06, lift: [0.004, 0.010, 0.022],
+                      gain: [1.02, 1.00, 0.97], bloom: 1.0 } },
       weather: ['clear', 'overcast', 'rain', 'fog'],
       music: { root: 55, scale: [0, 3, 5, 7, 10], tempo: 0.16, pad: 0.5 } },
 
@@ -66,7 +72,12 @@
          the angular size of anything else in the game, because the whole
          zone is built around its reflection. */
       air: { sky: 'open', water: 'open', elev: 0.52, disc: 0.062,
-             cloud: 0.10, wxCloud: 0.55, cloudY: 0.52, zen: '#05080f' },
+             cloud: 0.10, wxCloud: 0.55, cloudY: 0.52, zen: '#05080f',
+             /* One light and nothing else, so the shadows go blue and stay
+                there and the highlight is left clean — a moon is white and
+                grading it warm would be a lie the whole zone is built on. */
+             grade: { sat: 1.00, con: 1.10, lift: [0.000, 0.008, 0.030],
+                      gain: [0.98, 1.00, 1.03], bloom: 1.25, thresh: 0.92 } },
       weather: ['clear', 'overcast', 'rain', 'fog', 'meteor'],
       music: { root: 53, scale: [0, 2, 3, 7, 9], tempo: 0.14, pad: 0.6 } },
 
@@ -87,7 +98,12 @@
          slow, and the sky reads as enormous. */
       air: { sky: 'open', water: 'mirror', elev: 0.40, disc: 0.036,
              cloud: 0.16, cloudY: 0.72, zen: '#050d14',
-             bed: '#5e7a72', cloudTint: '#cfeee8' },
+             bed: '#5e7a72', cloudTint: '#cfeee8',
+             /* Glass: hard, clean, faintly cold, and the highest contrast in
+                the game because a mirror has no midtones of its own — what it
+                has is the sky's, twice. */
+             grade: { sat: 0.98, con: 1.16, lift: [0.000, 0.006, 0.008],
+                      gain: [0.97, 1.01, 1.01], bloom: 1.1, thresh: 0.96 } },
       weather: ['clear', 'fog', 'aurora', 'meteor', 'overcast'],
       music: { root: 57, scale: [0, 2, 4, 7, 11], tempo: 0.12, pad: 0.7 } },
 
@@ -107,7 +123,14 @@
          water is gone well before the horizon is. That is the sensation of
          depth done with air rather than with a darker blue. */
       air: { sky: 'open', water: 'swell', elev: 0.18, disc: 0.022,
-             cloud: 0.72, cloudY: 0.22, zen: '#04070c', cloudTint: '#5d7080' },
+             cloud: 0.72, cloudY: 0.22, zen: '#04070c', cloudTint: '#5d7080',
+             /* Crushed and drained. Weather sits on this place; a photograph
+                of it would have no colour in it worth the name and a very
+                long way between the darkest thing and the lightest. Bloom is
+                held down hard — there is nothing down here bright enough to
+                bloom and letting the overcast do it would make fog. */
+             grade: { sat: 0.86, con: 1.20, lift: [0.000, 0.004, 0.010],
+                      gain: [0.96, 0.99, 1.02], bloom: 0.45, thresh: 1.25 } },
       weather: ['overcast', 'rain', 'storm', 'fog', 'eclipse'],
       music: { root: 48, scale: [0, 1, 5, 7, 8], tempo: 0.10, pad: 0.8 } },
 
@@ -126,7 +149,13 @@
          the underside of the roof near the water. No deck, no body, and the
          weather is not admitted at all. */
       air: { sky: 'closed', water: 'open', elev: 0.55, disc: 0.0,
-             cloud: 0, wxCloud: 0, zen: '#0a0618' },
+             cloud: 0, wxCloud: 0, zen: '#0a0618',
+             /* Lit from inside the rock rather than from a sky, so the
+                highlights carry the crystal's colour and the shadows have
+                nothing in them at all. The one zone where bloom is the point:
+                the light sources ARE the geology. */
+             grade: { sat: 1.08, con: 1.12, lift: [0.006, 0.000, 0.014],
+                      gain: [1.04, 0.98, 1.06], bloom: 1.6, thresh: 0.82 } },
       weather: ['clear', 'fog', 'aurora', 'eclipse', 'meteor'],
       music: { root: 50, scale: [0, 3, 5, 6, 10], tempo: 0.11, pad: 0.85 } },
 
@@ -144,7 +173,12 @@
          drawn over this by the zone layer; what the air does is make the space
          read as INSIDE, which is the half a painted ring cannot do on its own. */
       air: { sky: 'closed', water: 'open', elev: 0.62, disc: 0.0,
-             cloud: 0, wxCloud: 0.25, zen: '#080a1c' },
+             cloud: 0, wxCloud: 0.25, zen: '#080a1c',
+             /* Old, and lit by something that has been on for four hundred
+                years. Amber in the highlights, dust in the blacks, and the
+                lowest contrast in the game — nothing here is crisp any more. */
+             grade: { sat: 0.94, con: 0.98, lift: [0.020, 0.016, 0.010],
+                      gain: [1.05, 1.00, 0.93], bloom: 0.9, thresh: 1.0 } },
       weather: ['clear', 'aurora', 'meteor', 'eclipse', 'storm'],
       music: { root: 52, scale: [0, 2, 5, 7, 9], tempo: 0.13, pad: 0.75 } },
 
@@ -155,15 +189,33 @@
       desc: 'You arrived here. You cannot describe the journey. The water is fine and the fishing is excellent.',
       hint: 'The charts stop. The water does not.',
       rarityBoost: 3.10, valueBoost: 3.40, xpBoost: 36.0, biteBoost: 0.90,
-      sky: ['#08060f', '#1a1030'], water: ['#100a24', '#020106'], glow: '#9f7fff',
-      fog: '#1c1236', fogAmt: 0.55, stars: 0.68, starTint: '#d8c8ff',
+      /* NOT PURPLE. It was: a violet sky over violet water under a violet
+         light, and the result was a screensaver — the one visual note this
+         zone had was a hue, and a hue is the cheapest way there is to say
+         "strange". The colours are nearly neutral now and very slightly sick,
+         and the wrongness is carried by the LIGHT instead: an unbounded sky
+         that never converges, three landmarks that are the same object, and a
+         grade whose shadows are warm and whose highlights are cold — which is
+         the reverse of every daylit scene on Earth, and which the eye reads
+         as wrong before it can say why. */
+      sky: ['#0a0c0b', '#181e1a'], water: ['#0e1412', '#020403'], glow: '#c2cabc',
+      fog: '#141a17', fogAmt: 0.55, stars: 0.68, starTint: '#dfe6d8',
       horizon: 'tear', silhouette: 'none', depth: 0.55, void: 0.74,
       /* Unbounded: the dome does not converge and the aerial perspective is
          switched off entirely, so nothing about the air tells you how far away
          anything is. Every other place in the game hands you distance for
          free. This one refuses, and that refusal is the zone. */
       air: { sky: 'unbounded', water: 'open', elev: 0.44, disc: 0.0,
-             cloud: 0.22, wxCloud: 0.40, cloudY: 0.90, zen: '#06040d' },
+             cloud: 0.22, wxCloud: 0.40, cloudY: 0.90, zen: '#06040d',
+             /* Split-toned the wrong way round. Every natural scene on Earth
+                has warm light and cool shadow, because the sun is warm and
+                the shadows are lit by the sky; this has cool light and warm
+                shadow, which no daylight does and which the eye reads as
+                wrong before it can say why. That is the whole grade — NOT
+                purple, which is what this zone kept being given and what made
+                it look like a screensaver rather than a place. */
+             grade: { sat: 0.78, con: 1.10, lift: [0.030, 0.016, 0.000],
+                      gain: [0.93, 0.99, 1.06], bloom: 0.8, thresh: 1.05 } },
       weather: ['fog', 'eclipse', 'voidsurge', 'storm', 'aurora'],
       music: { root: 46, scale: [0, 1, 3, 7, 8], tempo: 0.08, pad: 0.95 } },
 
@@ -183,7 +235,13 @@
          mirrors the wrong way up. Every visual habit the other eight places
          built is broken here on purpose. */
       air: { sky: 'inverted', water: 'still', elev: 0.05, disc: 0.090,
-             cloud: 0, wxCloud: 0, zen: '#000000', bed: '#0d0424' },
+             cloud: 0, wxCloud: 0, zen: '#000000', bed: '#0d0424',
+             /* Almost no colour and almost no light, and one thing that is
+                bright. The blacks are true black — nothing is lifted, because
+                a lifted black says there is air between you and it and there
+                is not. */
+             grade: { sat: 0.82, con: 1.24, lift: [0.000, 0.000, 0.000],
+                      gain: [1.00, 0.96, 1.04], bloom: 1.5, thresh: 0.80 } },
       weather: ['voidsurge', 'eclipse', 'fog'],
       music: { root: 43, scale: [0, 1, 4, 6, 7], tempo: 0.06, pad: 1.0 } }
   ];

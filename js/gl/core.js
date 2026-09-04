@@ -301,7 +301,15 @@
       if (t.sb) gl.deleteRenderbuffer(t.sb);
     }
 
-    const samples = Math.min(4, gl.getParameter(gl.MAX_SAMPLES) || 0);
+    /* Samples off the quality dial. Two full-resolution 4x multisampled
+       buffers per frame — one for each art layer — is the largest single
+       piece of bandwidth this renderer spends, and it was spending it the
+       same way on every machine. Four is worth having on the edges of a
+       headland; on a low setting it is worth nothing at all. */
+    const want = { low: 1, medium: 2, cinematic: 4 }[
+      (VF.state && VF.state.data && VF.state.data.settings.quality) || 'high'];
+    const samples = Math.min(want === undefined ? 4 : want,
+                             gl.getParameter(gl.MAX_SAMPLES) || 0);
     const rb = gl.createRenderbuffer();
     gl.bindRenderbuffer(gl.RENDERBUFFER, rb);
     if (samples > 1) {
@@ -389,7 +397,7 @@
      to 0, and comes back black — so the GPU darkens where the 2D canvas
      tints. This takes bytes that are already premultiplied and uploads them
      as they are. */
-  function textureData(name, data, w, h, version, smooth) {
+  function textureData(name, data, w, h, version, smooth, float) {
     let t = targets['tx:' + name];
     if (t && t.version === version) return t;
     if (!t) {
@@ -399,8 +407,16 @@
     gl.bindTexture(gl.TEXTURE_2D, t.tex);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
-    const f = smooth === false ? gl.NEAREST : gl.LINEAR;
+    /* A float variant, because eight bits per channel cannot hold a
+       premultiplied dark colour at a low alpha — see the gradient ramp in
+       js/gl/path.js, which is the whole reason this exists. */
+    const wantF = !!float && caps.float;
+    if (wantF) {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.FLOAT, data);
+    } else {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
+    }
+    const f = (smooth === false || (wantF && !caps.floatLinear)) ? gl.NEAREST : gl.LINEAR;
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, f);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, f);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);

@@ -1135,8 +1135,13 @@
        finished image on the canvas at the end of the frame. Null when it is
        unavailable, and then everything below writes straight to the screen
        exactly as it did before there was one. */
-    const post = (world0 && useGl && VF.glPost) ? VF.glPost.begin() : null;
-    const world = glOn && VF.glWorld ? VF.glWorld.draw(L, P, backTex, post) : false;
+    const post = (world0 && useGl && VF.glPost) ? VF.glPost.begin(q) : null;
+    /* The world goes into its own smaller buffer when the quality level asks
+       for one, and is lifted into the scene before the art is drawn over it.
+       Nothing about the world pass changes; it is handed a different target. */
+    const world = glOn && VF.glWorld
+      ? VF.glWorld.draw(L, P, backTex, post ? VF.glPost.worldInto(q) : null) : false;
+    if (world && post) VF.glPost.lift(q);
     if (!world) { backTex = null; backTook = 0; }
     if (world) ctx.clearRect(0, 0, W, H);
 
