@@ -301,7 +301,15 @@
       if (t.sb) gl.deleteRenderbuffer(t.sb);
     }
 
-    const samples = Math.min(4, gl.getParameter(gl.MAX_SAMPLES) || 0);
+    /* Samples off the quality dial. Two full-resolution 4x multisampled
+       buffers per frame — one for each art layer — is the largest single
+       piece of bandwidth this renderer spends, and it was spending it the
+       same way on every machine. Four is worth having on the edges of a
+       headland; on a low setting it is worth nothing at all. */
+    const want = { low: 1, medium: 2, cinematic: 4 }[
+      (VF.state && VF.state.data && VF.state.data.settings.quality) || 'high'];
+    const samples = Math.min(want === undefined ? 4 : want,
+                             gl.getParameter(gl.MAX_SAMPLES) || 0);
     const rb = gl.createRenderbuffer();
     gl.bindRenderbuffer(gl.RENDERBUFFER, rb);
     if (samples > 1) {

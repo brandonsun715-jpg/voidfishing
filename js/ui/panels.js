@@ -3412,7 +3412,8 @@
     const qRow = U.el('div', 'set-row');
     qRow.appendChild(U.el('label', null, 'Graphics'));
     const qSeg = U.el('div', 'seg');
-    [['low', 'Low'], ['medium', 'Medium'], ['high', 'High']].forEach(function (o) {
+    [['low', 'Low'], ['medium', 'Medium'], ['high', 'High'],
+     ['cinematic', 'Cinematic']].forEach(function (o) {
       const btn = U.el('button', s.quality === o[0] ? 'active' : '', o[1]);
       btn.addEventListener('click', function () {
         s.quality = o[0];
