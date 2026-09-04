@@ -92,7 +92,14 @@
         sky: ['#2a1c3e', '#f0c07a'], water: ['#e8d6b0', '#8a6f52'], glow: '#ffe6a8',
         fog: '#c8a878', fogAmt: 0.30, stars: 1.0, starTint: '#fff4d8',
         horizon: 'ring', silhouette: 'none', depth: 0.34,
-        weather: ['clear', 'aurora', 'meteor'],
+        /* Water lying ON the cloud, so the deck is under the horizon rather
+           than over it and the sky above has nothing in it at all — no
+           convergence, no haze, no distance. The surface is a mirror because
+           there is no depth beneath it to darken; what it reflects is the only
+           thing up here. Nothing else in the game is lit from this high. */
+        air: { sky: 'unbounded', water: 'mirror', elev: 0.78, disc: 0.115,
+               cloud: 0.06, wxCloud: 0.20, cloudY: 1.10,
+               zen: '#160c26', bed: '#efe0bc', cloudTint: '#ffeccc' },
         music: { root: 60, scale: [0, 4, 7, 9, 11], tempo: 0.15, pad: 0.55 } },
       found: 'water lying on top of the cloud, with nothing under it but weather.',
       test: function () { return false; } },
@@ -109,7 +116,9 @@
         sky: ['#000000', '#0a0410'], water: ['#040110', '#000000'], glow: '#e0c8ff',
         fog: '#100628', fogAmt: 0.72, stars: 0.22, starTint: '#e8d8ff',
         horizon: 'eye', silhouette: 'none', depth: 0.62,
-        weather: ['voidsurge', 'eclipse'],
+        /* Beneath, further. Same rules, less of everything. */
+        air: { sky: 'inverted', water: 'still', elev: 0.02, disc: 0.070,
+               cloud: 0, wxCloud: 0, zen: '#000000', bed: '#08021a' },
         music: { root: 40, scale: [0, 1, 3, 6, 7], tempo: 0.05, pad: 1.0 } },
       found: 'the place all of it was pointing at.',
       final: true,

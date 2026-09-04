@@ -556,9 +556,47 @@
     const lw = (z && z.spatial && z.spatial.light) || null;
     const d = lw && lw.d !== undefined ? lw.d : LIGHT_D;
     // 0.4 / spread(d) puts it at 0.70 W with the camera at rest
-    const u = lw && lw.u !== undefined ? lw.u : 0.4 / VF.space.spread(d);
+    const u0 = lw && lw.u !== undefined ? lw.u : 0.4 / VF.space.spread(d);
+    const h0 = lw && lw.h !== undefined ? lw.h : 0.145;
+
+    /* AND IT MOVES.
+
+       It did not. The one big light sat at a fixed height and a fixed bearing
+       in every zone at every hour of every day, and that is most of why a
+       sunset here was a colour rather than an event: the sun did not go down,
+       it went orange. Nothing keyed off it could say anything either — the
+       lane it lays on the water, the seam under the horizon, the tilt of the
+       water gradient are all correct machinery pointed at a nail.
+
+       So it runs an arc. High at midday, low at both ends of the day, and
+       lowest in the small hours — which is also what makes the reflection
+       LONG in the evening, because a light near the horizon lays its path all
+       the way to the boat and a light overhead lays none at all.
+
+       It never goes under. This game has one celestial object per zone rather
+       than a sun and a moon, so the arc bottoms out just above the water
+       instead of setting: a moon low over the sea is the correct night and it
+       keeps the signature reflection that half these zones are built around.
+
+       A place with a roof does not get any of this. In the Abyss and the
+       Cradle the light is a hole in the rock, and holes do not rise. */
+    const air = loc.air || {};
+    const fixed = air.sky === 'closed' || air.sky === 'inverted';
+    const arc = VF.palette.sunArc ? VF.palette.sunArc() : 0.5;
+
+    let u = u0, h = h0;
+    if (!fixed) {
+      /* Across the sky as well as up it, so the light is in a different part
+         of the frame in the morning than in the evening and the water's lane
+         swings with it over a session. Kept inside the frame's own span: this
+         is a fixed camera looking one way, and a light that walks out of shot
+         takes the composition with it. */
+      const sweep = Math.sin(((VF.time.cycle() - 0.330 + 1) % 1) * Math.PI * 2);
+      u = u0 - sweep * (0.62 / VF.space.spread(d));
+      h = h0 * (0.20 + 1.05 * arc);
+    }
     L.glowX = VF.space.xAt(u, d);
-    L.glowY = L.horizonY - H * (lw && lw.h !== undefined ? lw.h : 0.145);
+    L.glowY = L.horizonY - H * h;
   }
 
   function seedAmbient() {
@@ -1078,6 +1116,8 @@
     const backs = backList(P, q);
     const useGl = glOn && VF.glWorld && VF.glWorld.ok() && VF.glLayer && VF.glLayer.ok();
 
+    const world0 = glOn && VF.glWorld && VF.glWorld.ok();
+
     let backTex = null, backTook = 0;
     if (useGl) {
       const r = VF.glLayer.back(backs, function (g) {
@@ -1090,7 +1130,13 @@
        under its water, so the sea can cover the foot of a headland. It returns
        false if it could not draw at all, and then the 2D sky and water below
        draw exactly as they always did. */
-    const world = glOn && VF.glWorld ? VF.glWorld.draw(L, P, backTex) : false;
+    /* THE POST CHAIN. Open it and the world and the front layer both go into
+       a half-float buffer instead of onto the canvas; js/gl/post.js puts the
+       finished image on the canvas at the end of the frame. Null when it is
+       unavailable, and then everything below writes straight to the screen
+       exactly as it did before there was one. */
+    const post = (world0 && useGl && VF.glPost) ? VF.glPost.begin() : null;
+    const world = glOn && VF.glWorld ? VF.glWorld.draw(L, P, backTex, post) : false;
     if (!world) { backTex = null; backTook = 0; }
     if (world) ctx.clearRect(0, 0, W, H);
 
@@ -1105,10 +1151,15 @@
       });
       if (r && r.count) {
         /* onto the canvas, blended, because a resolve cannot blend */
-        if (VF.glLayer.composite(r.tex)) frontTook = r.count;
+        if (VF.glLayer.composite(r.tex, post)) frontTook = r.count;
       }
     }
     runFrom(fronts, frontTook);
+
+    /* And the chain onto the canvas. After the front layer and before any of
+       the 2D remainder, because the remainder is on the canvas ABOVE this one
+       and must not be graded twice. */
+    if (post) VF.glPost.end(L, P, q, VF.state.rt.dt);
     syncVignette();
 
     if (wrongK > 0.01) drawWrong(wrongK);

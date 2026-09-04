@@ -159,6 +159,12 @@
       const v = vals[k];
       if (typeof v === 'number') gl.uniform1f(loc, v);
       else if (typeof v === 'boolean') gl.uniform1i(loc, v ? 1 : 0);
+      /* An INT uniform has to say so. `typeof v === 'number'` means float here
+         — every other uniform in the game is one and half of them are
+         integral by coincidence — so a shader that selects a model with an
+         int gets uniform1f, which is a GL error, and the selector silently
+         stays at whatever it was. See int() below. */
+      else if (v && v.__int !== undefined) gl.uniform1i(loc, v.__int);
       else if (v && v.__tex) {
         gl.activeTexture(gl.TEXTURE0 + unit);
         gl.bindTexture(gl.TEXTURE_2D, v.tex);
@@ -168,6 +174,17 @@
       else if (v && v.length === 3) gl.uniform3f(loc, v[0], v[1], v[2]);
       else if (v && v.length === 4) gl.uniform4f(loc, v[0], v[1], v[2], v[3]);
     }
+  }
+
+  /* An integer uniform, wrapped so setUniforms can tell it from a float.
+     Wrappers are cached rather than allocated: this is called for every model
+     selector on every frame, and a per-frame object per uniform is exactly
+     the kind of garbage a render loop should not make. */
+  const INTS = [];
+  function int(n) {
+    n = n | 0;
+    if (n < 0) n = 0;
+    return INTS[n] || (INTS[n] = { __int: n });
   }
 
   /* ------------------------------------------------------------ geometry
@@ -361,6 +378,37 @@
     return t;
   }
 
+  /* Raw pixels, already premultiplied.
+
+     texture() above hands a canvas to texImage2D with
+     UNPACK_PREMULTIPLY_ALPHA_WEBGL on, which means the browser reads the
+     canvas back UNPREMULTIPLIED and then premultiplies it again. For anything
+     opaque that round trip is lossless and nobody notices. For a nearly
+     transparent colour it destroys the colour outright: a fill at alpha
+     2/255 is stored premultiplied as round(28 * 2/255) = 0, un-premultiplies
+     to 0, and comes back black — so the GPU darkens where the 2D canvas
+     tints. This takes bytes that are already premultiplied and uploads them
+     as they are. */
+  function textureData(name, data, w, h, version, smooth) {
+    let t = targets['tx:' + name];
+    if (t && t.version === version) return t;
+    if (!t) {
+      t = { __tex: 1, name: name, tex: gl.createTexture(), w: 0, h: 0, version: null };
+      targets['tx:' + name] = t;
+    }
+    gl.bindTexture(gl.TEXTURE_2D, t.tex);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
+    const f = smooth === false ? gl.NEAREST : gl.LINEAR;
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, f);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, f);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    t.w = w; t.h = h; t.version = version;
+    return t;
+  }
+
   /* ------------------------------------------------------------- blending
 
      Three modes, because three is what the art uses ON A LIVE CONTEXT: 132 of
@@ -448,8 +496,10 @@
   }
 
   VF.gl = {
+    int: int,
     init: init, resize: resize,
     program: program, pass: pass, target: target, clear: clear,
+    textureData: textureData,
     setUniforms: setUniforms, uniform: uniform,
     buffer: buffer, upload: upload, mesh: mesh,
     msaa: msaa, resolve: resolve, bind: bind, texture: texture, blend: blend,

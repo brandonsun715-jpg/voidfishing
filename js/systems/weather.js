@@ -78,6 +78,10 @@
     encounter: function () { return field('encounter', 1); },
     /* Render fields */
     fog: function () { return field('fog', 0); },
+    /* How much of the sky is closed over. Read by js/render/palette.js and
+       from there by the cloud deck in js/gl/world.js — weather is a thing
+       you can see above you now rather than a tint over the whole frame. */
+    cloud: function () { return field('cloud', 0); },
     rain: function () { return field('rain', 0); },
     wind: function () { return field('wind', 0.3); },
     light: function () { return field('light', 1); },

@@ -161,7 +161,7 @@
      fifty times pessimistic, so it is not the number to tune against. */
   const stats = { batch: 0, stencil: 0, tris: 0 };
 
-  let lut = null, lutCtx = null;
+  let lut = null;
 
   /* The art builds its gradients fresh inside the draw call — `const grad =
      g.createLinearGradient(...)` on every frame, at 223 call sites. So the
@@ -200,20 +200,50 @@
        the texture to still be uploaded is a bet on another module's cache, and
        it lost. */
     if (!VF.gl.hasTexture('grad' + slot, sig)) {
-      if (!lut) {
-        lut = document.createElement('canvas');
-        lut.width = 256; lut.height = 1;
-        lutCtx = lut.getContext('2d', { willReadFrequently: true });
-      }
-      lutCtx.clearRect(0, 0, 256, 1);
-      const strip = lutCtx.createLinearGradient(0, 0, 256, 0);
+      if (!lut) lut = new Uint8Array(256 * 4);
+      /* Built here rather than by painting the real CanvasGradient into a
+         256x1 canvas and uploading that.
+
+         The canvas was the right instinct — let the reference rasteriser do
+         the interpolating — and it has one failure, which took a whole zone
+         to find. A canvas stores premultiplied 8-bit, texImage2D reads it
+         back UNPREMULTIPLIED and premultiplies it again, and at very low
+         alpha that round trip destroys the colour: a stop at rgba(28,20,54,
+         0.008) stores as round(28 * 2/255) = 0, un-premultiplies to 0, and
+         arrives black. So the GPU DARKENED where the 2D canvas tinted, which
+         is what the Nowhere Sea's surface mist did — seven nearly invisible
+         ellipses that came out as a black smear, on the GPU only.
+
+         Interpolating in premultiplied space is also what the canvas spec
+         says gradients do, so this is the same maths at full precision
+         instead of through two 8-bit conversions. */
+      const st = [];
       for (let i = 0; i < g._stops.length; i++) {
-        strip.addColorStop(U.clamp(g._stops[i][0], 0, 1), g._stops[i][1]);
+        const c = parse(g._stops[i][1]);
+        st.push([U.clamp(g._stops[i][0], 0, 1), c[0] * c[3], c[1] * c[3], c[2] * c[3], c[3]]);
       }
-      lutCtx.fillStyle = strip;
-      lutCtx.fillRect(0, 0, 256, 1);
+      st.sort(function (a, b) { return a[0] - b[0]; });
+      if (!st.length) { lut.fill(0); }
+      else {
+        let k = 0;
+        for (let i = 0; i < 256; i++) {
+          const x = i / 255;
+          while (k < st.length - 2 && x > st[k + 1][0]) k++;
+          const a = st[Math.min(k, st.length - 1)];
+          const b = st[Math.min(k + 1, st.length - 1)];
+          const span = b[0] - a[0];
+          /* Before the first stop and after the last, canvas holds the end
+             colour rather than extrapolating. */
+          const u = x <= a[0] ? 0 : x >= b[0] ? 1 : (span > 0 ? (x - a[0]) / span : 0);
+          const o = i * 4;
+          lut[o]     = Math.round(U.clamp(a[1] + (b[1] - a[1]) * u, 0, 1) * 255);
+          lut[o + 1] = Math.round(U.clamp(a[2] + (b[2] - a[2]) * u, 0, 1) * 255);
+          lut[o + 2] = Math.round(U.clamp(a[3] + (b[3] - a[3]) * u, 0, 1) * 255);
+          lut[o + 3] = Math.round(U.clamp(a[4] + (b[4] - a[4]) * u, 0, 1) * 255);
+        }
+      }
     }
-    return VF.gl.texture('grad' + slot, lut, sig);
+    return VF.gl.textureData('grad' + slot, lut, 256, 1, sig);
   }
 
   function Gradient(kind, a) {

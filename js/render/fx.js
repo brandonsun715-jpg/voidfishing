@@ -115,6 +115,11 @@
     update: update, shakeOffset: shakeOffset, drawRipples: drawRipples,
     drawOverlay: drawOverlay, reset: reset,
     pulseAmt: function () { return vignettePulse; },
-    shakeAmt: function () { return shakeAmt; }
+    shakeAmt: function () { return shakeAmt; },
+    /* How much flash is on the screen right now. `flash` above is the verb —
+       it STARTS one — so anything that wants to read the level needs its own
+       way in, and js/gl/post.js asking VF.fx.flash() would have fired a white
+       frame sixty times a second. */
+    flashAmt: function () { return flash ? Math.max(0, flash.amt) : 0; }
   };
 })(window.VF = window.VF || {});

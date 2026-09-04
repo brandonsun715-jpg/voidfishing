@@ -209,6 +209,15 @@ const OUT = path.join(__dirname, 'sc-gl');
     const CLOCKS = [0, 5, 11, 17, 23];
     const cases = [], tested = {};
 
+    /* The secret waters too. They are registered on discovery, so a fresh
+       save's locations list does not contain them — and the five arts that
+       only THE HEAVENS generates were therefore never reached, never
+       verified, and so never ported. A tool that silently skips a zone
+       reports a clean run on art it has not looked at. */
+    VF.secrets.list.forEach(function (sec) {
+      if (sec.loc) VF.locations.register(sec.loc);
+    });
+
     VF.locations.list.forEach(function (zone) {
       d.location = zone.id;
       VF.landmarks.invalidate();
