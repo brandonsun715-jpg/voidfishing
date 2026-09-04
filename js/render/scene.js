@@ -1139,9 +1139,14 @@
     /* The world goes into its own smaller buffer when the quality level asks
        for one, and is lifted into the scene before the art is drawn over it.
        Nothing about the world pass changes; it is handed a different target. */
+    /* The backdrop goes to whichever pass is running at full size — the
+       world shader when it is, and the lift when it is not. Handing it to a
+       reduced-resolution world pass puts every star and cloud through the
+       downscale, which is the one thing that scale exists to avoid. */
+    const backToWorld = (post && !VF.glPost.wantsBack(q)) ? null : backTex;
     const world = glOn && VF.glWorld
-      ? VF.glWorld.draw(L, P, backTex, post ? VF.glPost.worldInto(q) : null) : false;
-    if (world && post) VF.glPost.lift(q);
+      ? VF.glWorld.draw(L, P, backToWorld, post ? VF.glPost.worldInto(q) : null) : false;
+    if (world && post) VF.glPost.lift(q, backToWorld ? null : backTex, L.horizonY / H);
     if (!world) { backTex = null; backTook = 0; }
     if (world) ctx.clearRect(0, 0, W, H);
 

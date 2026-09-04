@@ -170,13 +170,40 @@
       frag = vec4(c, 1.0);
     }`;
 
-  /* Straight through, flipped, for lifting the world buffer into the scene. */
+  /* The world buffer up into the scene, and the backdrop composited over it
+     AT FULL RESOLUTION.
+
+     The backdrop — stars, clouds, the ridgeline, the landmarks standing at or
+     beyond the horizon — used to be handed to the world shader, which
+     composited it inside its own sky. That was right when the world pass ran
+     at the size of the screen. It stopped being right the moment the world
+     pass got smaller: all of that ART was then drawn into a buffer at three
+     quarters scale and blown back up, which is exactly what the reduced
+     resolution was supposed to protect it from. Soft cloud came back with
+     hard stepped edges on it.
+
+     So the world shader draws sky and sea alone and this puts the backdrop on
+     afterwards, at the size of the screen, with the same expression the
+     shader used and the same clip to the sky — the water covers the foot of a
+     headland because the water is everything below the horizon, and that is
+     as true here as it was there. */
   const UP_FS = `#version 300 es
     precision highp float;
     in vec2 uv;
     out vec4 frag;
     uniform sampler2D src;
-    void main() { frag = texture(src, vec2(uv.x, 1.0 - uv.y)); }`;
+    uniform sampler2D back;
+    uniform bool  hasBack;
+    uniform float horizon;
+    void main() {
+      vec2 p = vec2(uv.x, 1.0 - uv.y);
+      vec3 c = texture(src, p).rgb;
+      if (hasBack && uv.y < horizon) {
+        vec4 bk = texture(back, p);
+        c = bk.rgb + c * (1.0 - bk.a);
+      }
+      frag = vec4(c, 1.0);
+    }`;
 
   let bright = null, blur = null, resolve = null, up = null;
   let failed = false, built = false;
@@ -237,7 +264,12 @@
 
   function worldTarget(q) {
     const dpr = VF.gl.size().dpr || 1;
-    const k = WORLD_SCALE[q] === undefined ? 0.78 : WORLD_SCALE[q];
+    let k = WORLD_SCALE[q] === undefined ? 0.78 : WORLD_SCALE[q];
+    /* A half-float texture can only be filtered where OES_texture_float_linear
+       is present. Without it every sample of the world buffer is NEAREST, and
+       scaling a NEAREST buffer up is not a soft image, it is a staircase —
+       so on a machine without the extension there is no scaling at all. */
+    if (!VF.gl.caps.floatLinear) k = 1;
     if (k >= 0.999) return null;              // straight into the scene buffer
     return VF.gl.target('post-world', dpr * k, true);
   }
@@ -272,7 +304,7 @@
 
   /* And the small buffer up into the scene, before the art goes over it. A
      plain textured pass; the target's own LINEAR filtering does the work. */
-  function lift(q) {
+  function lift(q, back, horizon) {
     const w = worldTarget(q);
     if (!w || !programs()) return false;
     const t = sceneTarget();
@@ -281,8 +313,17 @@
     gl.disable(gl.BLEND);
     gl.disable(gl.SCISSOR_TEST);
     gl.disable(gl.STENCIL_TEST);
-    return VF.gl.pass(up, { src: w }, t);
+    return VF.gl.pass(up, {
+      src: w,
+      back: back || w,
+      hasBack: !!back,
+      horizon: horizon === undefined ? 0.5 : horizon
+    }, t);
   }
+
+  /* Whether the world pass should be given the backdrop itself. It should
+     only when it is drawing at full size — otherwise lift() puts it on. */
+  function wantsBack(q) { return !worldTarget(q); }
 
   /* Everything a place asks of the chain, in one object, defaulted so a
      location that says nothing gets a neutral photographic treatment rather
@@ -382,6 +423,7 @@
     ok: ok,
     begin: begin,
     worldInto: worldInto,
+    wantsBack: wantsBack,
     lift: lift,
     end: end,
     /* the tools ask what the chain is doing, and force it off */
