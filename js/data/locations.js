@@ -42,6 +42,11 @@
          something lost. The trench and the flats already dropped it for the
          same reason. */
       horizon: 'moon', silhouette: 'none', depth: 0.42, void: 0.00,
+      /* Ordinary air over an ordinary coast: a low light, a moderate deck of
+         cloud not far up, and weather allowed to do whatever it likes to it.
+         This is the reference the other eight are different FROM. */
+      air: { sky: 'open', water: 'open', elev: 0.26, disc: 0.030,
+             cloud: 0.34, cloudY: 0.30 },
       weather: ['clear', 'overcast', 'rain', 'fog'],
       music: { root: 55, scale: [0, 3, 5, 7, 10], tempo: 0.16, pad: 0.5 } },
 
@@ -55,6 +60,13 @@
       sky: ['#0f1830', '#2b3c66'], water: ['#1a2a48', '#060a16'], glow: '#b8cfff',
       fog: '#33456e', fogAmt: 0.34, stars: 0.75, starTint: '#e6efff',
       horizon: 'moon', silhouette: 'trees', depth: 0.44, void: 0.06,
+      /* A bowl in the lee of the land, so the weather mostly goes over the
+         top of it — wxCloud is what a place is allowed to catch, and this one
+         catches about half. What it has instead is the moon: high, and twice
+         the angular size of anything else in the game, because the whole
+         zone is built around its reflection. */
+      air: { sky: 'open', water: 'open', elev: 0.52, disc: 0.062,
+             cloud: 0.10, wxCloud: 0.55, cloudY: 0.52, zen: '#05080f' },
       weather: ['clear', 'overcast', 'rain', 'fog', 'meteor'],
       music: { root: 53, scale: [0, 2, 3, 7, 9], tempo: 0.14, pad: 0.6 } },
 
@@ -68,6 +80,14 @@
       sky: ['#101a24', '#3a5a68'], water: ['#22414c', '#08151c'], glow: '#9fe8e0',
       fog: '#2e4e58', fogAmt: 0.22, stars: 0.9, starTint: '#dffaff',
       horizon: 'arch', silhouette: 'none', depth: 0.38, void: 0.14,
+      /* Glass. The water model reflects the sky it is under and shows its own
+         bed through it, which is the only honest way to draw "everything above
+         is doubled below" — the old zone painted a second horizon and hoped.
+         The deck sits very high, so the shapes up there are small, distant and
+         slow, and the sky reads as enormous. */
+      air: { sky: 'open', water: 'mirror', elev: 0.40, disc: 0.036,
+             cloud: 0.16, cloudY: 0.72, zen: '#050d14',
+             bed: '#5e7a72', cloudTint: '#cfeee8' },
       weather: ['clear', 'fog', 'aurora', 'meteor', 'overcast'],
       music: { root: 57, scale: [0, 2, 4, 7, 11], tempo: 0.12, pad: 0.7 } },
 
@@ -81,6 +101,13 @@
       sky: ['#0a1018', '#1b2c3a'], water: ['#0e1d28', '#01040a'], glow: '#5fa8c0',
       fog: '#16303f', fogAmt: 0.48, stars: 0.5, starTint: '#b8d8e8',
       horizon: 'monolith', silhouette: 'none', depth: 0.52, void: 0.26,
+      /* Weather sits on this place. A low deck means big fast shapes directly
+         overhead rather than a distant ceiling, and the swell model puts a
+         long heave under the chop and doubles the extinction, so the far
+         water is gone well before the horizon is. That is the sensation of
+         depth done with air rather than with a darker blue. */
+      air: { sky: 'open', water: 'swell', elev: 0.18, disc: 0.022,
+             cloud: 0.72, cloudY: 0.22, zen: '#04070c', cloudTint: '#5d7080' },
       weather: ['overcast', 'rain', 'storm', 'fog', 'eclipse'],
       music: { root: 48, scale: [0, 1, 5, 7, 8], tempo: 0.10, pad: 0.8 } },
 
@@ -94,6 +121,12 @@
       sky: ['#120c22', '#2e2050'], water: ['#1d1440', '#050318'], glow: '#c8a0ff',
       fog: '#2c1f52', fogAmt: 0.40, stars: 0.85, starTint: '#efe0ff',
       horizon: 'crystal', silhouette: 'none', depth: 0.48, void: 0.38,
+      /* There is no sky here. It is a cavern, so the vertical ramp runs the
+         other way — darkest straight up, and what light there is comes off
+         the underside of the roof near the water. No deck, no body, and the
+         weather is not admitted at all. */
+      air: { sky: 'closed', water: 'open', elev: 0.55, disc: 0.0,
+             cloud: 0, wxCloud: 0, zen: '#0a0618' },
       weather: ['clear', 'fog', 'aurora', 'eclipse', 'meteor'],
       music: { root: 50, scale: [0, 3, 5, 6, 10], tempo: 0.11, pad: 0.85 } },
 
@@ -107,6 +140,11 @@
       sky: ['#0d1226', '#3a3060'], water: ['#1a2050', '#04061a'], glow: '#ffd08a',
       fog: '#2a2c5e', fogAmt: 0.32, stars: 1.0, starTint: '#fff2d8',
       horizon: 'ring', silhouette: 'none', depth: 0.40, void: 0.52,
+      /* Also closed, but by something built rather than by rock. The ring is
+         drawn over this by the zone layer; what the air does is make the space
+         read as INSIDE, which is the half a painted ring cannot do on its own. */
+      air: { sky: 'closed', water: 'open', elev: 0.62, disc: 0.0,
+             cloud: 0, wxCloud: 0.25, zen: '#080a1c' },
       weather: ['clear', 'aurora', 'meteor', 'eclipse', 'storm'],
       music: { root: 52, scale: [0, 2, 5, 7, 9], tempo: 0.13, pad: 0.75 } },
 
@@ -120,6 +158,12 @@
       sky: ['#08060f', '#1a1030'], water: ['#100a24', '#020106'], glow: '#9f7fff',
       fog: '#1c1236', fogAmt: 0.55, stars: 0.68, starTint: '#d8c8ff',
       horizon: 'tear', silhouette: 'none', depth: 0.55, void: 0.74,
+      /* Unbounded: the dome does not converge and the aerial perspective is
+         switched off entirely, so nothing about the air tells you how far away
+         anything is. Every other place in the game hands you distance for
+         free. This one refuses, and that refusal is the zone. */
+      air: { sky: 'unbounded', water: 'open', elev: 0.44, disc: 0.0,
+             cloud: 0.22, wxCloud: 0.40, cloudY: 0.90, zen: '#06040d' },
       weather: ['fog', 'eclipse', 'voidsurge', 'storm', 'aurora'],
       music: { root: 46, scale: [0, 1, 3, 7, 8], tempo: 0.08, pad: 0.95 } },
 
@@ -133,6 +177,13 @@
       sky: ['#010103', '#070310'], water: ['#040210', '#000000'], glow: '#b48aff',
       fog: '#140a28', fogAmt: 0.68, stars: 0.35, starTint: '#c8a8ff',
       horizon: 'eye', silhouette: 'none', depth: 0.60, void: 1.00,
+      /* The light is under you and the water does not move. Inverted sky puts
+         the brightness at the bottom of the frame and sends it up through the
+         surface; still water has no waves at all — not calm ones, none — and
+         mirrors the wrong way up. Every visual habit the other eight places
+         built is broken here on purpose. */
+      air: { sky: 'inverted', water: 'still', elev: 0.05, disc: 0.090,
+             cloud: 0, wxCloud: 0, zen: '#000000', bed: '#0d0424' },
       weather: ['voidsurge', 'eclipse', 'fog'],
       music: { root: 43, scale: [0, 1, 4, 6, 7], tempo: 0.06, pad: 1.0 } }
   ];

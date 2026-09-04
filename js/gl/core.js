@@ -159,6 +159,12 @@
       const v = vals[k];
       if (typeof v === 'number') gl.uniform1f(loc, v);
       else if (typeof v === 'boolean') gl.uniform1i(loc, v ? 1 : 0);
+      /* An INT uniform has to say so. `typeof v === 'number'` means float here
+         — every other uniform in the game is one and half of them are
+         integral by coincidence — so a shader that selects a model with an
+         int gets uniform1f, which is a GL error, and the selector silently
+         stays at whatever it was. See int() below. */
+      else if (v && v.__int !== undefined) gl.uniform1i(loc, v.__int);
       else if (v && v.__tex) {
         gl.activeTexture(gl.TEXTURE0 + unit);
         gl.bindTexture(gl.TEXTURE_2D, v.tex);
@@ -168,6 +174,17 @@
       else if (v && v.length === 3) gl.uniform3f(loc, v[0], v[1], v[2]);
       else if (v && v.length === 4) gl.uniform4f(loc, v[0], v[1], v[2], v[3]);
     }
+  }
+
+  /* An integer uniform, wrapped so setUniforms can tell it from a float.
+     Wrappers are cached rather than allocated: this is called for every model
+     selector on every frame, and a per-frame object per uniform is exactly
+     the kind of garbage a render loop should not make. */
+  const INTS = [];
+  function int(n) {
+    n = n | 0;
+    if (n < 0) n = 0;
+    return INTS[n] || (INTS[n] = { __int: n });
   }
 
   /* ------------------------------------------------------------ geometry
@@ -448,6 +465,7 @@
   }
 
   VF.gl = {
+    int: int,
     init: init, resize: resize,
     program: program, pass: pass, target: target, clear: clear,
     setUniforms: setUniforms, uniform: uniform,
