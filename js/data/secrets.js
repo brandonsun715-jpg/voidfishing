@@ -99,7 +99,14 @@
            thing up here. Nothing else in the game is lit from this high. */
         air: { sky: 'unbounded', water: 'mirror', elev: 0.78, disc: 0.115,
                cloud: 0.06, wxCloud: 0.20, cloudY: 1.10,
-               zen: '#160c26', bed: '#efe0bc', cloudTint: '#ffeccc' },
+               zen: '#160c26', bed: '#efe0bc', cloudTint: '#ffeccc',
+               /* High key: the only place in the game graded UP. Bright,
+                  low contrast, almost no black in the frame at all, which is
+                  what being above the weather actually looks like and is the
+                  opposite of every other water here. */
+               grade: { ev: 0.22, sat: 1.02, con: 0.92,
+                        lift: [0.045, 0.040, 0.032], gain: [1.02, 1.00, 0.98],
+                        bloom: 1.35, thresh: 0.88 } },
         music: { root: 60, scale: [0, 4, 7, 9, 11], tempo: 0.15, pad: 0.55 } },
       found: 'water lying on top of the cloud, with nothing under it but weather.',
       test: function () { return false; } },
