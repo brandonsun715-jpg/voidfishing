@@ -1135,11 +1135,17 @@
 
   /* ================================================================ entry */
 
+  /* The zones whose back layer is still a painted plate.
+
+     A plate is one shape at one distance with nothing behind it and nothing
+     in front of it, and it is what made eight of these places read as
+     backdrops. As each zone gets a landmark graph in js/data/zones.js it
+     comes off this list, because a graph and a plate are two horizons
+     competing and the one that means something loses — the Quiet Shore
+     proved that, and the Moonlit Basin proved it again with two rims in the
+     same frame. */
   const BACK = {
-    /* no shore: its back layer is the landmark graph now */
-    basin: basinBack, flats: flatsBack, trench: trenchBack,
-    abyss: abyssBack, cradle: cradleBack, nowhere: nowhereBack,
-    beneath: beneathBack, the_heavens: heavensBack
+    trench: trenchBack
   };
   const FRONT = {
     shore: shoreFront, basin: basinFront, flats: flatsFront, trench: trenchFront,
