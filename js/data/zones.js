@@ -380,8 +380,8 @@
          all — the lighthouse does this job on the Quiet Shore. */
       landmarks: {
         seed: 67,
-        macro: { art: 'ringfoot', side: 1, sMin: 0.20, sMax: 0.62,
-                 dMin: 1.05, dMax: 1.35, tall: 1, scale: 1.4 },
+        macro: { art: 'ringfoot', side: 1, sMin: 0.28, sMax: 0.70,
+                 dMin: 1.10, dMax: 1.42, tall: 1, scale: 1.0 },
         meso: [
           { art: 'pylon', count: 2, sMin: -1.15, sMax: 1.15,
             dMin: 0.50, dMax: 1.00, scale: 1.0 },
@@ -444,8 +444,18 @@
         meso: [
           /* The repeat. Same art, three ranges, deliberately un-jittered in
              everything except distance. */
-          { art: 'echo', count: 3, sMin: -1.10, sMax: 1.10,
-            dMin: 0.30, dMax: 1.05, scale: 1.0 },
+          /* Three entries rather than count: 3, because the tell only works
+             if the three are IN THE FRAME TOGETHER. Scattered across the full
+             width at three depths they are three objects; in a narrow lateral
+             band at three depths they are one object seen three times, which
+             is the whole point and is the only arrangement that says it.
+
+             Also near enough to read at all: at dMax 1.05 the furthest sat
+             past the horizon a few pixels tall in the darkest zone in the
+             game, and a tell nobody can see is not a tell. */
+          { art: 'echo', sMin: 0.10, sMax: 0.42, dMin: 0.26, dMax: 0.34, scale: 1.0 },
+          { art: 'echo', sMin: 0.18, sMax: 0.52, dMin: 0.46, dMax: 0.56, scale: 1.0 },
+          { art: 'echo', sMin: 0.26, sMax: 0.62, dMin: 0.70, dMax: 0.82, scale: 1.0 },
           /* And a piece of the picture with nothing in it, which is worse. */
           { art: 'absence', sMin: -0.95, sMax: 0.95, dMin: 0.45, dMax: 0.95 }
         ],

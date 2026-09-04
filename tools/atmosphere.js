@@ -227,9 +227,18 @@ const CLOCKS = [0.10, 0.34, 0.55, 0.82];   // dawn, day, sunset, night
         }
         return Math.sqrt(s2 / Math.max(1, n2));
       }
-      const cFar = bandContrast(0.06);
-      const cMid = bandContrast(0.45);
-      o.farNear = +(cFar / Math.max(0.35, cMid)).toFixed(4);
+      /* Averaged over three phases of the wave field rather than taken at
+         one instant. The surface is moving, so a single sample of its
+         contrast is a sample and not a measurement — between two runs of this
+         tool the Quiet Shore's figure moved from 0.44 to 0.38 on identical
+         code, which is most of the margin the test was working with. */
+      let cFar = 0, cMid = 0;
+      for (let ph = 0; ph < 3; ph++) {
+        if (ph) { VF.state.rt.t += 0.37; VF.glWorld.draw(VF.scene.L, VF.palette.P, null); }
+        cFar += bandContrast(0.06);
+        cMid += bandContrast(0.45);
+      }
+      o.farNear = +((cFar / 3) / Math.max(0.35, cMid / 3)).toFixed(4);
 
       /* --- stars: bright points against a dark neighbourhood ------------ */
       let stars = 0;

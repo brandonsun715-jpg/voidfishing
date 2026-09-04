@@ -891,14 +891,20 @@
      whole thing is, because a straight column of that size is just a wall and
      tells you nothing about what it is part of. */
   ART.ringfoot = function (g, l, p, P, L) {
-    const w = unit(p, L) * 0.50 * l.scale;
+    const w = unit(p, L) * 0.34 * l.scale;
     const hy = L.horizonY;
-    const h = L.h * 0.90 * p.scale * l.scale;
+    const h = L.h * 0.58 * p.scale * l.scale;
     const x = p.x;
     const sea = l.u < 0 ? 1 : -1;
     const top = Math.max(-L.h * 0.10, hy - h);
-    /* The radius of the ring, in this frame's pixels. Enormous on purpose. */
-    const R = w * 9.0;
+    /* The radius, in this frame's pixels.
+
+       It was w * 9, which is geometrically defensible — a ring that size IS
+       nearly straight over one frame — and drew a tapered slab taking a third
+       of the picture, which said "wall" and not "ring". The curvature has to
+       be legible or the shape carries none of the information it exists to
+       carry, so the radius is the smallest one that still reads as enormous. */
+    const R = w * 3.4;
 
     g.save();
     g.beginPath();
@@ -928,14 +934,26 @@
       g.lineTo(cx + Math.cos(a) * (R - w), cy + Math.sin(a) * (R - w));
       g.stroke();
     }
-    /* One panel gone, and the dark behind it. */
+    /* One panel gone. Cut OUT of the shape rather than painted onto it — a
+       dark rectangle over a dark shape is a sticker, and a hole is a hole. */
     const ga = U.lerp(a0, a1, 0.36);
-    g.fillStyle = tone(P, l, p, 1.0);
+    g.globalCompositeOperation = 'destination-out';
     g.beginPath();
-    g.arc(cx, cy, R - w * 0.10, ga, ga + 0.020, false);
-    g.arc(cx, cy, R - w * 0.80, ga + 0.020, ga, true);
+    g.arc(cx, cy, R - w * 0.10, ga, ga + 0.022, false);
+    g.arc(cx, cy, R - w * 0.78, ga + 0.022, ga, true);
     g.closePath();
     g.fill();
+    /* And the frame it was fixed to, still there behind where it was. */
+    g.globalCompositeOperation = 'source-over';
+    g.strokeStyle = lit(P, p, 0.13);
+    g.lineWidth = 1;
+    for (let i = 0; i < 3; i++) {
+      const a = ga + 0.0055 * (i + 1);
+      g.beginPath();
+      g.moveTo(cx + Math.cos(a) * (R - w * 0.12), cy + Math.sin(a) * (R - w * 0.12));
+      g.lineTo(cx + Math.cos(a) * (R - w * 0.76), cy + Math.sin(a) * (R - w * 0.76));
+      g.stroke();
+    }
     g.restore();
   };
 
@@ -1092,8 +1110,8 @@
      out something about where they are that no line of dialogue could
      deliver, and there is no line of dialogue about it. */
   ART.echo = function (g, l, p, P, L) {
-    const w = unit(p, L) * 0.045 * l.scale;
-    const h = p.scale * L.h * 0.075 * l.scale;
+    const w = unit(p, L) * 0.058 * l.scale;
+    const h = p.scale * L.h * 0.105 * l.scale;
     const x = p.x, y = p.y;
     g.save();
     g.fillStyle = tone(P, l, p, 0.94);
@@ -1106,9 +1124,21 @@
     g.lineTo(x + w, y);
     g.closePath();
     g.fill();
-    g.fillStyle = lit(P, p, 0.20);
+    /* A lit edge down the seaward side. The Nowhere Sea is the darkest place
+       in the game — a mean frame luminance of 24 against the Quiet Shore's
+       165 — and a silhouette drawn in tone() there is black on black. The
+       three of these are the only thing this zone has to say; they have to
+       survive their own atmosphere. */
+    g.strokeStyle = lit(P, p, 0.30);
+    g.lineWidth = Math.max(1, w * 0.05);
     g.beginPath();
-    g.arc(x + w * 0.12, y - h, Math.max(0.9, w * 0.10), 0, TAU);
+    g.moveTo(x + w * 0.12, y - h);
+    g.lineTo(x + w * 0.55, y - h * 0.30);
+    g.lineTo(x + w, y);
+    g.stroke();
+    g.fillStyle = lit(P, p, 0.28);
+    g.beginPath();
+    g.arc(x + w * 0.12, y - h, Math.max(1.1, w * 0.11), 0, TAU);
     g.fill();
     g.restore();
   };
