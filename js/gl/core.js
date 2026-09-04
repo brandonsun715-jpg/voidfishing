@@ -397,7 +397,7 @@
      to 0, and comes back black — so the GPU darkens where the 2D canvas
      tints. This takes bytes that are already premultiplied and uploads them
      as they are. */
-  function textureData(name, data, w, h, version, smooth) {
+  function textureData(name, data, w, h, version, smooth, float) {
     let t = targets['tx:' + name];
     if (t && t.version === version) return t;
     if (!t) {
@@ -407,8 +407,16 @@
     gl.bindTexture(gl.TEXTURE_2D, t.tex);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
-    const f = smooth === false ? gl.NEAREST : gl.LINEAR;
+    /* A float variant, because eight bits per channel cannot hold a
+       premultiplied dark colour at a low alpha — see the gradient ramp in
+       js/gl/path.js, which is the whole reason this exists. */
+    const wantF = !!float && caps.float;
+    if (wantF) {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.FLOAT, data);
+    } else {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
+    }
+    const f = (smooth === false || (wantF && !caps.floatLinear)) ? gl.NEAREST : gl.LINEAR;
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, f);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, f);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
