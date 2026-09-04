@@ -23,12 +23,21 @@ const path = require('path');
     const out = { fail: [] };
     const L = VF.scene.L;
 
-    /* 1. With the frame square on, the light lands where it always did.
+    /* 1. With the frame square on and the sun at its noon bearing, the light
+          lands where it always did.
 
-          The light is a world position now and follows the camera, which is
-          the point of it — so this pins the thing that must not have changed
-          rather than the thing that must: at rest, dead centre, every zone
-          still puts its one big light at 0.70 of the way across. */
+          THE LIGHT MOVES NOW. It runs an arc across the day — that is the
+          whole of why a sunset is an event here rather than a colour — so the
+          old form of this check, "every zone puts it at 0.70 of the way
+          across", is a statement about a game that no longer exists and it
+          failed in five zones the moment the arc landed.
+
+          What still has to hold is that the arc is the ONLY thing moving it.
+          At the top of the sun's own curve the sweep term is zero, so the
+          light must be exactly where it was nailed before, in every zone, to
+          the same tolerance. The invariant survives; it just has an hour on
+          it now. */
+    VF.time.setCycle(0.330);
     out.lightRatio = {};
     VF.locations.list.slice(0, 9).forEach(l => {
       VF.state.data.location = l.id;
