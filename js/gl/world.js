@@ -227,6 +227,27 @@ vec2 clouds(vec2 p, float hy, float aspect, int oct) {
    it. lod drops cloud octaves for the reflected copy — a reflection carries
    the shape and the colour and nobody has ever resolved the fourth octave of
    a cloud in the water. */
+/* The dome and the body of light in it, WITHOUT the cloud deck.
+
+   Split out because the water wants to reflect the sky and the deck is the
+   expensive half. On anything but glass the surface is broken enough that
+   what comes back is the gradient and the light — a chop scatters cloud
+   detail into nothing long before it scatters the sky's own colour — so open
+   water reflects this and pays for none of the noise. */
+vec3 skyBase(vec2 p, float hy, float aspect) {
+  float t = clamp(p.y / max(0.0001, hy), 0.0, 1.0);
+  vec3 c = mix(skyZen, skyTop, smoothstep(0.0, 1.0, pow(t, 0.88)));
+  c = mix(c, skyBot, smoothstep(0.46, 1.0, t));
+  if (skyModel == 2) c = mix(skyZen, skyBot, pow(t, 0.55));
+  else if (skyModel == 3) c = mix(skyZen, skyTop, smoothstep(0.0, 1.0, pow(t, 0.95)));
+  if (skyModel != 1) c += lightBody(p, aspect);
+  if (skyModel != 3) {
+    float hz = pow(t, 3.4);
+    c = mix(c, fog, hz * clamp(fogAmt, 0.0, 1.0) * 0.78);
+  }
+  return c;
+}
+
 vec3 skyAt(vec2 p, float hy, float aspect, bool reflected) {
   float t = clamp(p.y / max(0.0001, hy), 0.0, 1.0);   // 0 overhead, 1 horizon
 
@@ -433,10 +454,45 @@ void main() {
 
   /* --- what the surface reflects ---------------------------------------
 
-     A mirror is the sky it is under. The sample is the sky's own function
-     read at the mirrored height, pushed sideways by the surface slope so the
-     reflection breaks where the water does — which is the one thing that
-     stops it looking like a second sky pasted below the first. */
+     EVERY SEA REFLECTS ITS SKY. Only the two mirror models did, and what the
+     other three had instead was one line — mix thirty percent of skyBot into
+     the crests — which is a constant colour, not a reflection. It cannot know
+     that the sky above it is orange on one side and blue on the other, so at
+     sunset the water went warm only where the light's own lane fell and
+     stayed grey everywhere else. That is the single largest reason the ocean
+     read as a surface with lighting on it rather than as water.
+
+     Fresnel decides how much: almost everything at a grazing angle out by the
+     horizon, very little looking straight down past the gunwale, which is
+     both correct and the reason a reflection makes distance legible. The
+     sample is taken through the surface slope, so it breaks where the water
+     does — the one thing that stops it looking like a second sky pasted
+     below the first.
+
+     Open water reflects the dome and the light and not the cloud deck: a
+     chop scatters cloud detail into nothing long before it scatters the sky's
+     colour, and the deck is the expensive half. */
+  if (waterModel != 1 && waterModel != 3) {
+    float my = clamp(hy - (y - hy) * mix(1.00, 0.34, k), 0.0, hy);
+    float bend = dhx * mix(0.0018, 0.022, k);
+    vec3 sky = skyBase(vec2(clamp(uv.x + bend, 0.0, 1.0), my), hy, aspect);
+    /* Schlick, near enough. Water reflects about two percent of what hits it
+       head-on and very nearly all of it at a grazing angle, and that enormous
+       range is exactly what makes a sea legible as a receding plane: the
+       horizon is a mirror and the water by the boat is a window.
+
+       The first version of this used a plain power with a ceiling of 0.56 and
+       was almost invisible at the one place it matters most. */
+    float fres = 0.03 + 0.97 * pow(1.0 - k, 3.4);
+    /* Chop breaks a reflection up; a calm sea holds it. */
+    float hold = mix(0.62, 0.95, calm);
+    base = mix(base, sky, clamp(fres * hold, 0.0, 0.95));
+  }
+
+  /* And glass gets the whole sky, deck and all, at its own weight — the two
+     blocks are exclusive, because running both mixes a reflection into a
+     reflection and the Glass Flats came out as an unbroken sheet of sky with
+     no water left in it. */
   if (waterModel == 1 || waterModel == 3) {
     float my = clamp(hy - (y - hy) * mix(1.00, 0.34, k), 0.0, hy);
     float bend = dhx * mix(0.0025, 0.030, k);
@@ -483,10 +539,13 @@ void main() {
   float spec = lane * (glint * 0.85 + sheen * 0.25) * (1.0 - calm * 0.8);
   vec3 col = base + glow * (haze * (0.30 * bright + 0.05) + spec * (1.5 * bright + 0.35));
 
-  /* A little of the sky on every crest, so the water away from the light is
-     still a surface rather than a fill. */
+  /* A little of the sky on every crest. Much less than it was: this used to
+     be the only reflection in the game and had to carry the whole job, and
+     with a real one above it the old weight double-counted and flattened the
+     near water into haze. What is left is the face of a crest catching a
+     different part of the sky than the trough beside it. */
   float crest = smoothstep(-0.020, 0.055, -dhy);
-  col = mix(col, mix(col, skyBot, 0.30), crest * (0.16 + 0.30 * k) * (1.0 - calm * 0.6));
+  col = mix(col, mix(col, skyBot, 0.30), crest * (0.05 + 0.10 * k) * (1.0 - calm * 0.6));
 
   /* Foam, only where it is genuinely steep and only near enough to resolve.
      A mirror does not break, so it does not get any. */
