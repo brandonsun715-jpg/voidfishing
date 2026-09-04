@@ -127,7 +127,7 @@
 
   /* Put the front layer on the screen. One textured pass, blended, because a
      resolve cannot blend and the canvas cannot multisample. */
-  function composite(tex) {
+  function composite(tex, to) {
     if (!tex || !ok()) return false;
     if (!comp && !compFailed) {
       comp = VF.gl.program('composite', COMPOSITE_FS);
@@ -138,7 +138,11 @@
     gl.disable(gl.SCISSOR_TEST);
     gl.disable(gl.STENCIL_TEST);
     VF.gl.blend('source-over');
-    return VF.gl.pass(comp, { src: tex }, null);
+    /* Into the post buffer when the chain is open, so the front layer is
+       exposed and graded with the world rather than pasted on afterwards —
+       a rod lit brighter than the sea it is over is the tell that a frame
+       was assembled rather than photographed. */
+    return VF.gl.pass(comp, { src: tex }, to || null);
   }
 
   function report(s) {

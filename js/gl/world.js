@@ -543,13 +543,16 @@ void main() {
   /* Returns true if it drew, and false if the 2D path should do it instead.
      Every caller checks, so losing the context mid-frame degrades rather than
      failing. */
-  function draw(L, P, back) {
+  function draw(L, P, back, to) {
     if (failed || !VF.gl || !VF.gl.ok()) return false;
     if (!prog) {
       prog = VF.gl.program('world', FS);
       if (!prog) { failed = true; return false; }
     }
-    return VF.gl.pass(prog, uniforms(L, P, back), null);
+    /* `to` is the post chain's buffer when there is one, and null when there
+       is not. Nothing else changes: the world does not know or care whether
+       what it writes goes to the screen or through a tone curve first. */
+    return VF.gl.pass(prog, uniforms(L, P, back), to || null);
   }
 
   VF.glWorld = {

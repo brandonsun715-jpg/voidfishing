@@ -6,16 +6,65 @@
 
   const U = VF.util;
 
-  /* Keyframes around the day cycle. Interpolated, never switched. */
+  /* The day, as eleven named states rather than four.
+
+     There were seven keyframes and the four that mattered were dawn, day,
+     sunset and night — so the hour of a frame was legible as one of four
+     moods and the transitions between them were a straight line through
+     nowhere. A sunset in particular was "orange, and less bright", which is
+     what a filter does, not what an evening does.
+
+     What an evening does is a SEQUENCE, and the parts of it are not
+     interpolations of each other: golden hour is warm and bright and highly
+     saturated; sunset is warm and dim and MORE saturated still; twilight is
+     magenta and desaturating fast with the light source gone under the
+     horizon; blue hour is cold, dim, and the most saturated blue of the whole
+     day. A ramp from orange to navy passes through none of that.
+
+     `ev` is an exposure offset in stops, which the post chain reads. It is
+     what keeps the middle of the day from being a wall of white and the small
+     hours from being a black rectangle: the eye adapts, and the number says
+     how much. `sat` is a grade multiplier, not a colour — the ends of the day
+     ARE more saturated than noon, in the air and on film both. */
   const KEYS = [
-    { at: 0.00, tint: '#ffb37a', k: 0.26, bright: 0.62, star: 0.42, glow: '#ffc48a', glowSize: 1.15, warm: 0.7 },
-    { at: 0.18, tint: '#cfe2f5', k: 0.16, bright: 0.94, star: 0.10, glow: '#eaf4ff', glowSize: 0.85, warm: 0.3 },
-    { at: 0.34, tint: '#bcd8f0', k: 0.13, bright: 1.00, star: 0.04, glow: '#ffffff', glowSize: 0.75, warm: 0.25 },
-    { at: 0.50, tint: '#ff8f60', k: 0.30, bright: 0.66, star: 0.34, glow: '#ff9c66', glowSize: 1.25, warm: 0.85 },
-    { at: 0.62, tint: '#7a5a9a', k: 0.26, bright: 0.40, star: 0.80, glow: '#c8a8e8', glowSize: 1.05, warm: 0.45 },
-    { at: 0.80, tint: '#2c3c6e', k: 0.22, bright: 0.28, star: 1.00, glow: '#c8d8ff', glowSize: 1.00, warm: 0.1 },
-    { at: 1.00, tint: '#ffb37a', k: 0.26, bright: 0.62, star: 0.42, glow: '#ffc48a', glowSize: 1.15, warm: 0.7 }
+    /* first light. The sun is still down; what is lit is the air above it. */
+    { at: 0.000, tint: '#c9a0a8', k: 0.24, bright: 0.34, star: 0.62, glow: '#e8b09a', glowSize: 1.20, warm: 0.55, ev: 0.30, sat: 1.02 },
+    /* early morning — the sun clears the horizon and everything goes warm */
+    { at: 0.055, tint: '#ffbc86', k: 0.30, bright: 0.58, star: 0.24, glow: '#ffc48a', glowSize: 1.16, warm: 0.78, ev: 0.10, sat: 1.10 },
+    /* morning: the warmth burns off */
+    { at: 0.135, tint: '#e3ddd2', k: 0.20, bright: 0.86, star: 0.07, glow: '#fff2e0', glowSize: 0.94, warm: 0.42, ev: -0.05, sat: 1.02 },
+    { at: 0.235, tint: '#cfe2f5', k: 0.15, bright: 0.96, star: 0.03, glow: '#f6faff', glowSize: 0.82, warm: 0.28, ev: -0.10, sat: 0.99 },
+    /* midday. The flattest light of the day and the least interesting, which
+       is correct — it is what the other ten are measured against. */
+    { at: 0.330, tint: '#bcd8f0', k: 0.12, bright: 1.00, star: 0.02, glow: '#ffffff', glowSize: 0.74, warm: 0.22, ev: -0.16, sat: 0.96 },
+    /* afternoon, warming again */
+    { at: 0.425, tint: '#dcd8c8', k: 0.17, bright: 0.94, star: 0.03, glow: '#fff4d8', glowSize: 0.86, warm: 0.42, ev: -0.08, sat: 1.02 },
+    /* GOLDEN HOUR. Bright and warm at the same time, which happens nowhere
+       else in the cycle, and the reason the water goes to sheet metal. */
+    { at: 0.492, tint: '#ffa860', k: 0.30, bright: 0.80, star: 0.08, glow: '#ffb066', glowSize: 1.10, warm: 0.90, ev: 0.02, sat: 1.16 },
+    /* SUNSET. Dimmer than golden hour and deeper in colour, not the same
+       thing further along. */
+    { at: 0.552, tint: '#ff7a4a', k: 0.36, bright: 0.54, star: 0.26, glow: '#ff8a52', glowSize: 1.30, warm: 0.96, ev: 0.20, sat: 1.22 },
+    /* TWILIGHT — the light is under the horizon and only the air is lit */
+    { at: 0.610, tint: '#a2628c', k: 0.30, bright: 0.36, star: 0.58, glow: '#d69ac0', glowSize: 1.14, warm: 0.55, ev: 0.34, sat: 1.10 },
+    /* BLUE HOUR. The coldest and most saturated part of the day. */
+    { at: 0.668, tint: '#3f5590', k: 0.30, bright: 0.26, star: 0.86, glow: '#a8c0ff', glowSize: 1.02, warm: 0.16, ev: 0.46, sat: 1.14 },
+    /* night, and then the small hours, which are colder and darker again */
+    { at: 0.760, tint: '#2c3c6e', k: 0.22, bright: 0.20, star: 1.00, glow: '#c8d8ff', glowSize: 1.00, warm: 0.08, ev: 0.58, sat: 1.00 },
+    { at: 0.880, tint: '#22305c', k: 0.20, bright: 0.16, star: 1.00, glow: '#bcd0ff', glowSize: 0.98, warm: 0.05, ev: 0.66, sat: 0.96 },
+    /* pre-dawn: the first cool lift, before any colour */
+    { at: 0.955, tint: '#4a5578', k: 0.22, bright: 0.22, star: 0.86, glow: '#cbb8c0', glowSize: 1.10, warm: 0.24, ev: 0.52, sat: 0.98 },
+    { at: 1.000, tint: '#c9a0a8', k: 0.24, bright: 0.34, star: 0.62, glow: '#e8b09a', glowSize: 1.20, warm: 0.55, ev: 0.30, sat: 1.02 }
   ];
+
+  /* Where the one big light is on its arc: 1 at midday, 0 in the small hours,
+     0.5 at both ends of the day. Everything that wants to know how high the
+     light is asks this rather than re-deriving it from the clock, so the sky,
+     the water and the layout cannot disagree about where the sun is. */
+  function sunArc() {
+    const c = VF.time.cycle();
+    return 0.5 + 0.5 * Math.cos(((c - 0.330 + 1) % 1) * Math.PI * 2);
+  }
 
   const rgbCache = Object.create(null);
   function rgb(hex) { return rgbCache[hex] || (rgbCache[hex] = U.hexToRgb(hex)); }
@@ -33,7 +82,9 @@
       star: U.lerp(a.star, b.star, t),
       glow: U.mixRgb(rgb(a.glow), rgb(b.glow), t),
       glowSize: U.lerp(a.glowSize, b.glowSize, t),
-      warm: U.lerp(a.warm, b.warm, t)
+      warm: U.lerp(a.warm, b.warm, t),
+      ev: U.lerp(a.ev === undefined ? 0 : a.ev, b.ev === undefined ? 0 : b.ev, t),
+      sat: U.lerp(a.sat === undefined ? 1 : a.sat, b.sat === undefined ? 1 : b.sat, t)
     };
   }
 
@@ -192,6 +243,20 @@
     P.accent = rgb(loc.glow);
     P.bright = day.bright * light;
     P.warm = day.warm;
+    /* The hour's own exposure and saturation, for the post chain. Kept on P
+       rather than read from the clock there, so everything about how a frame
+       is lit arrives from one place. */
+    P.dayEv = day.ev;
+    P.daySat = day.sat;
+    /* What the WEATHER is doing to the light, on its own, with the hour taken
+       out. The post chain adapts its exposure to this and to nothing else —
+       see js/gl/post.js. */
+    P.wxLight = light;
+    /* How high the light is, on its own arc through the day. 1 at midday, 0
+       in the small hours. The sky shader bands its haze off this and the
+       water lays its lane by it — a light that never rises is a zone with one
+       hour in it, which is what nine of them had. */
+    P.sunArc = sunArc();
 
     /* ---------------------------------------------------------- the air */
 
@@ -219,5 +284,5 @@
     return P;
   }
 
-  VF.palette = { P: P, update: update, rgb: rgb };
+  VF.palette = { P: P, update: update, rgb: rgb, sunArc: sunArc };
 })(window.VF = window.VF || {});
