@@ -54,6 +54,55 @@
     return U.lerp(U.lerp(a, b, u), U.lerp(c, d, u), v);
   }
 
+  /* ------------------------------------------------------ gradient noise
+
+     For the clouds, and only for the clouds. The value noise above is a
+     bilinear function inside each cell, and the level sets of a bilinear
+     function are hyperbolas whose asymptotes run along the lattice — so
+     THRESHOLDING it, which is exactly what a cloud is, hands back silhouettes
+     made of straight segments wherever the cut lands near a cell's saddle.
+     The ridgelines can go on using value noise because a ridgeline reads the
+     field's height and never its level set.
+
+     Gradient noise is zero at every lattice point and its level sets are
+     smooth cubics, so the same threshold gives a rounded outline instead. */
+
+  function hashG(x, y, seed, k) {
+    let h = (x * 1597334677 + y * 3812015801 + seed * 2654435761 + k * 40503) | 0;
+    h = Math.imul(h ^ (h >>> 15), 2246822519);
+    h = Math.imul(h ^ (h >>> 13), 3266489917);
+    return ((h ^ (h >>> 16)) >>> 0) / 2147483648 - 1;   // -1 .. 1
+  }
+
+  function quintic(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+
+  function gnoise(x, y, seed) {
+    const xi = Math.floor(x), yi = Math.floor(y);
+    const fx = x - xi, fy = y - yi;
+    const ux = quintic(fx), uy = quintic(fy);
+    const g = function (cx, cy) {
+      return hashG(xi + cx, yi + cy, seed, 0) * (fx - cx) +
+             hashG(xi + cx, yi + cy, seed, 1) * (fy - cy);
+    };
+    const a = g(0, 0), b = g(1, 0), c = g(0, 1), d = g(1, 1);
+    const t = a + (b - a) * ux;
+    return t + ((c + (d - c) * ux) - t) * uy;
+  }
+
+  /* Normalised by the octaves actually summed, so a threshold means one
+     coverage and not a different one per octave count. Lands in 0..1 with the
+     bulk of it around a half. */
+  function gfbm(x, y, seed, octaves, lacunarity, gain) {
+    let sum = 0, amp = 0.5, freq = 1, norm = 0;
+    for (let i = 0; i < octaves; i++) {
+      sum += gnoise(x * freq, y * freq, seed + i * 131) * amp;
+      norm += amp;
+      freq *= lacunarity;
+      amp *= gain;
+    }
+    return 0.5 + 0.95 * sum / (norm || 1);
+  }
+
   /* Stacked octaves. `ridged` folds each octave around its midpoint, which is
      what turns soft blobs into the sharp crests a mountain needs. */
   function fbm(x, y, seed, octaves, lacunarity, gain, ridged) {
@@ -218,25 +267,40 @@
     const ly = (opt.lightY === undefined ? 0.25 : opt.lightY);
 
     /* The threshold has to fall off toward the top of the band or the layer
-       ends in a straight line across the sky. */
+       ends in a straight line across the sky.
+
+       The two levels are measured on THIS field rather than borrowed: 0.68
+       leaves about three percent of the layer covered and 0.41 about eighty.
+       They are close to the pair the GPU deck uses and deliberately not the
+       same numbers — this field has its own hash, its own octave count and
+       its own anisotropic stretch, and 0.76 here covers well under one
+       percent. Measuring each field separately is the only way the two
+       renderers agree about what a clear sky looks like.
+
+       `cover` is a coverage target in those terms, and the caller passes at
+       most 0.70 for one layer because two of them stacked is the overcast. */
     for (let y = 0; y < ch; y++) {
       const v = y / ch;
       // clouds thin out with altitude and pile up toward the horizon
       const band = Math.pow(U.clamp(v, 0, 1), 0.72);
+      const lo = U.lerp(0.68, 0.41, U.clamp(cover * band, 0, 1));
       for (let x = 0; x < cw; x++) {
         const u = x / cw;
         // stretched horizontally: clouds are wider than they are tall
-        const m = fbm(u * scale * 2.6, v * scale * 5.2, seed, 5, 2.05, 0.52, false);
-        const t = m - (1 - cover * band) * 0.62 - 0.16;
+        const m = gfbm(u * scale * 2.6, v * scale * 5.2, seed, 4, 2.05, 0.52);
+        const t = m - lo;
         if (t <= 0) continue;
-        const alpha = U.clamp(t / Math.max(0.02, soft), 0, 1);
+        /* A ramp, not a cut. The old edge went from nothing to full alpha
+           across one sample of the field, which is a hard boundary drawn at a
+           third of the resolution and then magnified three times. */
+        const alpha = U.clamp(t / Math.max(0.03, soft * 0.42), 0, 1);
 
         /* Shading: sample the mass again a short way toward the light. Where
            there is more cloud between here and the light, here is in shadow.
            That is the whole of it, and it is enough to give a flat noise field
            a top and a bottom. */
         const dxs = (lx - u) * 0.10, dys = (ly - v) * 0.10;
-        const m2 = fbm((u + dxs) * scale * 2.6, (v + dys) * scale * 5.2, seed, 3, 2.05, 0.52, false);
+        const m2 = gfbm((u + dxs) * scale * 2.6, (v + dys) * scale * 5.2, seed, 3, 2.05, 0.52);
         const k = U.clamp(0.5 + (m2 - m) * 4.2, 0, 1);
 
         const col = U.mixRgb(dark, lit, k);
@@ -250,7 +314,7 @@
   }
 
   VF.skyArt = {
-    noise2: noise2, fbm: fbm,
+    noise2: noise2, fbm: fbm, gnoise: gnoise, gfbm: gfbm,
     buildField: buildField,
     buildCloudLayer: buildCloudLayer,
     starColour: starColour

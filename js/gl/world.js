@@ -139,6 +139,77 @@ float fbm(vec2 p, int oct) {
   return s;
 }
 
+/* ------------------------------------------------------- gradient noise
+
+   The clouds cannot use the value noise above, and the reason is worth
+   writing down because it is not obvious and it took a rendered picture to
+   find.
+
+   Inside one cell, interpolated value noise is a BILINEAR function of the
+   cell coordinates: n = a + (b-a)u + (c-a)v + (a-b-c+d)uv. Set that equal to
+   a constant and you get a hyperbola — and a hyperbola near its centre is
+   indistinguishable from its two straight asymptotes, which run along the
+   lattice axes. Anywhere the threshold happens to sit near a cell's saddle
+   value, the level set IS a pair of straight lines.
+
+   That does not matter when the field is being used as a texture, which is
+   what the water does with it. It matters enormously when the field is
+   THRESHOLDED, because then the level set is not a detail of the shading —
+   it is the silhouette. A clear sky puts the threshold in the last few
+   percent of the distribution, where nothing survives except those degenerate
+   cells, so every cloud in the frame came out as a triangle with ruler-drawn
+   edges. Rendering the level set on its own showed it in one look after a
+   morning of reasoning about the projection instead.
+
+   Gradient noise has no such degeneracy: it is zero at every lattice point
+   and its level sets are smooth cubics, so a threshold anywhere in the range
+   gives a rounded, lumpy outline. It costs about twice a value-noise lookup,
+   and it is paid for on the sky half only. */
+vec2 hash22(vec2 p) {
+  vec3 q = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+  q += dot(q, q.yzx + 33.33);
+  return fract((q.xx + q.yz) * q.zy) * 2.0 - 1.0;
+}
+
+float gnoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+  float a = dot(hash22(i), f);
+  float b = dot(hash22(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0));
+  float c = dot(hash22(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0));
+  float d = dot(hash22(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0));
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+
+/* Normalised, and normalised BY THE OCTAVES ACTUALLY SUMMED — which the
+   value-noise fbm above is not, and that was a second bug hiding under the
+   first. Amplitudes 0.5, 0.25, 0.125, 0.0625 sum to 0.75 at two octaves and
+   0.9375 at four, so one fixed threshold meant one coverage on high and a
+   different one on low: at two octaves the clear-sky threshold sat above
+   everything the field could produce and the sky had no cloud in it at all.
+   Dividing by the sum makes the coverage the same picture at every quality.
+
+   The first octave is passed IN rather than computed here, because the caller
+   needs it for two other things: the lighting term below wants the large
+   shape of the deck and nothing else, which is exactly the first octave, and
+   the coverage cull wants it before deciding whether the rest is worth
+   evaluating at all. */
+float cfbmNorm(int oct) { return 1.0 - exp2(-float(oct)); }
+
+float cfbm(vec2 p, int oct, float first) {
+  float s = 0.5 * first, a = 0.25, norm = 0.5;
+  const mat2 rot = mat2(0.8000, 0.6000, -0.6000, 0.8000);
+  p = rot * p * 2.03 + vec2(11.3, 7.7);
+  for (int i = 1; i < 5; i++) {
+    if (i >= oct) break;
+    s += a * gnoise(p);
+    norm += a;
+    p = rot * p * 2.03 + vec2(11.3, 7.7);
+    a *= 0.5;
+  }
+  return 0.5 + 0.95 * s / max(norm, 1e-4);
+}
+
 /* ------------------------------------------------------------ the light
 
    A body, not a colour. discR is its angular radius as a fraction of the
@@ -195,11 +266,51 @@ vec2 clouds(vec2 p, float hy, float aspect, int oct) {
   vec2 q = vec2((p.x - 0.5) * aspect * lat * 2.6 + camU * 0.9 + time * 0.010,
                 dist * 1.5 + time * 0.004);
 
-  float n = fbm(q, oct);
-  /* Coverage. At 0 the threshold sits above almost everything the FBM
-     produces, so a clear sky is genuinely clear rather than faintly cloudy
-     everywhere — which is the failure mode of scaling an alpha instead. */
-  float lo = mix(0.80, 0.28, cloudAmt);
+  /* Coverage, and it is a CURVE rather than a lerp because a lerp is what a
+     lerp was: cloudAmt is a description of the weather, not of a threshold,
+     and the two are related by the field's own distribution.
+
+     These four numbers are fitted, not chosen. For each cloudAmt the zones
+     actually run at, the coverage the old value-noise deck produced was
+     measured, then the threshold that reproduces that coverage on THIS field
+     was solved for, and a cubic put through the nine pairs. Straightening it
+     into a lerp is what tools/atmosphere.js caught: the Trench stopped being
+     visibly cloudier than the Basin, and the Nowhere Sea — whose whole claim
+     is that its air gives the eye nothing to measure distance by — grew a
+     cloud deck. Cloud amount by zone is a thing the game already decided;
+     changing the noise underneath it is not licence to redecide it.
+
+     Monotone over the whole range: the derivative's discriminant is negative,
+     so there is no turning point hiding in here. */
+  float a2 = cloudAmt * cloudAmt;
+  float lo = 0.8971 - 1.1873 * cloudAmt + 1.0331 * a2 - 0.3576 * a2 * cloudAmt;
+
+  /* The first octave alone decides most pixels. Take it, then ask whether the
+     octaves still to come could possibly carry this pixel over the threshold:
+     they contribute at most (norm - 0.5) * NMAX. If even that is not enough
+     there is no cloud here, and the remaining lookups are wasted.
+
+     NMAX is 0.80 and it is measured, not the textbook 1/sqrt(2). That figure
+     assumes unit gradients, and hash22 hands back components in [-1,1) — so
+     its vectors run out to length sqrt(2) and the noise reaches 0.786 over a
+     sweep of fourteen thousand cells. Taking the textbook number would have
+     made this a cull that quietly ate the thinnest edge of every cloud.
+
+     A bound, then, and not an approximation: it never culls a pixel that
+     would have drawn cloud. On a clear sky, which is most of the frames this
+     game renders, it is most of the sky. */
+  const float NMAX = 0.80;
+  float first = gnoise(q);
+  float norm = cfbmNorm(oct);
+  if (0.5 + 0.95 * (0.5 * first + (norm - 0.5) * NMAX) / norm < lo)
+    return vec2(0.0);
+
+  float n = cfbm(q, oct, first);
+  /* A wide ramp, because the visible structure of a cloud deck lives in the
+     pixels that are PARTLY covered. Narrowing it to 0.13 was the other half
+     of what atmosphere.js caught — the coverage was nearly right by area and
+     the sky detail had halved, because most of the covered sky had gone flat
+     and opaque instead of modulating. */
   float cov = smoothstep(lo, lo + 0.22, n);
 
   /* The last sliver above the horizon is edge-on and a pixel tall; letting it
@@ -213,11 +324,17 @@ vec2 clouds(vec2 p, float hy, float aspect, int oct) {
      shape of the deck — which side of a mass of cloud faces the light — and
      that lives entirely in the first octave; the rest was three more noise
      evaluations per pixel buying detail nobody can see in a shading term.
-     Seven noise lookups per sky pixel to four, on half the frame, at sixty
-     frames a second. */
+
+     AND BOTH SIDES OF THE DIFFERENCE ARE THE SAME FIELD, which they were
+     not. A four-octave sum with a mean near 0.47 was being compared against
+     one half-amplitude value-noise lookup with a mean of 0.25, so the
+     difference carried that 0.22 offset everywhere and the term sat pinned
+     at its upper clamp over most of the deck: every cloud in the game was
+     lit flat on both sides, and the shading that is supposed to give the
+     deck a top and a bottom did nothing at all. */
   vec2 toL = normalize(vec2((light.x - p.x) * aspect, ang - (hy - light.y)) + vec2(1e-5));
-  float n2 = vnoise(q + toL * vec2(1.6, 0.9)) * 0.5;
-  float lit = clamp((n - n2) * 2.4 + 0.5, 0.0, 1.0);
+  float ahead = gnoise(q + toL * vec2(1.6, 0.9));
+  float lit = clamp((first - ahead) * 1.6 + 0.5, 0.0, 1.0);
   return vec2(cov, lit);
 }
 
